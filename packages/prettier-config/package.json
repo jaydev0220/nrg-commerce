@@ -1,0 +1,19 @@
+{
+	"name": "@packages/prettier-config",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"exports": {
+		".": "./prettier.config.js"
+	},
+	"devDependencies": {
+		"prettier": "catalog:lint",
+		"prettier-plugin-svelte": "catalog:lint",
+		"prettier-plugin-tailwindcss": "catalog:lint"
+	},
+	"peerDependencies": {
+		"prettier": "catalog:lint",
+		"prettier-plugin-svelte": "catalog:lint",
+		"prettier-plugin-tailwindcss": "catalog:lint"
+	}
+}

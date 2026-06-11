@@ -1,0 +1,32 @@
+{
+	"name": "@packages/database",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"check": "if find . -path ./node_modules -prune -o \\( -name '*.ts' -o -name '*.mts' -o -name '*.cts' -o -name '*.tsx' \\) -print -quit | grep -q .; then tsc --noEmit --project ./tsconfig.json; else echo 'No TypeScript source files to check'; fi",
+		"format": "prettier --ignore-path ../../.prettierignore --write .",
+		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint ."
+	},
+	"dependencies": {
+		"@prisma/adapter-pg": "catalog:db",
+		"@prisma/client": "catalog:db",
+		"pg": "catalog:db"
+	},
+	"devDependencies": {
+		"@eslint/js": "catalog:lint",
+		"@packages/eslint-config": "workspace:*",
+		"@packages/prettier-config": "workspace:*",
+		"@packages/tsconfig": "workspace:*",
+		"@types/node": "catalog:",
+		"@types/pg": "catalog:db",
+		"eslint": "catalog:lint",
+		"eslint-config-prettier": "catalog:lint",
+		"globals": "catalog:lint",
+		"prettier": "catalog:lint",
+		"prisma": "catalog:db",
+		"tsx": "catalog:",
+		"typescript": "catalog:",
+		"typescript-eslint": "catalog:lint"
+	}
+}

@@ -1,0 +1,20 @@
+{
+	"name": "nrg-commerce",
+	"author": {
+		"name": "Jay",
+		"url": "https://github.com/jaydev0220"
+	},
+	"license": "CC-BY-NC-ND-4.0",
+	"scripts": {
+		"check": "pnpm -r --filter @apps/admin --filter @apps/catalog --filter @apps/api --filter @packages/database --filter @packages/schemas --if-present check",
+		"format": "pnpm -r --filter @apps/admin --filter @apps/catalog --filter @apps/api --filter @packages/database --filter @packages/schemas format",
+		"lint": "pnpm -r --filter @apps/admin --filter @apps/catalog --filter @apps/api --filter @packages/database --filter @packages/schemas lint"
+	},
+	"devEngines": {
+		"packageManager": {
+			"name": "pnpm",
+			"version": "^11.4.0",
+			"onFail": "download"
+		}
+	}
+}

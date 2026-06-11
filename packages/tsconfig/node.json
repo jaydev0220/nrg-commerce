@@ -1,0 +1,13 @@
+{
+	"extends": "./base.json",
+	"compilerOptions": {
+		"lib": ["ESNext"],
+		"module": "ESNext",
+		"target": "ESNext",
+		"types": ["node"],
+		"verbatimModuleSyntax": true,
+		"noUncheckedSideEffectImports": true,
+		"isolatedModules": true,
+		"moduleDetection": "force"
+	}
+}

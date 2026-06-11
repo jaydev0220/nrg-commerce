@@ -1,0 +1,26 @@
+{
+	"name": "@packages/eslint-config",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"exports": {
+		".": "./eslint.config.js",
+		"./svelte": "./svelte.js"
+	},
+	"devDependencies": {
+		"@eslint/js": "catalog:lint",
+		"eslint": "catalog:lint",
+		"eslint-config-prettier": "catalog:lint",
+		"eslint-plugin-svelte": "catalog:lint",
+		"globals": "catalog:lint",
+		"typescript-eslint": "catalog:lint"
+	},
+	"peerDependencies": {
+		"@eslint/js": "catalog:lint",
+		"eslint": "catalog:lint",
+		"eslint-config-prettier": "catalog:lint",
+		"eslint-plugin-svelte": "catalog:lint",
+		"globals": "catalog:lint",
+		"typescript-eslint": "catalog:lint"
+	}
+}
