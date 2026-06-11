@@ -10,10 +10,13 @@
 		"format": "pnpm -r --filter @apps/admin --filter @apps/catalog --filter @apps/api --filter @packages/database --filter @packages/schemas format",
 		"lint": "pnpm -r --filter @apps/admin --filter @apps/catalog --filter @apps/api --filter @packages/database --filter @packages/schemas lint"
 	},
+	"engines": {
+		"node": "24.16.0"
+	},
 	"devEngines": {
 		"packageManager": {
 			"name": "pnpm",
-			"version": "^11.4.0",
+			"version": "11.4.0",
 			"onFail": "download"
 		}
 	}
