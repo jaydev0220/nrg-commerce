@@ -3,12 +3,19 @@
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
+	"exports": {
+		".": {
+			"types": "./build/src/index.d.ts",
+			"default": "./build/src/index.js"
+		}
+	},
+	"types": "./build/src/index.d.ts",
 	"scripts": {
 		"build": "tsc --project tsconfig.json",
 		"check": "tsc --noEmit --project tsconfig.json",
 		"format": "prettier --ignore-path ../../.prettierignore --write .",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
-		"test": "node --test"
+		"test": "tsc --project tsconfig.json && node --test build/tests/**/*.test.js"
 	},
 	"dependencies": {
 		"zod": "catalog:"

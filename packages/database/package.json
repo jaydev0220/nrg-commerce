@@ -3,15 +3,23 @@
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
+	"exports": {
+		".": {
+			"types": "./build/src/index.d.ts",
+			"default": "./build/src/index.js"
+		}
+	},
+	"types": "./build/src/index.d.ts",
 	"scripts": {
 		"build": "prisma generate && tsc --project tsconfig.json",
 		"check": "prisma validate && tsc --noEmit --project tsconfig.json",
 		"format": "prettier --ignore-path ../../.prettierignore --write . && prisma format",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
-		"test": "node --test",
+		"test": "prisma generate && tsc --project tsconfig.json && node --test build/tests/**/*.test.js",
 		"db:generate": "prisma generate",
 		"db:migrate": "prisma migrate dev",
 		"db:deploy": "prisma migrate deploy",
+		"db:seed": "tsx prisma/seed.ts",
 		"db:studio": "prisma studio"
 	},
 	"dependencies": {

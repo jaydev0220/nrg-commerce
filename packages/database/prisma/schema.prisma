@@ -1,8 +1,227 @@
 generator client {
-  provider = "prisma-client"
-  output   = "./generated/prisma"
+  provider               = "prisma-client"
+  output                 = "./generated/prisma"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum StaffStatus {
+  active
+  inactive
+  suspended
+}
+
+enum MfaMethod {
+  authenticator
+  passkey
+}
+
+enum PasskeyDeviceType {
+  singleDevice
+  multiDevice
+}
+
+enum ProductImageType {
+  thumbnail
+  gallery
+}
+
+model Staff {
+  id                 String              @id @default(uuid()) @db.Uuid
+  email              String              @unique
+  name               String
+  status             StaffStatus         @default(inactive)
+  passwordHash       String?
+  mfaRequired        Boolean             @default(false)
+  preferredMfaMethod MfaMethod?
+  lastLoginAt        DateTime?           @db.Timestamptz(6)
+  deletedAt          DateTime?           @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(6)
+  roles              StaffRole[]
+  sessions           AuthSession[]
+  totpCredentials    TotpCredential[]
+  passkeyCredentials PasskeyCredential[]
+
+  @@index([status, createdAt])
+  @@index([deletedAt])
+}
+
+model Role {
+  id              String           @id @default(uuid()) @db.Uuid
+  key             String           @unique
+  name            String
+  description     String?
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(6)
+  staffRoles      StaffRole[]
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  id              String           @id @default(uuid()) @db.Uuid
+  key             String           @unique
+  name            String
+  description     String?
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(6)
+  rolePermissions RolePermission[]
+}
+
+model StaffRole {
+  staffId    String   @db.Uuid
+  roleId     String   @db.Uuid
+  assignedAt DateTime @default(now()) @db.Timestamptz(6)
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([staffId, roleId])
+  @@index([roleId])
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  grantedAt    DateTime   @default(now()) @db.Timestamptz(6)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model AuthSession {
+  id              String         @id @default(uuid()) @db.Uuid
+  staffId         String         @db.Uuid
+  userAgent       String?
+  ipAddress       String?
+  authenticatedAt DateTime       @default(now()) @db.Timestamptz(6)
+  lastSeenAt      DateTime?      @db.Timestamptz(6)
+  expiresAt       DateTime       @db.Timestamptz(6)
+  revokedAt       DateTime?      @db.Timestamptz(6)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(6)
+  staff           Staff          @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  refreshTokens   RefreshToken[]
+
+  @@index([staffId, revokedAt])
+  @@index([expiresAt])
+}
+
+model RefreshToken {
+  id              String        @id @default(uuid()) @db.Uuid
+  sessionId       String        @db.Uuid
+  jwtId           String        @unique
+  tokenHash       String        @unique
+  previousTokenId String?       @unique @db.Uuid
+  issuedAt        DateTime      @default(now()) @db.Timestamptz(6)
+  expiresAt       DateTime      @db.Timestamptz(6)
+  lastUsedAt      DateTime?     @db.Timestamptz(6)
+  consumedAt      DateTime?     @db.Timestamptz(6)
+  revokedAt       DateTime?     @db.Timestamptz(6)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+  session         AuthSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  previousToken   RefreshToken? @relation("RefreshTokenRotation", fields: [previousTokenId], references: [id], onDelete: Restrict)
+  nextToken       RefreshToken? @relation("RefreshTokenRotation")
+
+  @@index([sessionId, revokedAt])
+  @@index([expiresAt])
+}
+
+model TotpCredential {
+  id              String    @id @default(uuid()) @db.Uuid
+  staffId         String    @db.Uuid
+  secretEncrypted String
+  digits          Int       @default(6)
+  period          Int       @default(30)
+  verifiedAt      DateTime? @db.Timestamptz(6)
+  lastUsedAt      DateTime? @db.Timestamptz(6)
+  deletedAt       DateTime? @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
+  staff           Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, deletedAt])
+}
+
+model PasskeyCredential {
+  id           String             @id @default(uuid()) @db.Uuid
+  staffId      String             @db.Uuid
+  credentialId String             @unique
+  publicKey    Bytes
+  userHandle   String?
+  counter      Int                @default(0)
+  transports   String[]           @default([])
+  aaguid       String?
+  deviceType   PasskeyDeviceType?
+  backedUp     Boolean?
+  nickname     String?
+  verifiedAt   DateTime?          @db.Timestamptz(6)
+  lastUsedAt   DateTime?          @db.Timestamptz(6)
+  deletedAt    DateTime?          @db.Timestamptz(6)
+  createdAt    DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime           @updatedAt @db.Timestamptz(6)
+  staff        Staff              @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, deletedAt])
+}
+
+model ProductCategory {
+  id          String            @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String            @unique
+  description String?
+  position    Int               @default(0)
+  parentId    String?           @db.Uuid
+  deletedAt   DateTime?         @db.Timestamptz(6)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(6)
+  parent      ProductCategory?  @relation("ProductCategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    ProductCategory[] @relation("ProductCategoryHierarchy")
+  skus        ProductSku[]
+
+  @@index([parentId, position])
+  @@index([deletedAt])
+}
+
+model ProductSku {
+  id          String          @id @default(uuid()) @db.Uuid
+  skuCode     String          @unique
+  name        String
+  description String?
+  categoryId  String          @db.Uuid
+  price       Decimal         @db.Decimal(10, 2)
+  published   Boolean         @default(false)
+  attributes  Json            @db.JsonB
+  deletedAt   DateTime?       @db.Timestamptz(6)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(6)
+  category    ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  images      ProductImage[]
+
+  @@index([categoryId, published, createdAt])
+  @@index([published, createdAt])
+  @@index([deletedAt])
+}
+
+model ProductImage {
+  id        String           @id @default(uuid()) @db.Uuid
+  skuId     String           @db.Uuid
+  imageUrl  String
+  assetKey  String?
+  altText   String
+  type      ProductImageType @default(gallery)
+  position  Int              @default(0)
+  deletedAt DateTime?        @db.Timestamptz(6)
+  createdAt DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(6)
+  sku       ProductSku       @relation(fields: [skuId], references: [id], onDelete: Restrict)
+
+  @@index([skuId, type, position])
+  @@index([deletedAt])
 }
