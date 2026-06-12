@@ -13,10 +13,15 @@
 		"test": "node --test"
 	},
 	"dependencies": {
+		"@packages/database": "workspace:*",
+		"@packages/schemas": "workspace:*",
+		"@simplewebauthn/server": "catalog:express",
 		"cors": "catalog:express",
 		"express": "catalog:express",
+		"express-rate-limit": "catalog:express",
 		"helmet": "catalog:express",
-		"multer": "catalog:express"
+		"multer": "catalog:express",
+		"otplib": "catalog:express"
 	},
 	"devDependencies": {
 		"@eslint/js": "catalog:lint",
