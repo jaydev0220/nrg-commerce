@@ -135,7 +135,31 @@ project-root/
 
 - **ORM:** Prisma 7
 - **Database:** PostgreSQL 18
+- **Testing:** Node.js built-in test runner
 
 #### `packages/schemas`
 
 - **Validation library:** Zod 4
+- **Testing:** Node.js built-in test runner
+
+## Verifications
+
+If you are on a task that changes code, you must run the following commands to ensure code quality:
+
+```bash
+pnpm format
+pnpm lint
+pnpm check
+```
+
+Run when the change can affect build output:
+
+```bash
+pnpm build
+```
+
+Run when behavior changes:
+
+```bash
+pnpm test
+```
