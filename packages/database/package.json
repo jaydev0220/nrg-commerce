@@ -4,9 +4,15 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
-		"check": "if find . -path ./node_modules -prune -o \\( -name '*.ts' -o -name '*.mts' -o -name '*.cts' -o -name '*.tsx' \\) -print -quit | grep -q .; then tsc --noEmit --project ./tsconfig.json; else echo 'No TypeScript source files to check'; fi",
-		"format": "prettier --ignore-path ../../.prettierignore --write .",
-		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint ."
+		"build": "prisma generate && tsc --project tsconfig.json",
+		"check": "prisma validate && tsc --noEmit --project tsconfig.json",
+		"format": "prettier --ignore-path ../../.prettierignore --write . && prisma format",
+		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
+		"test": "node --test",
+		"db:generate": "prisma generate",
+		"db:migrate": "prisma migrate dev",
+		"db:deploy": "prisma migrate deploy",
+		"db:studio": "prisma studio"
 	},
 	"dependencies": {
 		"@prisma/adapter-pg": "catalog:db",

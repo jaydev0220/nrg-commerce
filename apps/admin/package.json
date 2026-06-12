@@ -7,14 +7,14 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
-		"prepare": "svelte-kit sync || echo ''",
+		"prepare": "svelte-kit sync",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
 		"format": "prettier --ignore-path ../../.prettierignore --write .",
-		"test:e2e": "playwright install && playwright test",
-		"test": "npm run test:unit -- --run && npm run test:e2e",
-		"test:unit": "vitest"
+		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
+		"test": "vitest run --passWithNoTests",
+		"test:watch": "vitest",
+		"test:e2e": "playwright test"
 	},
 	"devDependencies": {
 		"@eslint/js": "catalog:lint",

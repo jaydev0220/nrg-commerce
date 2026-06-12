@@ -6,9 +6,13 @@
 	},
 	"license": "CC-BY-NC-ND-4.0",
 	"scripts": {
-		"check": "pnpm -r --filter @apps/admin --filter @apps/catalog --filter @apps/api --filter @packages/database --filter @packages/schemas --if-present check",
-		"format": "pnpm -r --filter @apps/admin --filter @apps/catalog --filter @apps/api --filter @packages/database --filter @packages/schemas format",
-		"lint": "pnpm -r --filter @apps/admin --filter @apps/catalog --filter @apps/api --filter @packages/database --filter @packages/schemas lint"
+		"dev": "pnpm --parallel --filter './apps/*' run dev",
+		"build": "pnpm -r run build",
+		"check": "pnpm -r run check",
+		"format": "pnpm -r run format",
+		"lint": "pnpm -r run lint",
+		"test": "pnpm -r run test",
+		"test:e2e": "pnpm --filter './apps/*' run test:e2e"
 	},
 	"engines": {
 		"node": "24.16.0"

@@ -4,9 +4,11 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
-		"check": "if find . -path ./node_modules -prune -o \\( -name '*.ts' -o -name '*.mts' -o -name '*.cts' -o -name '*.tsx' \\) -print -quit | grep -q .; then tsc --noEmit --project ./tsconfig.json; else echo 'No TypeScript source files to check'; fi",
+		"build": "tsc --project tsconfig.json",
+		"check": "tsc --noEmit --project tsconfig.json",
 		"format": "prettier --ignore-path ../../.prettierignore --write .",
-		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint ."
+		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
+		"test": "node --test"
 	},
 	"dependencies": {
 		"zod": "catalog:"
