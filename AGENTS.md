@@ -74,7 +74,14 @@ project-root/
 |   |   `-- svelte.json
 |   |-- database/
 |   |   |-- prisma/
+|   |   |   |-- migrations/
+|   |   |   |-- generated/
+|   |   |   |-- schema.prisma
+|   |   |   `-- seed.ts
 |   |   |-- src/
+|   |   |   |-- client.ts
+|   |   |   |-- access-control.ts
+|   |   |   `-- index.ts
 |   |   |-- tests/
 |   |   |-- package.json
 |   |   |-- eslint.config.js
@@ -83,6 +90,11 @@ project-root/
 |   |   `-- prisma.config.ts
 |   `-- schemas/
 |   |   |-- src/
+|   |   |   |-- common.ts
+|   |   |   |-- auth.ts
+|   |   |   |-- staff.ts
+|   |   |   |-- products.ts
+|   |   |   `-- index.ts
 |   |   |-- tests/
 |   |   |-- package.json
 |   |   |-- eslint.config.js
