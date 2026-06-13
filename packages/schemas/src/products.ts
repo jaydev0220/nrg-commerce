@@ -101,6 +101,10 @@ export const productSkuDeleteQuerySchema = z.object({
 	force: booleanLikeSchema.default(false)
 });
 
+export const managementSkuDetailQuerySchema = z.object({
+	includeImages: booleanLikeSchema.default(false)
+});
+
 export const managementCategoryListQuerySchema = paginationQuerySchema.extend({
 	search: z.string().trim().min(1).optional(),
 	parentId: uuidSchema.optional(),
@@ -143,9 +147,18 @@ export const managementProductImageListQuerySchema = paginationQuerySchema.exten
 	order: sortOrderSchema.default('asc')
 });
 
+const imageContentTypeSchema = z
+	.string()
+	.trim()
+	.regex(/^image\/[a-z0-9.+-]+$/i, 'Expected an image/* content type.');
+
+export const productImageUploadRequestSchema = z.object({
+	fileName: z.string().trim().min(1),
+	contentType: imageContentTypeSchema
+});
+
 export const productImageCreateSchema = z.object({
-	imageUrl: z.url(),
-	assetKey: z.string().trim().min(1).optional(),
+	assetKey: z.string().trim().min(1),
 	altText: z.string().trim().min(1),
 	type: productImageTypeSchema.default('gallery'),
 	position: z.coerce.number().int().min(0).default(0)

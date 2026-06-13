@@ -24,4 +24,4 @@ export {
 	PrismaClient,
 	ProductImageType,
 	StaffStatus
-} from '@prisma/client';
+} from '../prisma/generated/prisma/client.js';

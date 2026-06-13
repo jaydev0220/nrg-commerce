@@ -126,6 +126,8 @@ export const refreshTokenClaimsSchema = z.object({
 	sid: uuidSchema,
 	jti: z.string().min(1),
 	type: z.literal('refresh'),
+	mfa: z.array(mfaMethodSchema).default([]),
+	primaryFactor: authPrimaryFactorSchema,
 	exp: z.number().int().positive(),
 	iat: z.number().int().positive()
 });
@@ -141,4 +143,31 @@ export const totpChallengeSchema = z.object({
 export const mfaPreferenceSchema = z.object({
 	mfaRequired: booleanLikeSchema.default(false),
 	preferredMfaMethod: mfaMethodSchema.nullable().optional()
+});
+
+export const passwordLoginSchema = z.object({
+	email: z.email(),
+	password: z.string().min(8)
+});
+
+export const pendingAuthTokenSchema = z.object({
+	pendingToken: z.string().min(1)
+});
+
+export const passkeyAuthenticationStartSchema = z.object({
+	email: z.email()
+});
+
+export const passkeyAuthenticationVerificationSchema = z.object({
+	ceremonyToken: z.string().min(1),
+	credential: z.unknown()
+});
+
+export const passkeyRegistrationStartSchema = z.object({
+	nickname: z.string().trim().min(1).optional()
+});
+
+export const totpSetupConfirmationSchema = z.object({
+	setupToken: z.string().min(1),
+	code: z.string().regex(/^\d{6,8}$/)
 });

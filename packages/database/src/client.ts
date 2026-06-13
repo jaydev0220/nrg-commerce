@@ -1,6 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
+
+import { PrismaClient } from '../prisma/generated/prisma/client.js';
 
 const fallbackDatabaseUrl = 'postgresql://postgres:postgres@localhost:5432/nrg_commerce';
 

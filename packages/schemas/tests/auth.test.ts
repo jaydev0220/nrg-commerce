@@ -3,7 +3,12 @@ import test from 'node:test';
 
 import {
 	accessTokenClaimsSchema,
+	passkeyAuthenticationVerificationSchema,
+	passwordLoginSchema,
+	refreshTokenRequestSchema,
 	refreshTokenClaimsSchema,
+	staffPasswordUpdateSchema,
+	totpSetupConfirmationSchema,
 	totpCredentialSchema,
 	totpChallengeSchema
 } from '../src/index.js';
@@ -33,6 +38,8 @@ test('refreshTokenClaimsSchema rejects access token payloads', () => {
 			sid: 'ca7641b9-6856-42b6-99f0-f75f1a4d9e79',
 			jti: 'refresh-family-1',
 			type: 'access',
+			mfa: ['authenticator'],
+			primaryFactor: 'password',
 			exp: 1_800_000_000,
 			iat: 1_700_000_000
 		})
@@ -60,4 +67,47 @@ test('totpCredentialSchema uses the fixed TOTP shape without label or algorithm 
 	assert.equal(parsedCredential.secretEncrypted, 'encrypted-secret');
 	assert.equal('label' in parsedCredential, false);
 	assert.equal('algorithm' in parsedCredential, false);
+});
+
+test('passwordLoginSchema requires an email and a long enough password', () => {
+	const parsedPayload = passwordLoginSchema.parse({
+		email: 'admin@example.com',
+		password: 'correct horse battery staple'
+	});
+
+	assert.equal(parsedPayload.email, 'admin@example.com');
+	assert.throws(() => passwordLoginSchema.parse({ email: 'admin@example.com', password: 'short' }));
+});
+
+test('refreshTokenRequestSchema requires a refresh token string', () => {
+	assert.equal(
+		refreshTokenRequestSchema.parse({ refreshToken: 'refresh-token-value' }).refreshToken,
+		'refresh-token-value'
+	);
+	assert.throws(() => refreshTokenRequestSchema.parse({ refreshToken: '' }));
+});
+
+test('passkey and TOTP ceremony schemas accept opaque tokens and validation codes', () => {
+	assert.equal(
+		passkeyAuthenticationVerificationSchema.parse({
+			ceremonyToken: 'opaque-token',
+			credential: { id: 'credential-id' }
+		}).ceremonyToken,
+		'opaque-token'
+	);
+	assert.equal(
+		totpSetupConfirmationSchema.parse({
+			setupToken: 'setup-token',
+			code: '123456'
+		}).setupToken,
+		'setup-token'
+	);
+});
+
+test('staffPasswordUpdateSchema enforces the admin password update payload', () => {
+	assert.equal(
+		staffPasswordUpdateSchema.parse({ password: 'correct horse battery staple' }).password,
+		'correct horse battery staple'
+	);
+	assert.throws(() => staffPasswordUpdateSchema.parse({ password: 'tiny' }));
 });

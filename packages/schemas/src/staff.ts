@@ -51,3 +51,7 @@ export const staffUpdateSchema = nonEmptyUpdate(
 export const staffDeleteQuerySchema = z.object({
 	force: booleanLikeSchema.default(false)
 });
+
+export const staffPasswordUpdateSchema = z.object({
+	password: z.string().min(8)
+});
