@@ -2,6 +2,7 @@ node_modules
 build
 .svelte-kit
 static
+generated
 
 pnpm-lock.yaml
 worker-configuration.d.ts
