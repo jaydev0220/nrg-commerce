@@ -10,9 +10,11 @@
 		"check": "tsc --noEmit --project tsconfig.json",
 		"format": "prettier --ignore-path ../../.prettierignore --write .",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
-		"test": "node --test"
+		"test": "tsx --test tests/**/*.test.ts"
 	},
 	"dependencies": {
+		"@aws-sdk/client-s3": "catalog:express",
+		"@aws-sdk/s3-request-presigner": "catalog:express",
 		"@packages/database": "workspace:*",
 		"@packages/schemas": "workspace:*",
 		"@simplewebauthn/server": "catalog:express",
@@ -22,7 +24,6 @@
 		"express-rate-limit": "catalog:express",
 		"helmet": "catalog:express",
 		"jose": "catalog:express",
-		"multer": "catalog:express",
 		"otplib": "catalog:express"
 	},
 	"devDependencies": {
