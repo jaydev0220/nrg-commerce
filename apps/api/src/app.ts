@@ -13,6 +13,7 @@ import { createAuthService } from './modules/auth/auth.service.js';
 import { createPrismaCatalogRepository } from './modules/management/catalog.repository.js';
 import { createCategoryService } from './modules/management/category.service.js';
 import { createImageService } from './modules/management/image.service.js';
+import { createProductService } from './modules/management/product.service.js';
 import { createSkuService } from './modules/management/sku.service.js';
 import { createPrismaStaffRepository } from './modules/management/staff.repository.js';
 import { createStaffService } from './modules/management/staff.service.js';
@@ -74,6 +75,9 @@ export function createApp(dependencies: AppDependencies = {}) {
 	const categoryService = createCategoryService({
 		repository: managementCatalogRepository
 	});
+	const productService = createProductService({
+		repository: managementCatalogRepository
+	});
 	const skuService = createSkuService({
 		repository: managementCatalogRepository
 	});
@@ -124,6 +128,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 		authService,
 		authenticate,
 		staffService,
+		productService,
 		categoryService,
 		skuService,
 		imageService,

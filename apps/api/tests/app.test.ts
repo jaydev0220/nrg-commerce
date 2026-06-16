@@ -111,6 +111,7 @@ test('management upload noop route is not exposed', async () => {
 			next();
 		},
 		staffService: {} as Parameters<typeof initializeRoutes>[1]['staffService'],
+		productService: {} as Parameters<typeof initializeRoutes>[1]['productService'],
 		categoryService: {} as Parameters<typeof initializeRoutes>[1]['categoryService'],
 		skuService: {} as Parameters<typeof initializeRoutes>[1]['skuService'],
 		imageService: {} as Parameters<typeof initializeRoutes>[1]['imageService'],
@@ -138,6 +139,7 @@ test('management product image upload-url route returns a presigned upload targe
 	app.use(
 		'/api/management/products',
 		createCatalogManagementRouter({
+			productService: {} as Parameters<typeof createCatalogManagementRouter>[0]['productService'],
 			categoryService: {} as Parameters<typeof createCatalogManagementRouter>[0]['categoryService'],
 			skuService: {} as Parameters<typeof createCatalogManagementRouter>[0]['skuService'],
 			imageService: {

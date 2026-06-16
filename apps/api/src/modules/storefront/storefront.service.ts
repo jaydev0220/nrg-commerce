@@ -5,6 +5,7 @@ import type {
 	CatalogCategoryRecord,
 	CatalogCategoryTreeRecord,
 	CatalogJsonValue,
+	CatalogProductRecord,
 	CatalogSkuRecord
 } from '../../types/catalog.js';
 import { buildCategoryTree, matchesAttributes } from '../../utils/catalog.js';
@@ -15,7 +16,9 @@ type StorefrontServiceDependencies = {
 	repository: Pick<
 		StorefrontRepository,
 		| 'listCategories'
+		| 'listProducts'
 		| 'listSkus'
+		| 'findProductById'
 		| 'findSkuByCode'
 		| 'findCategoryBySlug'
 		| 'countProductsForCategoryIds'
@@ -36,6 +39,29 @@ type StorefrontSkuListQuery = {
 	sort: 'name' | 'price' | 'createdAt';
 	order: 'asc' | 'desc';
 };
+
+type StorefrontProductListQuery = {
+	page: number;
+	limit: number;
+	search?: string;
+	categorySlug?: string;
+	includeSkus: boolean;
+	includeImages: boolean;
+	sort: 'name' | 'createdAt';
+	order: 'asc' | 'desc';
+};
+
+function ensurePublishedProduct(product: CatalogProductRecord | null): CatalogProductRecord {
+	if (!product || !product.published) {
+		throw new AppError(
+			404,
+			'PRODUCT_NOT_FOUND',
+			'The requested storefront product could not be found.'
+		);
+	}
+
+	return product;
+}
 
 function ensurePublishedSku(sku: CatalogSkuRecord | null): CatalogSkuRecord {
 	if (!sku || !sku.published) {
@@ -68,6 +94,38 @@ function ensureCategory(category: CatalogCategoryRecord | null): CatalogCategory
 
 export function createStorefrontCatalogService(dependencies: StorefrontServiceDependencies) {
 	return {
+		async listProducts(query: StorefrontProductListQuery): Promise<{
+			data: CatalogProductRecord[];
+			total: number;
+		}> {
+			const result = await dependencies.repository.listProducts(query, {
+				includeSkus: query.includeSkus,
+				includeImages: query.includeImages,
+				publishedOnly: true
+			});
+
+			return {
+				data: result.data.filter((product) => product.published),
+				total: result.total
+			};
+		},
+
+		async getProductById(
+			productId: string,
+			query: {
+				includeSkus: boolean;
+				includeImages: boolean;
+			}
+		): Promise<CatalogProductRecord> {
+			return ensurePublishedProduct(
+				await dependencies.repository.findProductById(productId, {
+					includeSkus: query.includeSkus,
+					includeImages: query.includeImages,
+					publishedOnly: true
+				})
+			);
+		},
+
 		async listSkus(query: StorefrontSkuListQuery): Promise<{
 			data: CatalogSkuRecord[];
 			total: number;

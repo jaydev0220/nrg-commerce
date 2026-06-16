@@ -8,7 +8,7 @@ type SkuServiceDependencies = {
 		CatalogRepository,
 		| 'listSkus'
 		| 'findSkuById'
-		| 'findCategoryById'
+		| 'findProductById'
 		| 'createSku'
 		| 'updateSku'
 		| 'softDeleteSku'
@@ -55,24 +55,17 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 		},
 
 		async createSku(input: {
+			productId: string;
 			skuCode: string;
-			name: string;
-			description?: string;
-			categoryId: string;
 			price: number;
-			published: boolean;
 			attributes: Record<string, CatalogJsonValue>;
 		}): Promise<CatalogSkuRecord> {
 			if (await dependencies.repository.skuCodeExists(input.skuCode)) {
 				throw new AppError(409, 'SKU_CODE_CONFLICT', 'The provided SKU code is already in use.');
 			}
 
-			if (!(await dependencies.repository.findCategoryById(input.categoryId))) {
-				throw new AppError(
-					404,
-					'CATEGORY_NOT_FOUND',
-					'The referenced product category could not be found.'
-				);
+			if (!(await dependencies.repository.findProductById(input.productId))) {
+				throw new AppError(404, 'PRODUCT_NOT_FOUND', 'The referenced product could not be found.');
 			}
 
 			return dependencies.repository.createSku(input);
@@ -81,12 +74,9 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 		async updateSku(
 			skuId: string,
 			input: {
+				productId?: string;
 				skuCode?: string;
-				name?: string;
-				description?: string | null;
-				categoryId?: string;
 				price?: number;
-				published?: boolean;
 				attributes?: Record<string, CatalogJsonValue>;
 			}
 		): Promise<CatalogSkuRecord> {
@@ -102,12 +92,8 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 				}
 			}
 
-			if (input.categoryId && !(await dependencies.repository.findCategoryById(input.categoryId))) {
-				throw new AppError(
-					404,
-					'CATEGORY_NOT_FOUND',
-					'The referenced product category could not be found.'
-				);
+			if (input.productId && !(await dependencies.repository.findProductById(input.productId))) {
+				throw new AppError(404, 'PRODUCT_NOT_FOUND', 'The referenced product could not be found.');
 			}
 
 			return dependencies.repository.updateSku(skuId, input);

@@ -1,4 +1,8 @@
 export const permissionKeys = [
+	'product.read',
+	'product.create',
+	'product.update',
+	'product.delete',
 	'product.sku.read',
 	'product.sku.create',
 	'product.sku.update',
@@ -25,6 +29,26 @@ export type PermissionDefinition = {
 };
 
 export const permissionDefinitions = [
+	{
+		key: 'product.read',
+		name: 'Read products',
+		description: 'View product profiles in management workflows.'
+	},
+	{
+		key: 'product.create',
+		name: 'Create products',
+		description: 'Create product profiles in management workflows.'
+	},
+	{
+		key: 'product.update',
+		name: 'Update products',
+		description: 'Update product profiles in management workflows.'
+	},
+	{
+		key: 'product.delete',
+		name: 'Delete products',
+		description: 'Delete product profiles in management workflows.'
+	},
 	{
 		key: 'product.sku.read',
 		name: 'Read product SKUs',
@@ -125,6 +149,10 @@ export const roleDefinitions = [
 		name: 'Catalog Manager',
 		description: 'Manage product SKUs, categories, and images.',
 		permissions: [
+			'product.read',
+			'product.create',
+			'product.update',
+			'product.delete',
 			'product.sku.read',
 			'product.sku.create',
 			'product.sku.update',

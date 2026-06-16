@@ -3,8 +3,11 @@ import {
 	z,
 	storefrontCategoryDetailQuerySchema,
 	storefrontCategoryListQuerySchema,
+	storefrontProductDetailQuerySchema,
+	storefrontProductListQuerySchema,
 	storefrontSkuDetailQuerySchema,
-	storefrontSkuListQuerySchema
+	storefrontSkuListQuerySchema,
+	uuidSchema
 } from '@packages/schemas';
 
 import { validateRequest } from '../../middlewares/validate-request.js';
@@ -19,6 +22,10 @@ const skuCodeParamsSchema = z.object({
 	skuCode: z.string().trim().min(1)
 });
 
+const productParamsSchema = z.object({
+	productId: uuidSchema
+});
+
 const categorySlugParamsSchema = z.object({
 	categorySlug: z.string().trim().min(1)
 });
@@ -26,6 +33,12 @@ const categorySlugParamsSchema = z.object({
 export function createStorefrontCatalogRouter(dependencies: StorefrontRouterDependencies): Router {
 	const controller = createStorefrontCatalogController(dependencies);
 	const router = Router();
+
+	router.get(
+		'/',
+		validateRequest({ query: storefrontProductListQuerySchema }),
+		controller.listProducts
+	);
 
 	router.get(
 		'/skus',
@@ -52,6 +65,12 @@ export function createStorefrontCatalogRouter(dependencies: StorefrontRouterDepe
 			query: storefrontCategoryDetailQuerySchema
 		}),
 		controller.getCategoryBySlug
+	);
+
+	router.get(
+		'/:productId',
+		validateRequest({ params: productParamsSchema, query: storefrontProductDetailQuerySchema }),
+		controller.getProductById
 	);
 
 	return router;

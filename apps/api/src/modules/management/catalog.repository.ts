@@ -4,11 +4,13 @@ import type {
 	CatalogCategoryRecord,
 	CatalogImageRecord,
 	CatalogJsonValue,
+	CatalogProductRecord,
 	CatalogSkuRecord,
 	PaginatedResult
 } from '../../types/catalog.js';
 
 type CategorySortField = 'name' | 'createdAt' | 'updatedAt' | 'position';
+type ProductSortField = 'name' | 'createdAt' | 'updatedAt';
 type SkuSortField = 'createdAt' | 'updatedAt' | 'skuCode' | 'price';
 type StorefrontSkuSortField = 'name' | 'price' | 'createdAt';
 type ImageSortField = 'position' | 'createdAt' | 'updatedAt';
@@ -35,6 +37,23 @@ type ListSkusInput = {
 	limit?: number;
 };
 
+type ListProductsInput = {
+	search?: string;
+	published?: boolean;
+	categoryId?: string;
+	categorySlug?: string;
+	sort: ProductSortField;
+	order: 'asc' | 'desc';
+	page?: number;
+	limit?: number;
+};
+
+type FindProductOptions = {
+	includeSkus: boolean;
+	includeImages: boolean;
+	publishedOnly?: boolean;
+};
+
 type FindSkuOptions = {
 	includeImages: boolean;
 	publishedOnly?: boolean;
@@ -50,6 +69,13 @@ type ListImagesInput = {
 
 type ListCategoriesOptions = {
 	paginate?: boolean;
+};
+
+type ListProductsOptions = {
+	paginate?: boolean;
+	includeSkus: boolean;
+	includeImages: boolean;
+	publishedOnly?: boolean;
 };
 
 type ListSkusOptions = {
@@ -108,19 +134,71 @@ function mapImageRecord(image: {
 	};
 }
 
+function mapSkuRecordFromProduct(
+	product: {
+		name: string;
+		description: string | null;
+		categoryId: string;
+		published: boolean;
+		category: { slug: string };
+	},
+	sku: {
+		id: string;
+		productId: string;
+		skuCode: string;
+		price: { toString(): string };
+		attributes: unknown;
+		deletedAt: Date | null;
+		createdAt: Date;
+		updatedAt: Date;
+		images?: Array<{
+			id: string;
+			skuId: string;
+			imageUrl: string;
+			assetKey: string | null;
+			altText: string;
+			type: 'thumbnail' | 'gallery';
+			position: number;
+			deletedAt: Date | null;
+			createdAt: Date;
+			updatedAt: Date;
+		}>;
+	}
+): CatalogSkuRecord {
+	return {
+		id: sku.id,
+		productId: sku.productId,
+		skuCode: sku.skuCode,
+		name: product.name,
+		description: product.description,
+		categoryId: product.categoryId,
+		categorySlug: product.category.slug,
+		price: Number(sku.price.toString()),
+		published: product.published,
+		attributes: (sku.attributes ?? {}) as Record<string, CatalogJsonValue>,
+		deletedAt: sku.deletedAt,
+		createdAt: sku.createdAt,
+		updatedAt: sku.updatedAt,
+		images: sku.images?.map(mapImageRecord) ?? []
+	};
+}
+
 function mapSkuRecord(sku: {
 	id: string;
+	productId: string;
 	skuCode: string;
-	name: string;
-	description: string | null;
-	categoryId: string;
+	product: {
+		name: string;
+		description: string | null;
+		categoryId: string;
+		published: boolean;
+		category: { slug: string };
+	};
 	price: { toString(): string };
-	published: boolean;
 	attributes: unknown;
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
-	category: { slug: string };
 	images?: Array<{
 		id: string;
 		skuId: string;
@@ -134,20 +212,53 @@ function mapSkuRecord(sku: {
 		updatedAt: Date;
 	}>;
 }): CatalogSkuRecord {
+	return mapSkuRecordFromProduct(sku.product, sku);
+}
+
+function mapProductRecord(product: {
+	id: string;
+	name: string;
+	description: string | null;
+	categoryId: string;
+	published: boolean;
+	deletedAt: Date | null;
+	createdAt: Date;
+	updatedAt: Date;
+	category: { slug: string };
+	skus?: Array<{
+		id: string;
+		productId: string;
+		skuCode: string;
+		price: { toString(): string };
+		attributes: unknown;
+		deletedAt: Date | null;
+		createdAt: Date;
+		updatedAt: Date;
+		images?: Array<{
+			id: string;
+			skuId: string;
+			imageUrl: string;
+			assetKey: string | null;
+			altText: string;
+			type: 'thumbnail' | 'gallery';
+			position: number;
+			deletedAt: Date | null;
+			createdAt: Date;
+			updatedAt: Date;
+		}>;
+	}>;
+}): CatalogProductRecord {
 	return {
-		id: sku.id,
-		skuCode: sku.skuCode,
-		name: sku.name,
-		description: sku.description,
-		categoryId: sku.categoryId,
-		categorySlug: sku.category.slug,
-		price: Number(sku.price.toString()),
-		published: sku.published,
-		attributes: (sku.attributes ?? {}) as Record<string, CatalogJsonValue>,
-		deletedAt: sku.deletedAt,
-		createdAt: sku.createdAt,
-		updatedAt: sku.updatedAt,
-		images: sku.images?.map(mapImageRecord) ?? []
+		id: product.id,
+		name: product.name,
+		description: product.description,
+		categoryId: product.categoryId,
+		categorySlug: product.category.slug,
+		published: product.published,
+		deletedAt: product.deletedAt,
+		createdAt: product.createdAt,
+		updatedAt: product.updatedAt,
+		skus: product.skus?.map((sku) => mapSkuRecordFromProduct(product, sku)) ?? []
 	};
 }
 
@@ -165,10 +276,22 @@ function resolveCategoryOrderBy(sort: CategorySortField, order: 'asc' | 'desc') 
 	}
 }
 
-function resolveSkuOrderBy(sort: SkuSortField | StorefrontSkuSortField, order: 'asc' | 'desc') {
+function resolveProductOrderBy(sort: ProductSortField, order: 'asc' | 'desc') {
 	switch (sort) {
 		case 'name':
 			return { name: order } as const;
+		case 'updatedAt':
+			return { updatedAt: order } as const;
+		case 'createdAt':
+		default:
+			return { createdAt: order } as const;
+	}
+}
+
+function resolveSkuOrderBy(sort: SkuSortField | StorefrontSkuSortField, order: 'asc' | 'desc') {
+	switch (sort) {
+		case 'name':
+			return { product: { name: order } } as const;
 		case 'price':
 			return { price: order } as const;
 		case 'updatedAt':
@@ -195,7 +318,7 @@ function resolveImageOrderBy(sort: ImageSortField, order: 'asc' | 'desc') {
 
 export function createPrismaCatalogRepository(database: DatabaseClient) {
 	const countAssignedSkus = async (categoryId: string, publishedOnly = false): Promise<number> =>
-		database.productSku.count({
+		database.product.count({
 			where: {
 				categoryId,
 				deletedAt: null,
@@ -273,6 +396,205 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			return category ? mapCategoryRecord(category) : null;
 		},
 
+		async listProducts(
+			input: ListProductsInput,
+			options: ListProductsOptions
+		): Promise<PaginatedResult<CatalogProductRecord>> {
+			const where = {
+				deletedAt: null,
+				...(options.publishedOnly ? { published: true } : {}),
+				...(input.published !== undefined ? { published: input.published } : {}),
+				...(input.categoryId ? { categoryId: input.categoryId } : {}),
+				...(input.categorySlug
+					? {
+							category: {
+								is: {
+									slug: input.categorySlug,
+									deletedAt: null
+								}
+							}
+						}
+					: {}),
+				...(input.search
+					? {
+							OR: [
+								{ name: { contains: input.search, mode: 'insensitive' as const } },
+								{ description: { contains: input.search, mode: 'insensitive' as const } }
+							]
+						}
+					: {})
+			};
+			const paginate = options.paginate ?? true;
+			const products = await database.product.findMany({
+				where,
+				orderBy: resolveProductOrderBy(input.sort, input.order),
+				include: {
+					category: {
+						select: {
+							slug: true
+						}
+					},
+					...(options.includeSkus
+						? {
+								skus: {
+									where: {
+										deletedAt: null
+									},
+									orderBy: [{ createdAt: 'asc' }],
+									...(options.includeImages
+										? {
+												include: {
+													images: {
+														where: {
+															deletedAt: null
+														},
+														orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+													}
+												}
+											}
+										: {})
+								}
+							}
+						: {})
+				},
+				...(paginate && input.page && input.limit
+					? {
+							skip: (input.page - 1) * input.limit,
+							take: input.limit
+						}
+					: {})
+			});
+			const total = paginate ? await database.product.count({ where }) : products.length;
+
+			return {
+				data: products.map(mapProductRecord),
+				total
+			};
+		},
+
+		async findProductById(
+			productId: string,
+			options: FindProductOptions = {
+				includeSkus: false,
+				includeImages: false
+			}
+		): Promise<CatalogProductRecord | null> {
+			const product = await database.product.findFirst({
+				where: {
+					id: productId,
+					deletedAt: null,
+					...(options.publishedOnly ? { published: true } : {})
+				},
+				include: {
+					category: {
+						select: {
+							slug: true
+						}
+					},
+					...(options.includeSkus
+						? {
+								skus: {
+									where: {
+										deletedAt: null
+									},
+									orderBy: [{ createdAt: 'asc' }],
+									...(options.includeImages
+										? {
+												include: {
+													images: {
+														where: {
+															deletedAt: null
+														},
+														orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+													}
+												}
+											}
+										: {})
+								}
+							}
+						: {})
+				}
+			});
+
+			return product ? mapProductRecord(product) : null;
+		},
+
+		async createProduct(input: {
+			name: string;
+			description?: string;
+			categoryId: string;
+			published: boolean;
+		}): Promise<CatalogProductRecord> {
+			const product = await database.product.create({
+				data: {
+					name: input.name,
+					description: input.description ?? null,
+					categoryId: input.categoryId,
+					published: input.published
+				},
+				include: {
+					category: {
+						select: {
+							slug: true
+						}
+					}
+				}
+			});
+
+			return mapProductRecord(product);
+		},
+
+		async updateProduct(
+			productId: string,
+			input: {
+				name?: string;
+				description?: string | null;
+				categoryId?: string;
+				published?: boolean;
+			}
+		): Promise<CatalogProductRecord> {
+			const product = await database.product.update({
+				where: {
+					id: productId
+				},
+				data: {
+					name: input.name,
+					description: input.description,
+					categoryId: input.categoryId,
+					published: input.published
+				},
+				include: {
+					category: {
+						select: {
+							slug: true
+						}
+					}
+				}
+			});
+
+			return mapProductRecord(product);
+		},
+
+		async softDeleteProduct(productId: string): Promise<void> {
+			await database.product.update({
+				where: {
+					id: productId
+				},
+				data: {
+					deletedAt: new Date(),
+					published: false
+				}
+			});
+		},
+
+		async forceDeleteProduct(productId: string): Promise<void> {
+			await database.product.delete({
+				where: {
+					id: productId
+				}
+			});
+		},
+
 		async createCategory(input: {
 			name: string;
 			slug: string;
@@ -320,7 +642,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 		},
 
 		async reassignSkusToCategory(categoryId: string, targetCategoryId: string): Promise<void> {
-			await database.productSku.updateMany({
+			await database.product.updateMany({
 				where: {
 					categoryId,
 					deletedAt: null
@@ -430,7 +752,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			input: ListSkusInput,
 			options: ListSkusOptions
 		): Promise<PaginatedResult<CatalogSkuRecord>> {
-			const where = {
+			const productWhere = {
 				deletedAt: null,
 				...(options.publishedOnly ? { published: true } : {}),
 				...(input.published !== undefined ? { published: input.published } : {}),
@@ -444,13 +766,27 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 								}
 							}
 						}
-					: {}),
+					: {})
+			};
+			const where = {
+				deletedAt: null,
+				product: {
+					is: productWhere
+				},
 				...(input.search
 					? {
 							OR: [
 								{ skuCode: { contains: input.search, mode: 'insensitive' as const } },
-								{ name: { contains: input.search, mode: 'insensitive' as const } },
-								{ description: { contains: input.search, mode: 'insensitive' as const } }
+								{
+									product: {
+										is: { name: { contains: input.search, mode: 'insensitive' as const } }
+									}
+								},
+								{
+									product: {
+										is: { description: { contains: input.search, mode: 'insensitive' as const } }
+									}
+								}
 							]
 						}
 					: {}),
@@ -462,9 +798,17 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				where,
 				orderBy: resolveSkuOrderBy(input.sort, input.order),
 				include: {
-					category: {
+					product: {
 						select: {
-							slug: true
+							name: true,
+							description: true,
+							categoryId: true,
+							published: true,
+							category: {
+								select: {
+									slug: true
+								}
+							}
 						}
 					},
 					...(options.includeImages
@@ -498,12 +842,25 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				where: {
 					id: skuId,
 					deletedAt: null,
-					...(options.publishedOnly ? { published: true } : {})
+					product: {
+						is: {
+							deletedAt: null,
+							...(options.publishedOnly ? { published: true } : {})
+						}
+					}
 				},
 				include: {
-					category: {
+					product: {
 						select: {
-							slug: true
+							name: true,
+							description: true,
+							categoryId: true,
+							published: true,
+							category: {
+								select: {
+									slug: true
+								}
+							}
 						}
 					},
 					...(options.includeImages
@@ -530,12 +887,25 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				where: {
 					skuCode,
 					deletedAt: null,
-					...(options.publishedOnly ? { published: true } : {})
+					product: {
+						is: {
+							deletedAt: null,
+							...(options.publishedOnly ? { published: true } : {})
+						}
+					}
 				},
 				include: {
-					category: {
+					product: {
 						select: {
-							slug: true
+							name: true,
+							description: true,
+							categoryId: true,
+							published: true,
+							category: {
+								select: {
+									slug: true
+								}
+							}
 						}
 					},
 					...(options.includeImages
@@ -555,28 +925,30 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 		},
 
 		async createSku(input: {
+			productId: string;
 			skuCode: string;
-			name: string;
-			description?: string;
-			categoryId: string;
 			price: number;
-			published: boolean;
 			attributes: Record<string, CatalogJsonValue>;
 		}): Promise<CatalogSkuRecord> {
 			const sku = await database.productSku.create({
 				data: {
+					productId: input.productId,
 					skuCode: input.skuCode,
-					name: input.name,
-					description: input.description ?? null,
-					categoryId: input.categoryId,
 					price: input.price,
-					published: input.published,
 					attributes: input.attributes
 				},
 				include: {
-					category: {
+					product: {
 						select: {
-							slug: true
+							name: true,
+							description: true,
+							categoryId: true,
+							published: true,
+							category: {
+								select: {
+									slug: true
+								}
+							}
 						}
 					}
 				}
@@ -588,12 +960,9 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 		async updateSku(
 			skuId: string,
 			input: {
+				productId?: string;
 				skuCode?: string;
-				name?: string;
-				description?: string | null;
-				categoryId?: string;
 				price?: number;
-				published?: boolean;
 				attributes?: Record<string, CatalogJsonValue>;
 			}
 		): Promise<CatalogSkuRecord> {
@@ -602,18 +971,23 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					id: skuId
 				},
 				data: {
+					productId: input.productId,
 					skuCode: input.skuCode,
-					name: input.name,
-					description: input.description,
-					categoryId: input.categoryId,
 					price: input.price,
-					published: input.published,
 					attributes: input.attributes
 				},
 				include: {
-					category: {
+					product: {
 						select: {
-							slug: true
+							name: true,
+							description: true,
+							categoryId: true,
+							published: true,
+							category: {
+								select: {
+									slug: true
+								}
+							}
 						}
 					}
 				}
@@ -628,8 +1002,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					id: skuId
 				},
 				data: {
-					deletedAt: new Date(),
-					published: false
+					deletedAt: new Date()
 				}
 			});
 		},

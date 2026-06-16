@@ -10,6 +10,7 @@ import type { AuthService } from '../modules/auth/auth.service.js';
 import { createCatalogManagementRouter } from '../modules/management/management.routes.js';
 import type { CategoryService } from '../modules/management/category.service.js';
 import type { ImageService } from '../modules/management/image.service.js';
+import type { ProductService } from '../modules/management/product.service.js';
 import type { SkuService } from '../modules/management/sku.service.js';
 import { createStaffManagementRouter } from '../modules/management/staff.routes.js';
 import type { StaffService } from '../modules/management/staff.service.js';
@@ -22,6 +23,7 @@ type RouteDependencies = {
 	authService: AuthService;
 	authenticate: RequestHandler;
 	staffService: StaffService;
+	productService: ProductService;
 	categoryService: CategoryService;
 	skuService: SkuService;
 	imageService: ImageService;
@@ -50,6 +52,7 @@ export function initializeRoutes(app: Application, dependencies: RouteDependenci
 	app.use(
 		'/api/management/products',
 		createCatalogManagementRouter({
+			productService: dependencies.productService,
 			categoryService: dependencies.categoryService,
 			skuService: dependencies.skuService,
 			imageService: dependencies.imageService

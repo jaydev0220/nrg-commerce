@@ -39,6 +39,17 @@ export const productCategorySchema = z.object({
 	updatedAt: dateSchema
 });
 
+export const productSchema = z.object({
+	id: uuidSchema,
+	name: z.string().trim().min(1),
+	description: z.string().min(1).nullable(),
+	categoryId: uuidSchema,
+	published: z.boolean(),
+	deletedAt: dateSchema.nullable(),
+	createdAt: dateSchema,
+	updatedAt: dateSchema
+});
+
 export const productImageSchema = z.object({
 	id: uuidSchema,
 	skuId: uuidSchema,
@@ -54,16 +65,14 @@ export const productImageSchema = z.object({
 
 export const productSkuSchema = z.object({
 	id: uuidSchema,
+	productId: uuidSchema,
 	skuCode: z.string().trim().min(1),
-	name: z.string().trim().min(1),
-	description: z.string().min(1).nullable(),
-	categoryId: uuidSchema,
 	price: moneySchema,
-	published: z.boolean(),
 	attributes: attributeMapSchema,
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
 	updatedAt: dateSchema,
+	product: productSchema.optional(),
 	images: z.array(productImageSchema).default([])
 });
 
@@ -75,27 +84,56 @@ export const managementSkuListQuerySchema = paginationQuerySchema.extend({
 	order: sortOrderSchema.default('desc')
 });
 
+export const managementProductListQuerySchema = paginationQuerySchema.extend({
+	search: z.string().trim().min(1).optional(),
+	published: booleanLikeSchema.optional(),
+	categoryId: uuidSchema.optional(),
+	sort: z.enum(['name', 'createdAt', 'updatedAt']).default('createdAt'),
+	order: sortOrderSchema.default('desc'),
+	includeSkus: booleanLikeSchema.default(false),
+	includeImages: booleanLikeSchema.default(false)
+});
+
 export const productSkuCreateSchema = z.object({
+	productId: uuidSchema,
 	skuCode: z.string().trim().min(1),
+	price: moneySchema,
+	attributes: attributeMapSchema.default({})
+});
+
+export const productCreateSchema = z.object({
 	name: z.string().trim().min(1),
 	description: z.string().trim().min(1).optional(),
 	categoryId: uuidSchema,
-	price: moneySchema,
-	published: booleanLikeSchema.default(false),
-	attributes: attributeMapSchema.default({})
+	published: booleanLikeSchema.default(false)
 });
 
 export const productSkuUpdateSchema = nonEmptyUpdate(
 	z.object({
+		productId: uuidSchema.optional(),
 		skuCode: z.string().trim().min(1).optional(),
-		name: z.string().trim().min(1).optional(),
-		description: z.string().trim().min(1).nullable().optional(),
-		categoryId: uuidSchema.optional(),
 		price: moneySchema.optional(),
-		published: booleanLikeSchema.optional(),
 		attributes: attributeMapSchema.optional()
 	})
 );
+
+export const productUpdateSchema = nonEmptyUpdate(
+	z.object({
+		name: z.string().trim().min(1).optional(),
+		description: z.string().trim().min(1).nullable().optional(),
+		categoryId: uuidSchema.optional(),
+		published: booleanLikeSchema.optional()
+	})
+);
+
+export const productDeleteQuerySchema = z.object({
+	force: booleanLikeSchema.default(false)
+});
+
+export const managementProductDetailQuerySchema = z.object({
+	includeSkus: booleanLikeSchema.default(false),
+	includeImages: booleanLikeSchema.default(false)
+});
 
 export const productSkuDeleteQuerySchema = z.object({
 	force: booleanLikeSchema.default(false)
@@ -180,7 +218,21 @@ export const storefrontSkuListQuerySchema = paginationQuerySchema.extend({
 	order: sortOrderSchema.default('desc')
 });
 
+export const storefrontProductListQuerySchema = paginationQuerySchema.extend({
+	search: z.string().trim().min(1).optional(),
+	categorySlug: z.string().trim().min(1).optional(),
+	includeSkus: booleanLikeSchema.default(false),
+	includeImages: booleanLikeSchema.default(false),
+	sort: z.enum(['name', 'createdAt']).default('createdAt'),
+	order: sortOrderSchema.default('desc')
+});
+
 export const storefrontSkuDetailQuerySchema = z.object({
+	includeImages: booleanLikeSchema.default(false)
+});
+
+export const storefrontProductDetailQuerySchema = z.object({
+	includeSkus: booleanLikeSchema.default(false),
 	includeImages: booleanLikeSchema.default(false)
 });
 

@@ -8,6 +8,10 @@ type StorefrontControllerDependencies = {
 	storefrontService: StorefrontCatalogService;
 };
 
+type ProductParams = {
+	productId: string;
+};
+
 type SkuCodeParams = {
 	skuCode: string;
 };
@@ -16,6 +20,8 @@ type CategorySlugParams = {
 	categorySlug: string;
 };
 type StorefrontCatalogController = {
+	listProducts: RequestHandler;
+	getProductById: RequestHandler;
 	listSkus: RequestHandler;
 	getSkuByCode: RequestHandler;
 	listCategories: RequestHandler;
@@ -24,6 +30,27 @@ type StorefrontCatalogController = {
 
 export function createStorefrontCatalogController(dependencies: StorefrontControllerDependencies) {
 	const controller: StorefrontCatalogController = {
+		listProducts: async (request, response) => {
+			const query =
+				getValidatedQuery<Parameters<StorefrontCatalogService['listProducts']>[0]>(request);
+			const result = await dependencies.storefrontService.listProducts(query);
+			response.status(200).json(
+				buildPaginatedResponse(result.data, {
+					page: query.page,
+					limit: query.limit,
+					total: result.total
+				})
+			);
+		},
+
+		getProductById: async (request, response) => {
+			const params = getValidatedParams<ProductParams>(request);
+			const query =
+				getValidatedQuery<Parameters<StorefrontCatalogService['getProductById']>[1]>(request);
+			const product = await dependencies.storefrontService.getProductById(params.productId, query);
+			response.status(200).json(product);
+		},
+
 		listSkus: async (request, response) => {
 			const query = getValidatedQuery<Parameters<StorefrontCatalogService['listSkus']>[0]>(request);
 			const result = await dependencies.storefrontService.listSkus(query);

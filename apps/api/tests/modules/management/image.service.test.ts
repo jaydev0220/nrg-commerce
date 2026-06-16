@@ -7,6 +7,7 @@ import { createImageService } from '../../../src/modules/management/image.servic
 function createCatalogSkuRecord() {
 	return {
 		id: 'sku-1',
+		productId: 'product-1',
 		skuCode: 'SKU-001',
 		name: 'Catalog SKU',
 		description: null,

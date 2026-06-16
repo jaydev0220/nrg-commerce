@@ -21,6 +21,7 @@ export type CatalogImageRecord = {
 
 export type CatalogSkuRecord = {
 	id: string;
+	productId: string;
 	skuCode: string;
 	name: string;
 	description: string | null;
@@ -33,6 +34,19 @@ export type CatalogSkuRecord = {
 	createdAt: Date;
 	updatedAt: Date;
 	images: CatalogImageRecord[];
+};
+
+export type CatalogProductRecord = {
+	id: string;
+	name: string;
+	description: string | null;
+	categoryId: string;
+	categorySlug: string;
+	published: boolean;
+	deletedAt: Date | null;
+	createdAt: Date;
+	updatedAt: Date;
+	skus: CatalogSkuRecord[];
 };
 
 export type CatalogCategoryRecord = {
