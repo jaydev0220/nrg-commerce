@@ -132,6 +132,7 @@ project-root/
 #### `apps/catalog`
 
 - **Framework:** Svelte 5
+- **i18n:** Paraglide JS
 - **Testing:** Playwright, Vitest
 - **Deployment:** Cloudflare Workers via `@sveltejs/adapter-cloudflare`
 
