@@ -1,7 +1,10 @@
 node_modules
 build
 .svelte-kit
+.wrangler
 test-results
+src/lib/paraglide
+project.inlang/cache/
 
 .env
 .env.*
