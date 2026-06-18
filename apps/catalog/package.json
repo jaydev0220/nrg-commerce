@@ -19,6 +19,7 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "catalog:lint",
+		"@inlang/paraglide-js": "catalog:svelte",
 		"@packages/eslint-config": "workspace:*",
 		"@packages/prettier-config": "workspace:*",
 		"@packages/tsconfig": "workspace:*",
