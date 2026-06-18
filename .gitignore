@@ -7,5 +7,6 @@ test-results
 .env.*
 !.env.example
 
+worker-configuration.d.ts
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
