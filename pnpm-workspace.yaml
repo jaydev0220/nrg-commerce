@@ -44,11 +44,16 @@ catalogs:
     typescript-eslint: ^8.61.1
   svelte:
     '@inlang/paraglide-js': ^2.19.0
+    '@lucide/svelte': ^1.20.0
     '@sveltejs/adapter-cloudflare': ^7.2.9
     '@sveltejs/adapter-node': ^5.5.4
+    '@sveltejs/adapter-static': ^3.0.10
     '@sveltejs/kit': ^2.65.2
     '@sveltejs/vite-plugin-svelte': ^7.1.2
+    '@tailwindcss/forms': ^0.5.11
     '@tailwindcss/vite': ^4.3.1
+    simple-icons: ^16.23.0
+    svead: ^0.0.16
     svelte: ^5.56.3
     svelte-check: ^4.6.0
     tailwindcss: ^4.3.1
