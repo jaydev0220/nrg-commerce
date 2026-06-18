@@ -1,0 +1,15 @@
+{
+	"name": "@packages/styles",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"exports": {
+		".": "./shared.css"
+	},
+	"devDependencies": {
+		"tailwindcss": "catalog:svelte"
+	},
+	"peerDependencies": {
+		"tailwindcss": "catalog:svelte"
+	}
+}

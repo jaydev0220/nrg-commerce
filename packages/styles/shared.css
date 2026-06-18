@@ -1,0 +1,268 @@
+@import 'tailwindcss';
+
+@theme {
+	/* ── Typography ───────────────────────────────── */
+	--font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Code', 'Liberation Mono', monospace;
+
+	/* ── Accent ramp: Blue-Teal ───────────────────── */
+	--color-accent-50: oklch(96% 0.02 192); /* #E4F4F7 — subtle tint, hover bg   */
+	--color-accent-100: oklch(90% 0.045 192); /* #BDE3EB — input focus ring, tags  */
+	--color-accent-200: oklch(82% 0.075 192); /* #83C9D6 — disabled states         */
+	--color-accent-300: oklch(73% 0.105 192); /* #44AFBF — secondary interactive   */
+	--color-accent-400: oklch(63% 0.12 192); /* #1A93A6 — hover on primary        */
+	--color-accent-500: oklch(54% 0.125 192); /* #0D7A8C — PRIMARY ACCENT          */
+	--color-accent-600: oklch(44% 0.11 192); /* #0A5D6B — pressed / active        */
+	--color-accent-700: oklch(35% 0.09 192); /* #074450 — dark surfaces           */
+	--color-accent-800: oklch(26% 0.065 192); /* #042E37 — dark text on accent bg  */
+	--color-accent-900: oklch(17% 0.04 192); /* #021B21 — near-black teal         */
+
+	/* ── Neutral ramp: Warm-cool ──────────────────── */
+	--color-neutral-50: oklch(98% 0.004 75); /* #F8F7F5 — page background         */
+	--color-neutral-100: oklch(95% 0.005 75); /* #F1EFEC — card surface alt        */
+	--color-neutral-200: oklch(90% 0.007 75); /* #E4E1DC — default border          */
+	--color-neutral-300: oklch(82% 0.008 75); /* #CBC8C1 — dividers                */
+	--color-neutral-400: oklch(70% 0.009 75); /* #A8A49C — placeholder text        */
+	--color-neutral-500: oklch(58% 0.009 75); /* #837F77 — muted / captions        */
+	--color-neutral-600: oklch(46% 0.009 75); /* #5F5B53 — secondary text          */
+	--color-neutral-700: oklch(34% 0.008 75); /* #3E3B35 — body text               */
+	--color-neutral-800: oklch(23% 0.007 75); /* #282521 — heading text            */
+	--color-neutral-900: oklch(13% 0.005 75); /* #131110 — near-black              */
+
+	/* ── Semantic color aliases ───────────────────── */
+	/* Backgrounds */
+	--color-bg-page: var(--color-neutral-50); /* outer page                    */
+	--color-bg-surface: #ffffff; /* cards, panels, modals         */
+	--color-bg-sunken: var(--color-neutral-100); /* inputs, code blocks           */
+	--color-bg-accent: var(--color-accent-50); /* subtle accent fill            */
+
+	/* Borders */
+	--color-border: var(--color-neutral-200); /* default                       */
+	--color-border-strong: var(--color-neutral-300); /* emphasis, table head          */
+	--color-border-accent: var(--color-accent-200); /* focused inputs                */
+
+	/* Text */
+	--color-text-heading: var(--color-neutral-900); /* h1–h3                         */
+	--color-text-body: var(--color-neutral-800); /* paragraphs                    */
+	--color-text-muted: var(--color-neutral-500); /* captions, meta                */
+	--color-text-subtle: var(--color-neutral-400); /* placeholders, hints           */
+	--color-text-accent: var(--color-accent-600); /* links, active labels          */
+	--color-text-on-accent: #ffffff; /* text on accent-500 bg         */
+
+	/* Brand */
+	--color-brand: var(--color-accent-500); /* primary CTA, links            */
+	--color-brand-hover: var(--color-accent-400);
+	--color-brand-active: var(--color-accent-600);
+	--color-brand-subtle: var(--color-accent-50);
+	--color-brand-muted: var(--color-accent-100);
+
+	/* ── Status colors ────────────────────────────── */
+	--color-success-bg: oklch(95% 0.035 150); /* #E8F5EC                        */
+	--color-success: oklch(44% 0.13 150); /* #1A7A3C                        */
+	--color-warning-bg: oklch(96% 0.04 80); /* #FBF4E3                        */
+	--color-warning: oklch(55% 0.13 70); /* #9A6A00                        */
+	--color-danger-bg: oklch(96% 0.03 22); /* #FAEBE8                        */
+	--color-danger: oklch(46% 0.16 22); /* #B83020                        */
+	--color-info-bg: var(--color-accent-50);
+	--color-info: var(--color-accent-600);
+
+	/* ── Border radius ────────────────────────────── */
+	--radius-xs: 2px; /* tags, code chips             */
+	--radius-sm: 4px; /* inputs, badges               */
+	--radius-md: 8px; /* buttons, dropdowns           */
+	--radius-lg: 12px; /* cards, panels                */
+	--radius-xl: 16px; /* modals, drawers (max)        */
+
+	/* ── Spacing extras ───────────────────────────── */
+	--spacing-18: 4.5rem; /* 72px — section padding mobile  */
+	--spacing-22: 5.5rem; /* 88px — section padding desktop */
+	--spacing-26: 6.5rem; /* 104px — hero vertical padding  */
+	--spacing-30: 7.5rem; /* 120px — large feature sections */
+
+	/* ── Typography scale ─────────────────────────── */
+	--text-xs: 0.75rem; /* 12px — mono specs, legal      */
+	--text-sm: 0.8125rem; /* 13px — TC UI minimum          */
+	--text-base: 1rem; /* 16px — body                   */
+	--text-md: 1.0625rem; /* 17px — comfortable body alt   */
+	--text-lg: 1.125rem; /* 18px — lead / intro           */
+	--text-xl: 1.25rem; /* 20px — h4 / card title        */
+	--text-2xl: 1.5rem; /* 24px — h3                     */
+	--text-3xl: 1.875rem; /* 30px — h2                     */
+	--text-4xl: 2.25rem; /* 36px — h1 mobile              */
+	--text-5xl: 3rem; /* 48px — h1 desktop             */
+	--text-6xl: 3.75rem; /* 60px — landing hero           */
+
+	/* ── Line height ──────────────────────────────── */
+	--leading-tight: 1.3; /* headings, display            */
+	--leading-snug: 1.5; /* subheadings, UI labels       */
+	--leading-normal: 1.7; /* body text (TC-comfortable)   */
+	--leading-relaxed: 1.9; /* long-form editorial          */
+
+	/* ── Font weight ──────────────────────────────── */
+	--font-weight-light: 300;
+	--font-weight-regular: 400;
+	--font-weight-medium: 500;
+	--font-weight-semibold: 600;
+	--font-weight-bold: 700;
+
+	/* ── Letter spacing ───────────────────────────── */
+	--tracking-tight: -0.025em; /* Latin display headings       */
+	--tracking-normal: 0em;
+	--tracking-tc: 0.04em; /* TC headings                  */
+	--tracking-mono: 0.06em; /* mono labels                  */
+	--tracking-caps: 0.12em; /* ALL CAPS labels, nav items   */
+
+	/* ── Shadows ──────────────────────────────────── */
+	--shadow-xs: 0 1px 2px oklch(13% 0.005 75 / 0.06);
+	--shadow-sm: 0 2px 6px oklch(13% 0.005 75 / 0.08);
+	--shadow-md: 0 4px 16px oklch(13% 0.005 75 / 0.1);
+	--shadow-lg: 0 8px 32px oklch(13% 0.005 75 / 0.12);
+
+	/* ── Transitions ──────────────────────────────── */
+	--ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* entrances                */
+	--ease-in: cubic-bezier(0.64, 0, 0.78, 0); /* exits                    */
+	--ease-ui: cubic-bezier(0.4, 0, 0.2, 1); /* hover/focus states       */
+	--duration-fast: 100ms;
+	--duration-base: 180ms;
+	--duration-slow: 320ms;
+}
+
+/* ── Dark mode overrides ─────────────────────────── */
+@media (prefers-color-scheme: dark) {
+	:root:not(.light) {
+		--color-bg-page: var(--color-neutral-900);
+		--color-bg-surface: var(--color-neutral-800);
+		--color-bg-sunken: oklch(10% 0.005 75);
+		--color-bg-accent: var(--color-accent-800);
+
+		--color-border: var(--color-neutral-700);
+		--color-border-strong: var(--color-neutral-600);
+		--color-border-accent: var(--color-accent-700);
+
+		--color-text-heading: var(--color-neutral-50);
+		--color-text-body: var(--color-neutral-200);
+		--color-text-muted: var(--color-neutral-500);
+		--color-text-subtle: var(--color-neutral-600);
+		--color-text-accent: var(--color-accent-300);
+
+		--color-brand: var(--color-accent-400);
+		--color-brand-hover: var(--color-accent-300);
+		--color-brand-active: var(--color-accent-500);
+		--color-brand-subtle: var(--color-accent-800);
+		--color-brand-muted: var(--color-accent-700);
+
+		--shadow-xs: 0 1px 2px oklch(0% 0 0 / 0.3);
+		--shadow-sm: 0 2px 6px oklch(0% 0 0 / 0.35);
+		--shadow-md: 0 4px 16px oklch(0% 0 0 / 0.4);
+		--shadow-lg: 0 8px 32px oklch(0% 0 0 / 0.45);
+	}
+}
+
+/* Manual dark mode override */
+:root.dark {
+	--color-bg-page: var(--color-neutral-900);
+	--color-bg-surface: var(--color-neutral-800);
+	--color-bg-sunken: oklch(10% 0.005 75);
+	--color-bg-accent: var(--color-accent-800);
+
+	--color-border: var(--color-neutral-700);
+	--color-border-strong: var(--color-neutral-600);
+	--color-border-accent: var(--color-accent-700);
+
+	--color-text-heading: var(--color-neutral-50);
+	--color-text-body: var(--color-neutral-200);
+	--color-text-muted: var(--color-neutral-500);
+	--color-text-subtle: var(--color-neutral-600);
+	--color-text-accent: var(--color-accent-300);
+
+	--color-brand: var(--color-accent-400);
+	--color-brand-hover: var(--color-accent-300);
+	--color-brand-active: var(--color-accent-500);
+	--color-brand-subtle: var(--color-accent-800);
+	--color-brand-muted: var(--color-accent-700);
+
+	--shadow-xs: 0 1px 2px oklch(0% 0 0 / 0.3);
+	--shadow-sm: 0 2px 6px oklch(0% 0 0 / 0.35);
+	--shadow-md: 0 4px 16px oklch(0% 0 0 / 0.4);
+	--shadow-lg: 0 8px 32px oklch(0% 0 0 / 0.45);
+}
+
+/* ── Base layer ──────────────────────────────────── */
+@layer base {
+	html {
+		font-family: var(--font-sans);
+		font-size: 16px;
+		color: var(--color-text-body);
+		background-color: var(--color-bg-page);
+		color-scheme: light;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		/* Improve TC rendering */
+		text-rendering: optimizeLegibility;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		html:not(.light) {
+			color-scheme: dark;
+		}
+	}
+
+	html.dark {
+		color-scheme: dark;
+	}
+
+	/* Heading defaults */
+	h1,
+	h2,
+	h3 {
+		color: var(--color-text-heading);
+		line-height: var(--leading-tight);
+		font-weight: var(--font-weight-bold);
+		letter-spacing: var(--tracking-tc);
+		text-wrap: balance;
+	}
+
+	h4,
+	h5,
+	h6 {
+		color: var(--color-text-heading);
+		line-height: var(--leading-snug);
+		font-weight: var(--font-weight-semibold);
+	}
+
+	p {
+		line-height: var(--leading-normal);
+	}
+
+	/* Mono context: specs, SKUs, measurements */
+	code,
+	kbd,
+	samp,
+	.mono {
+		font-family: var(--font-mono);
+		letter-spacing: var(--tracking-mono);
+	}
+
+	/* Border default — reset Tailwind v4's currentColor default */
+	*,
+	::after,
+	::before {
+		border-color: var(--color-border);
+	}
+
+	a,
+	button,
+	input,
+	select,
+	textarea {
+		touch-action: manipulation;
+	}
+
+	* {
+		-webkit-tap-highlight-color: rgb(13 122 140 / 0.2);
+	}
+
+	:target {
+		scroll-margin-top: 6rem;
+	}
+}
