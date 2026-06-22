@@ -40,16 +40,30 @@ project-root/
 |   |   |-- playwright.config.ts
 |   |   |-- tsconfig.json
 |   |   `-- vite.config.ts
-|   `-- catalog/
+|   |-- catalog/
 |   |   |-- src/
 |   |   |   |-- lib/
+|   |   |   |   |-- components/
+|   |   |   |   |-- catalog/
+|   |   |   |   `-- server/
 |   |   |   |-- routes/
+|   |   |   |   |-- [productSlug]/
+|   |   |   |   |   |-- +page.svelte
+|   |   |   |   |   `-- +page.server.ts
+|   |   |   |   |-- +page.svelte
+|   |   |   |   |-- +page.server.ts
 |   |   |   |   |-- +layout.svelte
 |   |   |   |   `-- layout.css
+|   |   |   |-- hooks.ts
+|   |   |   |-- hooks.server.ts
 |   |   |   |-- app.html
 |   |   |   |-- app.d.ts
 |   |   |   `-- svelte.d.ts
 |   |   |-- static/
+|   |   |-- messages/
+|   |   |   |-- en.json
+|   |   |   `-- zh-tw.json
+|   |   |-- project.inlang/
 |   |   |-- e2e/
 |   |   |-- tests/
 |   |   |-- package.json
@@ -59,6 +73,39 @@ project-root/
 |   |   |-- tsconfig.json
 |   |   |-- vite.config.ts
 |   |   `-- wrangler.jsonc
+|   `-- landing/
+|       |-- src/
+|       |   |-- lib/
+|       |   |   |-- components/
+|       |   |   |-- state/
+|       |   |   |-- seo/
+|       |   |   |-- utils/
+|       |   |   `-- data/
+|       |   |-- routes/
+|       |   |   |-- about/
+|       |   |   |   |-- +page.svelte
+|       |   |   |   `-- +page.ts
+|       |   |   |-- contact/
+|       |   |   |   |-- +page.svelte
+|       |   |   |   `-- +page.ts
+|       |   |   |-- +page.svelte
+|       |   |   |-- +page.ts
+|       |   |   |-- +layout.svelte
+|       |   |   `-- layout.css
+|       |   |-- hooks.ts
+|       |   |-- hooks.server.ts
+|       |   |-- app.html
+|       |   `-- app.d.ts
+|       |-- static/
+|       |-- messages/
+|       |   |-- en.json
+|       |   `-- zh-tw.json
+|       |-- project.inlang/
+|       |-- package.json
+|       |-- eslint.config.js
+|       |-- prettier.config.js
+|       |-- tsconfig.json
+|       `-- vite.config.ts
 |-- packages/
 |   |-- eslint-config/
 |   |   |-- package.json
@@ -88,7 +135,7 @@ project-root/
 |   |   |-- prettier.config.js
 |   |   |-- tsconfig.json
 |   |   `-- prisma.config.ts
-|   `-- schemas/
+|   |-- schemas/
 |   |   |-- src/
 |   |   |   |-- common.ts
 |   |   |   |-- auth.ts
@@ -100,16 +147,29 @@ project-root/
 |   |   |-- eslint.config.js
 |   |   |-- prettier.config.js
 |   |   `-- tsconfig.json
+|   `-- components/
+|       |-- src/
+|       |   `-- lib/
+|       |       |-- Logo.svelte
+|       |       |-- LanguageSwitcher.svelte
+|       |       |-- ThemeSwitcher.svelte
+|       |       |-- SocialIcon.svelte
+|       |       |-- Navbar.svelte
+|       |       |-- Footer.svelte
+|       |       |-- index.ts
+|       |       `-- types.ts
+|       |-- package.json
+|       |-- eslint.config.js
+|       |-- prettier.config.js
+|       |-- tsconfig.json
+|       `-- vite.config.ts
 |-- .gitignore
 |-- .prettierignore
 |-- package.json
 `-- pnpm-workspace.yaml
 ```
 
-### Notes
-
-- Keep test files the same structure as src.
-- Ask for approval when creating files not included in the tree.
+Keep test files the same structure as src.
 
 ## Tech Stack
 
@@ -123,15 +183,24 @@ project-root/
 
 ### Applications
 
+### `apps/landing`
+
+- **Framework:** Svelte 5
+- **Styling:** Tailwind CSS 4
+- **i18n:** Paraglide JS
+- **Deployment:** GitHub Pages via `@sveltejs/adapter-static`
+
 #### `apps/admin`
 
 - **Framework:** Svelte 5
+- **Styling:** Tailwind CSS 4
 - **Testing:** Playwright, Vitest
 - **Deployment:** Docker
 
 #### `apps/catalog`
 
 - **Framework:** Svelte 5
+- **Styling:** Tailwind CSS 4
 - **i18n:** Paraglide JS
 - **Testing:** Playwright, Vitest
 - **Deployment:** Cloudflare Workers via `@sveltejs/adapter-cloudflare`
@@ -154,6 +223,10 @@ project-root/
 
 - **Validation library:** Zod 4
 - **Testing:** Node.js built-in test runner
+
+## Breaking Changes
+
+The project is still under active development. Do not preserve backward compatibility when it would compromise code quality, maintainability, performance, or architectural clarity. Make breaking changes when they improve the program overall, and update all affected code, tests, and schemas accordingly.
 
 ## Verifications
 
