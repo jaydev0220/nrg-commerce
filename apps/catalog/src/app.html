@@ -1,9 +1,32 @@
 <!doctype html>
-<html lang="%paraglide.lang%" dir="%paraglide.dir%">
+<html
+	lang="%paraglide.lang%"
+	dir="%paraglide.dir%"
+>
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="text-scale" content="scale" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1"
+		/>
+		<meta
+			name="text-scale"
+			content="scale"
+		/>
+		<script>
+			(() => {
+				const storedTheme = document.cookie
+					.split('; ')
+					.find((cookie) => cookie.startsWith('theme='))
+					?.split('=')[1];
+				const theme = storedTheme === 'dark' ? 'dark' : 'light';
+				const root = document.documentElement;
+
+				root.classList.remove('light', 'dark');
+				root.classList.add(theme);
+				root.style.colorScheme = theme;
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

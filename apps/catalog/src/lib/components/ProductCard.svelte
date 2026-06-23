@@ -1,0 +1,91 @@
+<script lang="ts">
+	import { ArrowRight } from '@lucide/svelte';
+	import { resolve } from '$app/paths';
+	import type { Pathname } from '$app/types';
+	import * as m from '$lib/paraglide/messages';
+	import type { CatalogProductView } from '$lib/catalog/types.js';
+
+	type Props = {
+		view: CatalogProductView;
+		categoryLabel: string;
+		href: string;
+	};
+
+	let { view, categoryLabel, href }: Props = $props();
+</script>
+
+<article
+	class="group overflow-hidden rounded-lg border border-border bg-bg-surface shadow-xs transition-[transform,border-color,box-shadow] duration-base ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:shadow-sm"
+>
+	<a
+		href={resolve(href as Pathname)}
+		class="relative block aspect-4/3 overflow-hidden bg-bg-sunken text-text-accent focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand"
+	>
+		{#if view.representativeImage}
+			<img
+				src={view.representativeImage.imageUrl}
+				alt={view.representativeImage.altText}
+				loading="lazy"
+				class="h-full w-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.03]"
+			/>
+		{:else}
+			<span
+				class="absolute inset-0 bg-[radial-gradient(circle_at_50%_25%,var(--color-bg-surface),transparent_68%)] opacity-90"
+			></span>
+			<span class="absolute inset-0 grid place-items-center p-6 text-center">
+				<span
+					class="rounded-md border border-border bg-bg-surface/90 px-3 py-2 text-sm font-semibold text-text-heading"
+				>
+					{view.name}
+				</span>
+			</span>
+		{/if}
+		<span
+			class="absolute bottom-3 right-3 translate-y-2 rounded-md border border-border bg-bg-surface/90 px-2.5 py-1.5 text-[11px] font-semibold text-text-heading opacity-0 shadow-xs backdrop-blur transition-all duration-base group-hover:translate-y-0 group-hover:opacity-100"
+		>
+			{m.catalog_view_product()}
+		</span>
+	</a>
+	<div class="flex min-h-67.5 flex-col p-5">
+		<div class="mb-3 flex items-start justify-between gap-3">
+			<p class="text-xs font-medium text-text-accent">{categoryLabel}</p>
+			<span
+				class="whitespace-nowrap rounded-sm bg-brand-subtle px-2 py-1 font-mono text-[10px] text-text-accent"
+			>
+				{view.skuCount}
+				{view.skuCount === 1 ? m.catalog_configuration() : m.catalog_configurations()}
+			</span>
+		</div>
+		<h2 class="text-xl leading-snug tracking-normal">
+			<a
+				href={resolve(href as Pathname)}
+				class="transition-colors duration-base ease-ui hover:text-text-accent"
+			>
+				{view.name}
+			</a>
+		</h2>
+		{#if view.description}
+			<p class="mt-2 line-clamp-2 text-sm text-text-muted">{view.description}</p>
+		{/if}
+		<div class="mt-4 flex flex-wrap gap-1.5">
+			{#each view.representativeAttributes as attribute (attribute.key)}
+				<span
+					class="rounded-sm border border-border bg-bg-sunken px-2 py-1 font-mono text-[10px] text-text-muted"
+				>
+					{attribute.values.length > 1
+						? `${attribute.values[0]} +${attribute.values.length - 1}`
+						: attribute.values[0]}
+				</span>
+			{/each}
+		</div>
+		<div class="mt-auto flex justify-end pt-6">
+			<a
+				href={resolve(href as Pathname)}
+				class="inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-xs font-semibold text-text-heading transition-[color,background-color,border-color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle hover:text-text-accent"
+			>
+				{m.catalog_view_product()}
+				<ArrowRight class="size-3.5" />
+			</a>
+		</div>
+	</div>
+</article>
