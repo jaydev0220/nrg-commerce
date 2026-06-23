@@ -18,7 +18,10 @@
 				{#each contactItems as item (item.id)}
 					{@const Icon = item.icon}
 					<div class="flex items-start space-x-3">
-						<Icon class="mt-0.5 h-5 w-5 shrink-0 text-brand" aria-hidden="true" />
+						<Icon
+							class="mt-0.5 h-5 w-5 shrink-0 text-brand"
+							aria-hidden="true"
+						/>
 						<div class="space-y-1">
 							<p class="text-xs tracking-wider text-text-muted uppercase">
 								{item.label()}
@@ -50,7 +53,10 @@
 					"
 					aria-label={social.label()}
 				>
-					<SocialIcon icon={social.icon} classList="h-4 w-auto" />
+					<SocialIcon
+						icon={social.icon}
+						classList="h-4 w-auto"
+					/>
 					{social.label()}
 				</a>
 			{/each}
@@ -84,7 +90,10 @@
 				{@const Icon = item.icon}
 				<div class="space-y-1">
 					<p class="text-xs tracking-wider text-text-muted uppercase">
-						<Icon class="mr-1 inline-block h-4 w-4 align-middle text-brand" aria-hidden="true" />
+						<Icon
+							class="mr-1 inline-block h-4 w-4 align-middle text-brand"
+							aria-hidden="true"
+						/>
 						{item.label()}
 					</p>
 					<p class="text-xs text-text-body">
@@ -109,7 +118,10 @@
 					"
 					aria-label={social.label()}
 				>
-					<SocialIcon icon={social.icon} classList="h-4 w-auto" />
+					<SocialIcon
+						icon={social.icon}
+						classList="h-4 w-auto"
+					/>
 					{social.label()}
 				</a>
 			{/each}
@@ -144,7 +156,10 @@
 					{@const Icon = item.icon}
 					<div class="space-y-1">
 						<p class="text-xs tracking-wider text-text-muted uppercase">
-							<Icon class="mr-1 inline-block h-4 w-4 align-middle text-brand" aria-hidden="true" />
+							<Icon
+								class="mr-1 inline-block h-4 w-4 align-middle text-brand"
+								aria-hidden="true"
+							/>
 							{item.label()}
 						</p>
 						<p class="text-xs text-text-body">
@@ -170,7 +185,10 @@
 					"
 					aria-label={social.label()}
 				>
-					<SocialIcon icon={social.icon} classList="h-4 w-auto" />
+					<SocialIcon
+						icon={social.icon}
+						classList="h-4 w-auto"
+					/>
 					{social.label()}
 				</a>
 			{/each}

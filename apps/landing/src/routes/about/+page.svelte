@@ -5,7 +5,10 @@
 	import * as m from '$lib/paraglide/messages';
 </script>
 
-<PageHeader breadcrumb={m.breadcrumb_about()} title={m.about_page_title()} />
+<PageHeader
+	breadcrumb={m.breadcrumb_about()}
+	title={m.about_page_title()}
+/>
 
 <CompanyStory />
 <Timeline />

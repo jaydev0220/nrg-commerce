@@ -66,7 +66,7 @@ const OG_LOCALES: Record<SupportedLocale, string> = {
 };
 
 function getSiteOrigin(): string {
-	return new URL('/', import.meta.env.PUBLIC_SITE_URL || DEFAULT_SITE_URL).href;
+	return new URL('/', import.meta.env['PUBLIC_SITE_URL'] || DEFAULT_SITE_URL).href;
 }
 
 function getBaseUrl(pathname: string): URL {

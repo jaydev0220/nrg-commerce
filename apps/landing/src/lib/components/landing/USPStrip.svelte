@@ -9,7 +9,10 @@
 				{#each usps as usp (usp.id)}
 					{@const Icon = usp.icon}
 					<article class="rounded-xl border border-border bg-bg-surface p-5 text-center">
-						<div class="flex justify-center" aria-hidden="true">
+						<div
+							class="flex justify-center"
+							aria-hidden="true"
+						>
 							<Icon class="h-7 w-7 text-brand" />
 						</div>
 						<h3 class="mt-2 font-semibold text-text-heading">

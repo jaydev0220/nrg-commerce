@@ -1,7 +1,12 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import * as m from '$lib/paraglide/messages';
-	import { shopCta } from '$lib/data';
+	import { extractLocaleFromUrl } from '$lib/paraglide/runtime';
+	import { getShopUrl, shopCta } from '$lib/data';
+	import type { SupportedLocale } from '$lib/seo';
 	import { splitLineBreakTags } from '$lib/utils/line-breaks';
+
+	let shopHref = $derived(getShopUrl(extractLocaleFromUrl(page.url) as SupportedLocale));
 </script>
 
 <section class="flex h-125 min-h-140 items-center bg-bg-accent md:h-114 xl:h-140">
@@ -27,7 +32,7 @@
 				<!-- CTA Button -->
 				<div class="space-y-2">
 					<a
-						href={shopCta.href}
+						href={shopHref}
 						target="_blank"
 						rel="external noopener noreferrer"
 						class="

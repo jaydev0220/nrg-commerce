@@ -1,4 +1,4 @@
-export const CDN_BASE_URL = 'https://cdn.nrglabware.com';
+export const CDN_BASE_URL = import.meta.env['PUBLIC_CDN_BASE_URL']?.trim() ?? '';
 
 export const CDN_ASSETS = {
 	// Branding
@@ -18,5 +18,9 @@ export const CDN_ASSETS = {
 } as const;
 
 export function cdnUrl(path: string): string {
+	if (!CDN_BASE_URL) {
+		return path;
+	}
+
 	return new URL(path, CDN_BASE_URL).toString();
 }

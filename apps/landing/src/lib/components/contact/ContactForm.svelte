@@ -129,12 +129,19 @@
 	</h2>
 	<div class="mb-6 border-t border-border"></div>
 
-	<form onsubmit={handleSubmit} class="space-y-6" novalidate>
+	<form
+		onsubmit={handleSubmit}
+		class="space-y-6"
+		novalidate
+	>
 		<!-- Desktop/Tablet: Two column layout -->
 		<div class="hidden gap-4 md:grid md:grid-cols-2">
 			<!-- Full Name -->
 			<div>
-				<label for="name" class="mb-2 block text-sm font-medium text-text-body">
+				<label
+					for="name"
+					class="mb-2 block text-sm font-medium text-text-body"
+				>
 					{m.form_name_required()}
 				</label>
 				<input
@@ -153,13 +160,21 @@
 					"
 				/>
 				{#if errors.name}
-					<p id="name-error" class="mt-1 text-xs text-red-600">{errors.name}</p>
+					<p
+						id="name-error"
+						class="mt-1 text-xs text-red-600"
+					>
+						{errors.name}
+					</p>
 				{/if}
 			</div>
 
 			<!-- Company Name -->
 			<div>
-				<label for="company" class="mb-2 block text-sm font-medium text-text-body">
+				<label
+					for="company"
+					class="mb-2 block text-sm font-medium text-text-body"
+				>
 					{m.form_company()}
 				</label>
 				<input
@@ -180,7 +195,10 @@
 		<div class="hidden gap-4 md:grid md:grid-cols-2">
 			<!-- Email -->
 			<div>
-				<label for="email" class="mb-2 block text-sm font-medium text-text-body">
+				<label
+					for="email"
+					class="mb-2 block text-sm font-medium text-text-body"
+				>
 					{m.form_email_required()}
 				</label>
 				<input
@@ -201,13 +219,21 @@
 					"
 				/>
 				{#if errors.email}
-					<p id="email-error" class="mt-1 text-xs text-red-600">{errors.email}</p>
+					<p
+						id="email-error"
+						class="mt-1 text-xs text-red-600"
+					>
+						{errors.email}
+					</p>
 				{/if}
 			</div>
 
 			<!-- Phone -->
 			<div>
-				<label for="phone" class="mb-2 block text-sm font-medium text-text-body">
+				<label
+					for="phone"
+					class="mb-2 block text-sm font-medium text-text-body"
+				>
 					{m.form_phone()}
 				</label>
 				<input
@@ -229,7 +255,10 @@
 		<div class="space-y-4 md:hidden">
 			<!-- Full Name -->
 			<div>
-				<label for="name-mobile" class="mb-2 block text-sm font-medium text-text-body">
+				<label
+					for="name-mobile"
+					class="mb-2 block text-sm font-medium text-text-body"
+				>
 					{m.form_name_required()}
 				</label>
 				<input
@@ -248,13 +277,21 @@
 					"
 				/>
 				{#if errors.name}
-					<p id="name-error-mobile" class="mt-1 text-xs text-red-600">{errors.name}</p>
+					<p
+						id="name-error-mobile"
+						class="mt-1 text-xs text-red-600"
+					>
+						{errors.name}
+					</p>
 				{/if}
 			</div>
 
 			<!-- Company Name -->
 			<div>
-				<label for="company-mobile" class="mb-2 block text-sm font-medium text-text-body">
+				<label
+					for="company-mobile"
+					class="mb-2 block text-sm font-medium text-text-body"
+				>
 					{m.form_company()}
 				</label>
 				<input
@@ -272,7 +309,10 @@
 
 			<!-- Email -->
 			<div>
-				<label for="email-mobile" class="mb-2 block text-sm font-medium text-text-body">
+				<label
+					for="email-mobile"
+					class="mb-2 block text-sm font-medium text-text-body"
+				>
 					{m.form_email_required()}
 				</label>
 				<input
@@ -293,13 +333,21 @@
 					"
 				/>
 				{#if errors.email}
-					<p id="email-error-mobile" class="mt-1 text-xs text-red-600">{errors.email}</p>
+					<p
+						id="email-error-mobile"
+						class="mt-1 text-xs text-red-600"
+					>
+						{errors.email}
+					</p>
 				{/if}
 			</div>
 
 			<!-- Phone -->
 			<div>
-				<label for="phone-mobile" class="mb-2 block text-sm font-medium text-text-body">
+				<label
+					for="phone-mobile"
+					class="mb-2 block text-sm font-medium text-text-body"
+				>
 					{m.form_phone()}
 				</label>
 				<input
@@ -319,7 +367,10 @@
 
 		<!-- Inquiry Type (Full Width) -->
 		<div>
-			<label for="inquiry-type" class="mb-2 block text-sm font-medium text-text-body">
+			<label
+				for="inquiry-type"
+				class="mb-2 block text-sm font-medium text-text-body"
+			>
 				{m.form_inquiry_type()}
 			</label>
 			<select
@@ -340,7 +391,10 @@
 
 		<!-- Product Interest (Full Width) -->
 		<div>
-			<label for="product-interest" class="mb-2 block text-sm font-medium text-text-body">
+			<label
+				for="product-interest"
+				class="mb-2 block text-sm font-medium text-text-body"
+			>
 				{m.form_product_interest()}
 			</label>
 			<input
@@ -358,7 +412,10 @@
 
 		<!-- Message (Full Width) -->
 		<div>
-			<label for="message" class="mb-2 block text-sm font-medium text-text-body">
+			<label
+				for="message"
+				class="mb-2 block text-sm font-medium text-text-body"
+			>
 				{m.form_message_required()}
 			</label>
 			<textarea
@@ -374,10 +431,14 @@
 					w-full resize-none rounded-md border border-border bg-bg-sunken px-3 py-2 text-sm
 					focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none
 					{errors.message ? 'border-red-500' : ''}
-				"
-			></textarea>
+				"></textarea>
 			{#if errors.message}
-				<p id="message-error" class="mt-1 text-xs text-red-600">{errors.message}</p>
+				<p
+					id="message-error"
+					class="mt-1 text-xs text-red-600"
+				>
+					{errors.message}
+				</p>
 			{/if}
 		</div>
 

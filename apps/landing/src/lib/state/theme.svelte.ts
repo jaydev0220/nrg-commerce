@@ -2,7 +2,9 @@ import { browser } from '$app/environment';
 
 export type Theme = 'light' | 'dark';
 
-const THEME_STORAGE_KEY = 'theme';
+const THEME_COOKIE_NAME = 'theme';
+const THEME_COOKIE_DOMAIN = import.meta.env['PUBLIC_COOKIE_DOMAIN']?.trim() ?? '';
+const THEME_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 const DEFAULT_THEME: Theme = 'light';
 
 function applyTheme(theme: Theme) {
@@ -13,10 +15,13 @@ function applyTheme(theme: Theme) {
 	root.style.colorScheme = theme;
 }
 
-function getStoredTheme(): Theme | null {
+function getThemeFromCookie(): Theme | null {
 	if (!browser) return null;
 
-	const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+	const storedTheme = document.cookie
+		.split('; ')
+		.find((cookie) => cookie.startsWith(`${THEME_COOKIE_NAME}=`))
+		?.split('=')[1];
 
 	if (storedTheme === 'light' || storedTheme === 'dark') {
 		return storedTheme;
@@ -25,10 +30,29 @@ function getStoredTheme(): Theme | null {
 	return null;
 }
 
+function persistTheme(theme: Theme) {
+	const cookieParts = [
+		`${THEME_COOKIE_NAME}=${theme}`,
+		'Path=/',
+		`Max-Age=${THEME_COOKIE_MAX_AGE_SECONDS}`,
+		'SameSite=Lax'
+	];
+
+	if (THEME_COOKIE_DOMAIN) {
+		cookieParts.push(`Domain=${THEME_COOKIE_DOMAIN}`);
+	}
+
+	if (window.location.protocol === 'https:') {
+		cookieParts.push('Secure');
+	}
+
+	document.cookie = cookieParts.join('; ');
+}
+
 function getInitialTheme(): Theme {
 	if (!browser) return DEFAULT_THEME;
 
-	const storedTheme = getStoredTheme();
+	const storedTheme = getThemeFromCookie();
 	if (storedTheme) return storedTheme;
 
 	const root = document.documentElement;
@@ -52,7 +76,7 @@ class ThemeController {
 
 		this.current = theme;
 		applyTheme(theme);
-		window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+		persistTheme(theme);
 	};
 
 	toggle = () => {

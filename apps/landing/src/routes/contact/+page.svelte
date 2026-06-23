@@ -5,7 +5,10 @@
 	import * as m from '$lib/paraglide/messages';
 </script>
 
-<PageHeader breadcrumb={m.breadcrumb_contact()} title={m.contact_page_title()} />
+<PageHeader
+	breadcrumb={m.breadcrumb_contact()}
+	title={m.contact_page_title()}
+/>
 
 <section class="bg-bg-page py-16 lg:py-20">
 	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
