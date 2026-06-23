@@ -41,14 +41,17 @@ catalogs:
     prettier: ^3.8.4
     prettier-plugin-svelte: ^4.1.1
     prettier-plugin-tailwindcss: ^0.8.0
+    publint: ^0.3.21
     typescript-eslint: ^8.61.1
   svelte:
     '@inlang/paraglide-js': ^2.19.0
     '@lucide/svelte': ^1.20.0
+    '@sveltejs/adapter-auto': ^7.0.1
     '@sveltejs/adapter-cloudflare': ^7.2.9
     '@sveltejs/adapter-node': ^5.5.4
     '@sveltejs/adapter-static': ^3.0.10
     '@sveltejs/kit': ^2.65.2
+    '@sveltejs/package': ^2.5.8
     '@sveltejs/vite-plugin-svelte': ^7.1.2
     '@tailwindcss/forms': ^0.5.11
     '@tailwindcss/vite': ^4.3.1

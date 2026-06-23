@@ -1,7 +1,9 @@
 node_modules
 build
+dist
 .svelte-kit
 .wrangler
+generated
 test-results
 src/lib/paraglide
 project.inlang/cache/

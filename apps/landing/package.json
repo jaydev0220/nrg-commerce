@@ -17,6 +17,7 @@
 		"@eslint/js": "catalog:lint",
 		"@inlang/paraglide-js": "catalog:svelte",
 		"@lucide/svelte": "catalog:svelte",
+		"@packages/components": "workspace:*",
 		"@packages/eslint-config": "workspace:*",
 		"@packages/prettier-config": "workspace:*",
 		"@packages/styles": "workspace:*",

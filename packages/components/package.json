@@ -1,55 +1,68 @@
 {
-	"name": "@apps/catalog",
+	"name": "@packages/components",
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build && wrangler types --check",
-		"preview": "wrangler dev .svelte-kit/cloudflare/_worker.js --port 4173",
-		"prepare": "svelte-kit sync",
+		"build": "vite build && npm run prepack",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"prepack": "svelte-kit sync && svelte-package && publint",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"format": "prettier --ignore-path ../../.prettierignore --write .",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
-		"test": "vitest run --passWithNoTests",
-		"test:watch": "vitest",
-		"test:e2e": "playwright test",
-		"types": "vite build && wrangler types"
+		"format": "prettier --ignore-path ../../.prettierignore --write ."
+	},
+	"files": [
+		"dist",
+		"!dist/**/*.test.*",
+		"!dist/**/*.spec.*"
+	],
+	"sideEffects": [
+		"**/*.css"
+	],
+	"svelte": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js"
+		}
+	},
+	"peerDependencies": {
+		"@sveltejs/kit": "catalog:svelte",
+		"svelte": "catalog:svelte"
+	},
+	"dependencies": {
+		"@lucide/svelte": "catalog:svelte"
 	},
 	"devDependencies": {
 		"@eslint/js": "catalog:lint",
-		"@inlang/paraglide-js": "catalog:svelte",
-		"@lucide/svelte": "catalog:svelte",
-		"@packages/components": "workspace:*",
 		"@packages/eslint-config": "workspace:*",
 		"@packages/prettier-config": "workspace:*",
 		"@packages/styles": "workspace:*",
 		"@packages/tsconfig": "workspace:*",
-		"@playwright/test": "catalog:test",
-		"@sveltejs/adapter-cloudflare": "catalog:svelte",
+		"@sveltejs/adapter-auto": "catalog:svelte",
 		"@sveltejs/kit": "catalog:svelte",
+		"@sveltejs/package": "catalog:svelte",
 		"@sveltejs/vite-plugin-svelte": "catalog:svelte",
 		"@tailwindcss/vite": "catalog:svelte",
 		"@types/node": "catalog:",
-		"@vitest/browser-playwright": "catalog:test",
 		"eslint": "catalog:lint",
 		"eslint-config-prettier": "catalog:lint",
 		"eslint-plugin-svelte": "catalog:lint",
 		"globals": "catalog:lint",
-		"playwright": "catalog:test",
 		"prettier": "catalog:lint",
 		"prettier-plugin-svelte": "catalog:lint",
 		"prettier-plugin-tailwindcss": "catalog:lint",
-		"svead": "catalog:svelte",
+		"publint": "catalog:lint",
+		"simple-icons": "catalog:svelte",
 		"svelte": "catalog:svelte",
 		"svelte-check": "catalog:svelte",
 		"tailwindcss": "catalog:svelte",
 		"typescript": "catalog:",
 		"typescript-eslint": "catalog:lint",
-		"vite": "catalog:svelte",
-		"vitest": "catalog:test",
-		"vitest-browser-svelte": "catalog:test",
-		"wrangler": "catalog:svelte"
+		"vite": "catalog:svelte"
 	}
 }

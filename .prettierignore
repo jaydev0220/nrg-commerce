@@ -1,8 +1,12 @@
 node_modules
 build
+dist
 .svelte-kit
+.wrangler
 static
 generated
 
 pnpm-lock.yaml
 worker-configuration.d.ts
+apps/catalog/src/lib/paraglide
+apps/landing/src/lib/paraglide
