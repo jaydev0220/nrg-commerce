@@ -103,9 +103,11 @@ export function createCategoryService(dependencies: CategoryServiceDependencies)
 
 		async createCategory(input: {
 			name: string;
+			nameEn?: string;
 			slug: string;
 			parentId?: string;
 			description?: string;
+			descriptionEn?: string;
 			position: number;
 		}): Promise<CatalogCategoryRecord> {
 			if (await dependencies.repository.slugExists(input.slug)) {
@@ -127,9 +129,11 @@ export function createCategoryService(dependencies: CategoryServiceDependencies)
 			categoryId: string,
 			input: {
 				name?: string;
+				nameEn?: string | null;
 				slug?: string;
 				parentId?: string | null;
 				description?: string | null;
+				descriptionEn?: string | null;
 				position?: number;
 			}
 		): Promise<CatalogCategoryRecord> {

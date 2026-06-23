@@ -20,10 +20,12 @@ import {
 test('productCreateSchema defaults published to false for the base product profile', () => {
 	const parsedProduct = productCreateSchema.parse({
 		name: 'Canvas Tote',
+		slug: 'canvas-tote',
 		categoryId: '93f99825-2962-4a10-b453-daa375ff1c43'
 	});
 
 	assert.equal(parsedProduct.published, false);
+	assert.equal(parsedProduct.slug, 'canvas-tote');
 });
 
 test('productSkuCreateSchema requires a productId and keeps attributes as an object', () => {
@@ -46,6 +48,20 @@ test('productSkuCreateSchema requires a productId and keeps attributes as an obj
 
 test('productUpdateSchema requires at least one field', () => {
 	assert.throws(() => productUpdateSchema.parse({}));
+});
+
+test('productCreateSchema accepts optional English catalog content fields', () => {
+	const parsedProduct = productCreateSchema.parse({
+		name: '桌上型數位萬用電表 700 系列',
+		nameEn: 'Bench Multimeter 700 Series',
+		description: '主要中文描述',
+		descriptionEn: 'Primary English description',
+		slug: 'bench-multimeter-700',
+		categoryId: '93f99825-2962-4a10-b453-daa375ff1c43'
+	});
+
+	assert.equal(parsedProduct.nameEn, 'Bench Multimeter 700 Series');
+	assert.equal(parsedProduct.descriptionEn, 'Primary English description');
 });
 
 test('managementProductListQuerySchema parses include flags from query strings', () => {

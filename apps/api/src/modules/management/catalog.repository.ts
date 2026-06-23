@@ -87,8 +87,10 @@ type ListSkusOptions = {
 function mapCategoryRecord(category: {
 	id: string;
 	name: string;
+	nameEn: string | null;
 	slug: string;
 	description: string | null;
+	descriptionEn: string | null;
 	position: number;
 	parentId: string | null;
 	deletedAt: Date | null;
@@ -98,8 +100,10 @@ function mapCategoryRecord(category: {
 	return {
 		id: category.id,
 		name: category.name,
+		nameEn: category.nameEn,
 		slug: category.slug,
 		description: category.description,
+		descriptionEn: category.descriptionEn,
 		position: category.position,
 		parentId: category.parentId,
 		deletedAt: category.deletedAt,
@@ -136,8 +140,11 @@ function mapImageRecord(image: {
 
 function mapSkuRecordFromProduct(
 	product: {
+		slug: string;
 		name: string;
+		nameEn: string | null;
 		description: string | null;
+		descriptionEn: string | null;
 		categoryId: string;
 		published: boolean;
 		category: { slug: string };
@@ -168,9 +175,12 @@ function mapSkuRecordFromProduct(
 	return {
 		id: sku.id,
 		productId: sku.productId,
+		productSlug: product.slug,
 		skuCode: sku.skuCode,
 		name: product.name,
+		nameEn: product.nameEn,
 		description: product.description,
+		descriptionEn: product.descriptionEn,
 		categoryId: product.categoryId,
 		categorySlug: product.category.slug,
 		price: Number(sku.price.toString()),
@@ -188,8 +198,11 @@ function mapSkuRecord(sku: {
 	productId: string;
 	skuCode: string;
 	product: {
+		slug: string;
 		name: string;
+		nameEn: string | null;
 		description: string | null;
+		descriptionEn: string | null;
 		categoryId: string;
 		published: boolean;
 		category: { slug: string };
@@ -217,8 +230,11 @@ function mapSkuRecord(sku: {
 
 function mapProductRecord(product: {
 	id: string;
+	slug: string;
 	name: string;
+	nameEn: string | null;
 	description: string | null;
+	descriptionEn: string | null;
 	categoryId: string;
 	published: boolean;
 	deletedAt: Date | null;
@@ -250,8 +266,11 @@ function mapProductRecord(product: {
 }): CatalogProductRecord {
 	return {
 		id: product.id,
+		slug: product.slug,
 		name: product.name,
+		nameEn: product.nameEn,
 		description: product.description,
+		descriptionEn: product.descriptionEn,
 		categoryId: product.categoryId,
 		categorySlug: product.category.slug,
 		published: product.published,
@@ -337,6 +356,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					? {
 							OR: [
 								{ name: { contains: input.search, mode: 'insensitive' as const } },
+								{ nameEn: { contains: input.search, mode: 'insensitive' as const } },
 								{ slug: { contains: input.search, mode: 'insensitive' as const } }
 							]
 						}
@@ -418,8 +438,11 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				...(input.search
 					? {
 							OR: [
+								{ slug: { contains: input.search, mode: 'insensitive' as const } },
 								{ name: { contains: input.search, mode: 'insensitive' as const } },
-								{ description: { contains: input.search, mode: 'insensitive' as const } }
+								{ nameEn: { contains: input.search, mode: 'insensitive' as const } },
+								{ description: { contains: input.search, mode: 'insensitive' as const } },
+								{ descriptionEn: { contains: input.search, mode: 'insensitive' as const } }
 							]
 						}
 					: {})
@@ -519,16 +542,69 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			return product ? mapProductRecord(product) : null;
 		},
 
+		async findProductBySlug(
+			productSlug: string,
+			options: FindProductOptions = {
+				includeSkus: false,
+				includeImages: false
+			}
+		): Promise<CatalogProductRecord | null> {
+			const product = await database.product.findFirst({
+				where: {
+					slug: productSlug,
+					deletedAt: null,
+					...(options.publishedOnly ? { published: true } : {})
+				},
+				include: {
+					category: {
+						select: {
+							slug: true
+						}
+					},
+					...(options.includeSkus
+						? {
+								skus: {
+									where: {
+										deletedAt: null
+									},
+									orderBy: [{ createdAt: 'asc' }],
+									...(options.includeImages
+										? {
+												include: {
+													images: {
+														where: {
+															deletedAt: null
+														},
+														orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+													}
+												}
+											}
+										: {})
+								}
+							}
+						: {})
+				}
+			});
+
+			return product ? mapProductRecord(product) : null;
+		},
+
 		async createProduct(input: {
+			slug: string;
 			name: string;
+			nameEn?: string;
 			description?: string;
+			descriptionEn?: string;
 			categoryId: string;
 			published: boolean;
 		}): Promise<CatalogProductRecord> {
 			const product = await database.product.create({
 				data: {
+					slug: input.slug,
 					name: input.name,
+					nameEn: input.nameEn ?? null,
 					description: input.description ?? null,
+					descriptionEn: input.descriptionEn ?? null,
 					categoryId: input.categoryId,
 					published: input.published
 				},
@@ -547,8 +623,11 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 		async updateProduct(
 			productId: string,
 			input: {
+				slug?: string;
 				name?: string;
+				nameEn?: string | null;
 				description?: string | null;
+				descriptionEn?: string | null;
 				categoryId?: string;
 				published?: boolean;
 			}
@@ -558,8 +637,11 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					id: productId
 				},
 				data: {
+					slug: input.slug,
 					name: input.name,
+					nameEn: input.nameEn,
 					description: input.description,
+					descriptionEn: input.descriptionEn,
 					categoryId: input.categoryId,
 					published: input.published
 				},
@@ -597,17 +679,21 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 
 		async createCategory(input: {
 			name: string;
+			nameEn?: string;
 			slug: string;
 			parentId?: string;
 			description?: string;
+			descriptionEn?: string;
 			position: number;
 		}): Promise<CatalogCategoryRecord> {
 			const category = await database.productCategory.create({
 				data: {
 					name: input.name,
+					nameEn: input.nameEn ?? null,
 					slug: input.slug,
 					parentId: input.parentId ?? null,
 					description: input.description ?? null,
+					descriptionEn: input.descriptionEn ?? null,
 					position: input.position
 				}
 			});
@@ -619,9 +705,11 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			categoryId: string,
 			input: {
 				name?: string;
+				nameEn?: string | null;
 				slug?: string;
 				parentId?: string | null;
 				description?: string | null;
+				descriptionEn?: string | null;
 				position?: number;
 			}
 		): Promise<CatalogCategoryRecord> {
@@ -631,9 +719,11 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				},
 				data: {
 					name: input.name,
+					nameEn: input.nameEn,
 					slug: input.slug,
 					parentId: input.parentId,
 					description: input.description,
+					descriptionEn: input.descriptionEn,
 					position: input.position
 				}
 			});
@@ -680,6 +770,23 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 						? {
 								id: {
 									not: excludeCategoryId
+								}
+							}
+						: {})
+				}
+			});
+
+			return count > 0;
+		},
+
+		async productSlugExists(slug: string, excludeProductId?: string): Promise<boolean> {
+			const count = await database.product.count({
+				where: {
+					slug,
+					...(excludeProductId
+						? {
+								id: {
+									not: excludeProductId
 								}
 							}
 						: {})
@@ -784,7 +891,19 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 								},
 								{
 									product: {
+										is: { nameEn: { contains: input.search, mode: 'insensitive' as const } }
+									}
+								},
+								{
+									product: {
 										is: { description: { contains: input.search, mode: 'insensitive' as const } }
+									}
+								},
+								{
+									product: {
+										is: {
+											descriptionEn: { contains: input.search, mode: 'insensitive' as const }
+										}
 									}
 								}
 							]
@@ -800,8 +919,11 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				include: {
 					product: {
 						select: {
+							slug: true,
 							name: true,
+							nameEn: true,
 							description: true,
+							descriptionEn: true,
 							categoryId: true,
 							published: true,
 							category: {
@@ -852,8 +974,11 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				include: {
 					product: {
 						select: {
+							slug: true,
 							name: true,
+							nameEn: true,
 							description: true,
+							descriptionEn: true,
 							categoryId: true,
 							published: true,
 							category: {
@@ -897,8 +1022,11 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				include: {
 					product: {
 						select: {
+							slug: true,
 							name: true,
+							nameEn: true,
 							description: true,
+							descriptionEn: true,
 							categoryId: true,
 							published: true,
 							category: {
@@ -940,8 +1068,11 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				include: {
 					product: {
 						select: {
+							slug: true,
 							name: true,
+							nameEn: true,
 							description: true,
+							descriptionEn: true,
 							categoryId: true,
 							published: true,
 							category: {
@@ -979,8 +1110,11 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				include: {
 					product: {
 						select: {
+							slug: true,
 							name: true,
+							nameEn: true,
 							description: true,
+							descriptionEn: true,
 							categoryId: true,
 							published: true,
 							category: {

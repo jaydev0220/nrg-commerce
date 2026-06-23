@@ -172,36 +172,42 @@ model PasskeyCredential {
 }
 
 model ProductCategory {
-  id          String            @id @default(uuid()) @db.Uuid
-  name        String
-  slug        String            @unique
-  description String?
-  position    Int               @default(0)
-  parentId    String?           @db.Uuid
-  deletedAt   DateTime?         @db.Timestamptz(6)
-  createdAt   DateTime          @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime          @updatedAt @db.Timestamptz(6)
-  parent      ProductCategory?  @relation("ProductCategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children    ProductCategory[] @relation("ProductCategoryHierarchy")
-  products    Product[]
+  id            String            @id @default(uuid()) @db.Uuid
+  name          String
+  nameEn        String?
+  slug          String            @unique
+  description   String?
+  descriptionEn String?
+  position      Int               @default(0)
+  parentId      String?           @db.Uuid
+  deletedAt     DateTime?         @db.Timestamptz(6)
+  createdAt     DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime          @updatedAt @db.Timestamptz(6)
+  parent        ProductCategory?  @relation("ProductCategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children      ProductCategory[] @relation("ProductCategoryHierarchy")
+  products      Product[]
 
   @@index([parentId, position])
   @@index([deletedAt])
 }
 
 model Product {
-  id          String          @id @default(uuid()) @db.Uuid
-  name        String
-  description String?
-  categoryId  String          @db.Uuid
-  published   Boolean         @default(false)
-  deletedAt   DateTime?       @db.Timestamptz(6)
-  createdAt   DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime        @updatedAt @db.Timestamptz(6)
-  category    ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  skus        ProductSku[]
+  id            String          @id @default(uuid()) @db.Uuid
+  slug          String          @unique
+  name          String
+  nameEn        String?
+  description   String?
+  descriptionEn String?
+  categoryId    String          @db.Uuid
+  published     Boolean         @default(false)
+  deletedAt     DateTime?       @db.Timestamptz(6)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime        @updatedAt @db.Timestamptz(6)
+  category      ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  skus          ProductSku[]
 
   @@index([categoryId, published, createdAt])
+  @@index([slug])
   @@index([published, createdAt])
   @@index([deletedAt])
 }

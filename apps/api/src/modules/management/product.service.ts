@@ -25,7 +25,9 @@ type ProductServiceDependencies = {
 		CatalogRepository,
 		| 'listProducts'
 		| 'findProductById'
+		| 'findProductBySlug'
 		| 'findCategoryById'
+		| 'productSlugExists'
 		| 'createProduct'
 		| 'updateProduct'
 		| 'softDeleteProduct'
@@ -60,8 +62,11 @@ export function createProductService(dependencies: ProductServiceDependencies) {
 		},
 
 		async createProduct(input: {
+			slug: string;
 			name: string;
+			nameEn?: string;
 			description?: string;
+			descriptionEn?: string;
 			categoryId: string;
 			published: boolean;
 		}): Promise<CatalogProductRecord> {
@@ -73,14 +78,25 @@ export function createProductService(dependencies: ProductServiceDependencies) {
 				);
 			}
 
+			if (await dependencies.repository.productSlugExists(input.slug)) {
+				throw new AppError(
+					409,
+					'PRODUCT_SLUG_CONFLICT',
+					'The requested product slug is already in use.'
+				);
+			}
+
 			return dependencies.repository.createProduct(input);
 		},
 
 		async updateProduct(
 			productId: string,
 			input: {
+				slug?: string;
 				name?: string;
+				nameEn?: string | null;
 				description?: string | null;
+				descriptionEn?: string | null;
 				categoryId?: string;
 				published?: boolean;
 			}
@@ -92,6 +108,14 @@ export function createProductService(dependencies: ProductServiceDependencies) {
 					404,
 					'CATEGORY_NOT_FOUND',
 					'The referenced product category could not be found.'
+				);
+			}
+
+			if (input.slug && (await dependencies.repository.productSlugExists(input.slug, productId))) {
+				throw new AppError(
+					409,
+					'PRODUCT_SLUG_CONFLICT',
+					'The requested product slug is already in use.'
 				);
 			}
 

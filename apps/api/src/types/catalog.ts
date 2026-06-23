@@ -22,9 +22,12 @@ export type CatalogImageRecord = {
 export type CatalogSkuRecord = {
 	id: string;
 	productId: string;
+	productSlug: string;
 	skuCode: string;
 	name: string;
+	nameEn: string | null;
 	description: string | null;
+	descriptionEn: string | null;
 	categoryId: string;
 	categorySlug: string;
 	price: number;
@@ -38,8 +41,11 @@ export type CatalogSkuRecord = {
 
 export type CatalogProductRecord = {
 	id: string;
+	slug: string;
 	name: string;
+	nameEn: string | null;
 	description: string | null;
+	descriptionEn: string | null;
 	categoryId: string;
 	categorySlug: string;
 	published: boolean;
@@ -52,8 +58,10 @@ export type CatalogProductRecord = {
 export type CatalogCategoryRecord = {
 	id: string;
 	name: string;
+	nameEn: string | null;
 	slug: string;
 	description: string | null;
+	descriptionEn: string | null;
 	position: number;
 	parentId: string | null;
 	deletedAt: Date | null;

@@ -19,6 +19,7 @@ type StorefrontServiceDependencies = {
 		| 'listProducts'
 		| 'listSkus'
 		| 'findProductById'
+		| 'findProductBySlug'
 		| 'findSkuByCode'
 		| 'findCategoryBySlug'
 		| 'countProductsForCategoryIds'
@@ -119,6 +120,22 @@ export function createStorefrontCatalogService(dependencies: StorefrontServiceDe
 		): Promise<CatalogProductRecord> {
 			return ensurePublishedProduct(
 				await dependencies.repository.findProductById(productId, {
+					includeSkus: query.includeSkus,
+					includeImages: query.includeImages,
+					publishedOnly: true
+				})
+			);
+		},
+
+		async getProductBySlug(
+			productSlug: string,
+			query: {
+				includeSkus: boolean;
+				includeImages: boolean;
+			}
+		): Promise<CatalogProductRecord> {
+			return ensurePublishedProduct(
+				await dependencies.repository.findProductBySlug(productSlug, {
 					includeSkus: query.includeSkus,
 					includeImages: query.includeImages,
 					publishedOnly: true

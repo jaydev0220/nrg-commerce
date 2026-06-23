@@ -14,8 +14,10 @@ test('updateCategory rejects circular category parent changes', async () => {
 					return {
 						id: 'category-1',
 						name: 'Parent',
+						nameEn: 'Parent',
 						slug: 'parent',
 						description: null,
+						descriptionEn: null,
 						position: 0,
 						parentId: null,
 						deletedAt: null,
@@ -28,8 +30,10 @@ test('updateCategory rejects circular category parent changes', async () => {
 					return {
 						id: 'category-2',
 						name: 'Child',
+						nameEn: 'Child',
 						slug: 'child',
 						description: null,
+						descriptionEn: null,
 						position: 0,
 						parentId: 'category-1',
 						deletedAt: null,

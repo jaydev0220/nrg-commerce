@@ -10,7 +10,7 @@
 		"check": "tsc --noEmit --project tsconfig.json",
 		"format": "prettier --ignore-path ../../.prettierignore --write .",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
-		"test": "tsx --test tests/**/*.test.ts"
+		"test": "node --import tsx --test \"tests/**/*.test.ts\""
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "catalog:express",

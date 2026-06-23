@@ -8,9 +8,12 @@ function createCatalogSkuRecord() {
 	return {
 		id: 'sku-1',
 		productId: 'product-1',
+		productSlug: 'catalog-sku',
 		skuCode: 'SKU-001',
 		name: 'Catalog SKU',
+		nameEn: 'Catalog SKU',
 		description: null,
+		descriptionEn: null,
 		categoryId: 'category-1',
 		categorySlug: 'bags',
 		price: 19.99,

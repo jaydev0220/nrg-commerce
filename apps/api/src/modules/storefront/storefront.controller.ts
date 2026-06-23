@@ -9,7 +9,7 @@ type StorefrontControllerDependencies = {
 };
 
 type ProductParams = {
-	productId: string;
+	productSlug: string;
 };
 
 type SkuCodeParams = {
@@ -46,8 +46,11 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 		getProductById: async (request, response) => {
 			const params = getValidatedParams<ProductParams>(request);
 			const query =
-				getValidatedQuery<Parameters<StorefrontCatalogService['getProductById']>[1]>(request);
-			const product = await dependencies.storefrontService.getProductById(params.productId, query);
+				getValidatedQuery<Parameters<StorefrontCatalogService['getProductBySlug']>[1]>(request);
+			const product = await dependencies.storefrontService.getProductBySlug(
+				params.productSlug,
+				query
+			);
 			response.status(200).json(product);
 		},
 

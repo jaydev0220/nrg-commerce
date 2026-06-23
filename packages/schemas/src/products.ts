@@ -30,8 +30,10 @@ const parsedAttributeQuerySchema = z.string().transform((value, context) => {
 export const productCategorySchema = z.object({
 	id: uuidSchema,
 	name: z.string().min(1),
+	nameEn: z.string().min(1).nullable(),
 	slug: z.string().trim().min(1),
 	description: z.string().min(1).nullable(),
+	descriptionEn: z.string().min(1).nullable(),
 	position: z.number().int().min(0),
 	parentId: uuidSchema.nullable(),
 	deletedAt: dateSchema.nullable(),
@@ -41,8 +43,11 @@ export const productCategorySchema = z.object({
 
 export const productSchema = z.object({
 	id: uuidSchema,
+	slug: z.string().trim().min(1),
 	name: z.string().trim().min(1),
+	nameEn: z.string().trim().min(1).nullable(),
 	description: z.string().min(1).nullable(),
+	descriptionEn: z.string().min(1).nullable(),
 	categoryId: uuidSchema,
 	published: z.boolean(),
 	deletedAt: dateSchema.nullable(),
@@ -102,8 +107,11 @@ export const productSkuCreateSchema = z.object({
 });
 
 export const productCreateSchema = z.object({
+	slug: z.string().trim().min(1),
 	name: z.string().trim().min(1),
+	nameEn: z.string().trim().min(1).optional(),
 	description: z.string().trim().min(1).optional(),
+	descriptionEn: z.string().trim().min(1).optional(),
 	categoryId: uuidSchema,
 	published: booleanLikeSchema.default(false)
 });
@@ -119,8 +127,11 @@ export const productSkuUpdateSchema = nonEmptyUpdate(
 
 export const productUpdateSchema = nonEmptyUpdate(
 	z.object({
+		slug: z.string().trim().min(1).optional(),
 		name: z.string().trim().min(1).optional(),
+		nameEn: z.string().trim().min(1).nullable().optional(),
 		description: z.string().trim().min(1).nullable().optional(),
+		descriptionEn: z.string().trim().min(1).nullable().optional(),
 		categoryId: uuidSchema.optional(),
 		published: booleanLikeSchema.optional()
 	})
@@ -153,18 +164,22 @@ export const managementCategoryListQuerySchema = paginationQuerySchema.extend({
 
 export const productCategoryCreateSchema = z.object({
 	name: z.string().trim().min(1),
+	nameEn: z.string().trim().min(1).optional(),
 	slug: z.string().trim().min(1),
 	parentId: uuidSchema.optional(),
 	description: z.string().trim().min(1).optional(),
+	descriptionEn: z.string().trim().min(1).optional(),
 	position: z.coerce.number().int().min(0).default(0)
 });
 
 export const productCategoryUpdateSchema = nonEmptyUpdate(
 	z.object({
 		name: z.string().trim().min(1).optional(),
+		nameEn: z.string().trim().min(1).nullable().optional(),
 		slug: z.string().trim().min(1).optional(),
 		parentId: uuidSchema.nullable().optional(),
 		description: z.string().trim().min(1).nullable().optional(),
+		descriptionEn: z.string().trim().min(1).nullable().optional(),
 		position: z.coerce.number().int().min(0).optional()
 	})
 );

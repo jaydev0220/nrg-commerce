@@ -6,8 +6,7 @@ import {
 	storefrontProductDetailQuerySchema,
 	storefrontProductListQuerySchema,
 	storefrontSkuDetailQuerySchema,
-	storefrontSkuListQuerySchema,
-	uuidSchema
+	storefrontSkuListQuerySchema
 } from '@packages/schemas';
 
 import { validateRequest } from '../../middlewares/validate-request.js';
@@ -23,7 +22,7 @@ const skuCodeParamsSchema = z.object({
 });
 
 const productParamsSchema = z.object({
-	productId: uuidSchema
+	productSlug: z.string().trim().min(1)
 });
 
 const categorySlugParamsSchema = z.object({
@@ -68,7 +67,7 @@ export function createStorefrontCatalogRouter(dependencies: StorefrontRouterDepe
 	);
 
 	router.get(
-		'/:productId',
+		'/:productSlug',
 		validateRequest({ params: productParamsSchema, query: storefrontProductDetailQuerySchema }),
 		controller.getProductById
 	);

@@ -7,7 +7,7 @@ import { createCatalogManagementRouter } from '../src/modules/management/managem
 import type { AuthenticatedStaffContext } from '../src/types/auth.js';
 import { createApp } from '../src/app.js';
 import { initializeRoutes } from '../src/routes/index.js';
-import { withServer } from './helpers/http.js';
+import { requestApp } from './helpers/http.js';
 
 function createTestConfig() {
 	return {
@@ -73,15 +73,17 @@ test('createApp exposes liveness and readiness health endpoints', async () => {
 		}
 	});
 
-	await withServer(app, async (baseUrl) => {
-		const livenessResponse = await fetch(`${baseUrl}/health/liveness`);
-		const readinessResponse = await fetch(`${baseUrl}/health/readiness`);
-
-		assert.equal(livenessResponse.status, 200);
-		assert.equal(readinessResponse.status, 200);
-		assert.deepEqual(await livenessResponse.json(), { status: 'ok' });
-		assert.deepEqual(await readinessResponse.json(), { status: 'ready' });
+	const livenessResponse = await requestApp(app, {
+		path: '/health/liveness'
 	});
+	const readinessResponse = await requestApp(app, {
+		path: '/health/readiness'
+	});
+
+	assert.equal(livenessResponse.status, 200);
+	assert.equal(readinessResponse.status, 200);
+	assert.deepEqual(livenessResponse.json(), { status: 'ok' });
+	assert.deepEqual(readinessResponse.json(), { status: 'ready' });
 });
 
 test('management routes require authentication', async () => {
@@ -92,13 +94,13 @@ test('management routes require authentication', async () => {
 		}
 	});
 
-	await withServer(app, async (baseUrl) => {
-		const response = await fetch(`${baseUrl}/api/management/staff`);
-		const payload = (await response.json()) as { error: { code: string } };
-
-		assert.equal(response.status, 401);
-		assert.equal(payload.error.code, 'AUTHENTICATION_REQUIRED');
+	const response = await requestApp(app, {
+		path: '/api/management/staff'
 	});
+	const payload = response.json<{ error: { code: string } }>();
+
+	assert.equal(response.status, 401);
+	assert.equal(payload.error.code, 'AUTHENTICATION_REQUIRED');
 });
 
 test('management upload noop route is not exposed', async () => {
@@ -118,15 +120,14 @@ test('management upload noop route is not exposed', async () => {
 		storefrontService: {} as Parameters<typeof initializeRoutes>[1]['storefrontService']
 	});
 
-	await withServer(app, async (baseUrl) => {
-		const response = await fetch(`${baseUrl}/api/management/uploads/noop`, {
-			method: 'POST'
-		});
-		const payload = (await response.json()) as { error: { code: string } };
-
-		assert.equal(response.status, 404);
-		assert.equal(payload.error.code, 'ROUTE_NOT_FOUND');
+	const response = await requestApp(app, {
+		method: 'POST',
+		path: '/api/management/uploads/noop'
 	});
+	const payload = response.json<{ error: { code: string } }>();
+
+	assert.equal(response.status, 404);
+	assert.equal(payload.error.code, 'ROUTE_NOT_FOUND');
 });
 
 test('management product image upload-url route returns a presigned upload target', async () => {
@@ -168,33 +169,29 @@ test('management product image upload-url route returns a presigned upload targe
 	);
 	app.use(errorHandler);
 
-	await withServer(app, async (baseUrl) => {
-		const response = await fetch(
-			`${baseUrl}/api/management/products/skus/93f99825-2962-4a10-b453-daa375ff1c43/images/upload-url`,
-			{
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					fileName: 'front.png',
-					contentType: 'image/png'
-				})
-			}
-		);
-		const payload = (await response.json()) as {
-			method: string;
-			assetKey: string;
-			uploadUrl: string;
-			headers: Record<string, string>;
-		};
+	const response = await requestApp(app, {
+		method: 'POST',
+		path: '/api/management/products/skus/93f99825-2962-4a10-b453-daa375ff1c43/images/upload-url',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			fileName: 'front.png',
+			contentType: 'image/png'
+		})
+	});
+	const payload = response.json<{
+		method: string;
+		assetKey: string;
+		uploadUrl: string;
+		headers: Record<string, string>;
+	}>();
 
-		assert.equal(response.status, 200);
-		assert.equal(payload.method, 'PUT');
-		assert.equal(payload.assetKey, 'products/skus/sku-1/image.png');
-		assert.equal(payload.uploadUrl, 'https://signed-upload.example.com');
-		assert.deepEqual(payload.headers, {
-			'Content-Type': 'image/png'
-		});
+	assert.equal(response.status, 200);
+	assert.equal(payload.method, 'PUT');
+	assert.equal(payload.assetKey, 'products/skus/sku-1/image.png');
+	assert.equal(payload.uploadUrl, 'https://signed-upload.example.com');
+	assert.deepEqual(payload.headers, {
+		'Content-Type': 'image/png'
 	});
 });
