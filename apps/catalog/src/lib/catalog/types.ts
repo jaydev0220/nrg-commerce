@@ -100,17 +100,8 @@ export type CatalogProductView = {
 	minimumPrice: number;
 	maximumPrice: number;
 	skuCount: number;
-	representativeAttributes: Array<{
-		key: string;
-		values: string[];
-	}>;
 	representativeImage: CatalogImageRecord | null;
 	product: CatalogProductRecord;
-};
-
-export type CatalogAttributeFacet = {
-	key: string;
-	values: string[];
 };
 
 export type CatalogSort = 'featured' | 'price-asc' | 'price-desc' | 'name';
@@ -119,24 +110,33 @@ export type CatalogQueryState = {
 	locale: CatalogLocale;
 	query: string;
 	categorySlug: string | null;
-	attributeFilters: Record<string, string[]>;
 	sort: CatalogSort;
 };
 
 export type ProductOption = {
 	value: string;
+	label: string;
 	available: boolean;
 	selected: boolean;
 };
 
 export type ProductOptionGroup = {
 	key: string;
+	label: string;
 	options: ProductOption[];
+};
+
+export type ProductSelectedAttribute = {
+	key: string;
+	label: string;
+	value: string;
+	valueLabel: string;
 };
 
 export type ProductConfigurationModel = {
 	activeSku: CatalogSkuRecord;
 	selectedAttributes: Record<string, string>;
+	selectedAttributeEntries: ProductSelectedAttribute[];
 	attributeKeys: string[];
 	optionGroups: ProductOptionGroup[];
 };

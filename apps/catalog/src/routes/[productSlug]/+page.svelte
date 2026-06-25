@@ -19,7 +19,7 @@
 
 	let locale = $derived(localeFromPathname(page.url.pathname));
 	let requestedSelection = $state<Record<string, string>>({});
-	let model = $derived(createProductConfigurationModel(data.product, requestedSelection));
+	let model = $derived(createProductConfigurationModel(data.product, locale, requestedSelection));
 	let localizedName = $derived(localizeValue(locale, data.product.name, data.product.nameEn));
 	let localizedDescription = $derived(
 		localizeValue(locale, data.product.description, data.product.descriptionEn)

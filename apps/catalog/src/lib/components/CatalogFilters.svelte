@@ -1,32 +1,16 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import type {
-		CatalogAttributeFacet,
-		CatalogCategoryListEntry,
-		CatalogLocale
-	} from '$lib/catalog/types.js';
+	import type { CatalogCategoryListEntry, CatalogLocale } from '$lib/catalog/types.js';
 
 	type Props = {
 		locale: CatalogLocale;
 		categoryList: CatalogCategoryListEntry[];
-		attributeFacets: CatalogAttributeFacet[];
 		selectedCategorySlug: string | null;
-		selectedAttributeFilters: Record<string, string[]>;
 		onCategoryChange: (categorySlug: string | null) => void;
-		onAttributeToggle: (key: string, value: string) => void;
 		onReset: () => void;
 	};
 
-	let {
-		locale,
-		categoryList,
-		attributeFacets,
-		selectedCategorySlug,
-		selectedAttributeFilters,
-		onCategoryChange,
-		onAttributeToggle,
-		onReset
-	}: Props = $props();
+	let { locale, categoryList, selectedCategorySlug, onCategoryChange, onReset }: Props = $props();
 
 	function getCategoryName(entry: CatalogCategoryListEntry): string {
 		return locale === 'en' ? (entry.category.nameEn ?? entry.category.name) : entry.category.name;
@@ -67,33 +51,6 @@
 						<span class="font-mono text-[10px]">{entry.category.productCount}</span>
 					{/if}
 				</button>
-			{/each}
-		</div>
-	</section>
-
-	<section class="border-t border-border pt-7">
-		<h2 class="mb-4 text-sm font-semibold text-text-heading">{m.catalog_attributes()}</h2>
-		<div class="space-y-5">
-			{#each attributeFacets as facet (facet.key)}
-				<div>
-					<h3 class="mb-2 text-xs font-semibold uppercase tracking-caps text-text-muted">
-						{facet.key}
-					</h3>
-					<div class="space-y-3">
-						{#each facet.values as value (value)}
-							<label
-								class="flex cursor-pointer items-center gap-3 text-sm text-text-muted transition-[color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:text-text-heading"
-							>
-								<input
-									type="checkbox"
-									checked={(selectedAttributeFilters[facet.key] ?? []).includes(value)}
-									onchange={() => onAttributeToggle(facet.key, value)}
-								/>
-								<span>{value}</span>
-							</label>
-						{/each}
-					</div>
-				</div>
 			{/each}
 		</div>
 	</section>

@@ -2,9 +2,9 @@ import { expect, test } from 'vitest';
 
 import { buildCatalogQueryString, parseCatalogQueryState } from '$lib/catalog/query.js';
 
-test('parseCatalogQueryState reads category and attribute filters without price state', () => {
+test('parseCatalogQueryState reads category and sort without attribute state', () => {
 	const state = parseCatalogQueryState(
-		new URLSearchParams('q=pipette&category=consumables&sort=name&attribute.Volume=10uL,20uL'),
+		new URLSearchParams('q=pipette&category=consumables&sort=name'),
 		'en'
 	);
 
@@ -12,9 +12,6 @@ test('parseCatalogQueryState reads category and attribute filters without price 
 		locale: 'en',
 		query: 'pipette',
 		categorySlug: 'consumables',
-		attributeFilters: {
-			Volume: ['10uL', '20uL']
-		},
 		sort: 'name'
 	});
 });
@@ -23,8 +20,7 @@ test('buildCatalogQueryString clears category when null is passed', () => {
 	const queryString = buildCatalogQueryString({
 		query: '',
 		categorySlug: null,
-		sort: 'featured',
-		attributeFilters: {}
+		sort: 'featured'
 	});
 
 	expect(queryString).toBe('');

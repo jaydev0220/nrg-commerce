@@ -191,7 +191,6 @@ test('filterCatalogProducts matches nested SKU content without duplicating produ
 		locale: 'zh-tw',
 		query: 'NL-DMM-720',
 		categorySlug: null,
-		attributeFilters: {},
 		sort: 'featured'
 	});
 
@@ -206,7 +205,6 @@ test('filterCatalogProducts includes descendant categories and preserves price s
 		locale: 'zh-tw',
 		query: '',
 		categorySlug: 'measurement',
-		attributeFilters: {},
 		sort: 'price-asc'
 	});
 
@@ -216,22 +214,18 @@ test('filterCatalogProducts includes descendant categories and preserves price s
 	]);
 });
 
-test('deriveCatalogProductView computes representative price, attribute preview, and image fallback', () => {
+test('deriveCatalogProductView computes representative price and image fallback', () => {
 	const view = deriveCatalogProductView(createProducts()[0]!, 'en');
 
 	expect(view.minimumPrice).toBe(689);
 	expect(view.maximumPrice).toBe(989);
 	expect(view.skuCount).toBe(2);
 	expect(view.representativeImage?.imageUrl).toBe('https://assets.example.com/sku-1/front.png');
-	expect(view.representativeAttributes.map((entry) => entry.key)).toEqual([
-		'Resolution',
-		'Interface'
-	]);
 });
 
-test('createProductConfigurationModel resolves invalid combinations to the closest valid SKU', () => {
+test('createProductConfigurationModel localizes option labels and resolves invalid combinations', () => {
 	const product = createProducts()[0]!;
-	const model = createProductConfigurationModel(product, {
+	const model = createProductConfigurationModel(product, 'en', {
 		Resolution: '6½ digit',
 		Interface: 'USB-C / LAN',
 		Calibration: 'Accredited'
@@ -249,4 +243,20 @@ test('createProductConfigurationModel resolves invalid combinations to the close
 			.find((group) => group.key === 'Calibration')
 			?.options.find((option) => option.value === 'Accredited')?.selected
 	).toBe(true);
+	expect(model.optionGroups.find((group) => group.key === 'Calibration')?.label).toBe(
+		'Calibration'
+	);
+	expect(
+		model.selectedAttributeEntries.find((entry) => entry.key === 'Calibration')?.valueLabel
+	).toBe('Accredited');
+});
+
+test('createProductConfigurationModel translates preview attribute labels for zh-tw', () => {
+	const product = createProducts()[1]!;
+	const model = createProductConfigurationModel(product, 'zh-tw');
+
+	expect(model.optionGroups.find((group) => group.key === 'Detector')?.label).toBe('感測器');
+	expect(model.selectedAttributeEntries.find((entry) => entry.key === 'Range')?.label).toBe(
+		'量測範圍'
+	);
 });

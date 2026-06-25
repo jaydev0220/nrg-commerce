@@ -67,17 +67,6 @@
 		{#if view.description}
 			<p class="mt-2 line-clamp-2 text-sm text-text-muted">{view.description}</p>
 		{/if}
-		<div class="mt-4 flex flex-wrap gap-1.5">
-			{#each view.representativeAttributes as attribute (attribute.key)}
-				<span
-					class="rounded-sm border border-border bg-bg-sunken px-2 py-1 font-mono text-[10px] text-text-muted"
-				>
-					{attribute.values.length > 1
-						? `${attribute.values[0]} +${attribute.values.length - 1}`
-						: attribute.values[0]}
-				</span>
-			{/each}
-		</div>
 		<div class="mt-auto flex justify-end pt-6">
 			<a
 				href={resolve(href as Pathname)}

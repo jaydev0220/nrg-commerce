@@ -9,11 +9,7 @@
 
 	import type { CatalogSort } from '$lib/catalog/types.js';
 	import type { PageProps } from './$types';
-	import {
-		deriveAttributeFacets,
-		filterCatalogProducts,
-		flattenCategoryNodes
-	} from '$lib/catalog/logic.js';
+	import { filterCatalogProducts, flattenCategoryNodes } from '$lib/catalog/logic.js';
 	import {
 		buildCatalogQueryString,
 		localeFromPathname,
@@ -40,7 +36,6 @@
 	let debounceTimer: number | null = null;
 
 	let categoryList = $derived(flattenCategoryNodes(data.categories));
-	let attributeFacets = $derived(deriveAttributeFacets(data.products));
 	let filteredViews = $derived(filterCatalogProducts(data.products, data.categories, queryState));
 	let activeResultLabel = $derived.by(() => {
 		if (queryState.query) {
@@ -58,7 +53,6 @@
 		query?: string;
 		categorySlug?: string | null;
 		sort?: CatalogSort;
-		attributeFilters?: Record<string, string[]>;
 	};
 
 	function getCategoryLabel(categorySlug: string): string {
@@ -75,44 +69,20 @@
 		const categorySlug =
 			'categorySlug' in nextState ? (nextState.categorySlug ?? null) : queryState.categorySlug;
 		const sort = 'sort' in nextState ? (nextState.sort ?? 'featured') : queryState.sort;
-		const attributeFilters =
-			'attributeFilters' in nextState
-				? (nextState.attributeFilters ?? {})
-				: queryState.attributeFilters;
 		const queryString = buildCatalogQueryString({
 			query,
 			categorySlug,
-			sort,
-			attributeFilters
+			sort
 		});
+		const href = queryString
+			? `${localizeHref('/', { locale })}?${queryString}`
+			: localizeHref('/', { locale });
 
-		/* eslint-disable svelte/no-navigation-without-resolve */
-		goto(
-			`${resolve(localizeHref('/', { locale }) as Pathname)}${queryString ? `?${queryString}` : ''}`,
-			{
-				replaceState: true,
-				keepFocus: true,
-				noScroll: true
-			}
-		);
-		/* eslint-enable svelte/no-navigation-without-resolve */
-	}
-
-	function toggleAttributeFilter(key: string, value: string) {
-		const currentValues = queryState.attributeFilters[key] ?? [];
-		const nextValues = currentValues.includes(value)
-			? currentValues.filter((entry) => entry !== value)
-			: [...currentValues, value];
-		const nextFilters = {
-			...queryState.attributeFilters,
-			[key]: nextValues
-		};
-
-		if (nextValues.length === 0) {
-			delete nextFilters[key];
-		}
-
-		updateQuery({ attributeFilters: nextFilters });
+		goto(resolve(href as Pathname), {
+			replaceState: true,
+			keepFocus: true,
+			noScroll: true
+		});
 	}
 
 	function resetFilters() {
@@ -120,8 +90,7 @@
 		updateQuery({
 			query: '',
 			categorySlug: null,
-			sort: 'featured',
-			attributeFilters: {}
+			sort: 'featured'
 		});
 	}
 
@@ -231,11 +200,8 @@
 					<CatalogFilters
 						{locale}
 						{categoryList}
-						{attributeFacets}
 						selectedCategorySlug={queryState.categorySlug}
-						selectedAttributeFilters={queryState.attributeFilters}
 						onCategoryChange={(categorySlug) => updateQuery({ categorySlug })}
-						onAttributeToggle={toggleAttributeFilter}
 						onReset={resetFilters}
 					/>
 					<CatalogHelpCard />
@@ -256,10 +222,8 @@
 					query={queryState.query}
 					categorySlug={queryState.categorySlug}
 					categoryLabel={queryState.categorySlug ? getCategoryLabel(queryState.categorySlug) : null}
-					attributeFilters={queryState.attributeFilters}
 					onQueryClear={() => updateQuery({ query: '' })}
 					onCategoryClear={() => updateQuery({ categorySlug: null })}
-					onAttributeToggle={toggleAttributeFilter}
 				/>
 
 				{#if filteredViews.length > 0}
@@ -271,7 +235,7 @@
 							<ProductCard
 								{view}
 								categoryLabel={getCategoryLabel(view.categorySlug)}
-								href={resolve(localizeHref(`/${view.slug}`, { locale }) as Pathname)}
+								href={localizeHref(`/${view.slug}`, { locale })}
 							/>
 						{/each}
 					</div>
@@ -309,11 +273,8 @@
 			<CatalogFilters
 				{locale}
 				{categoryList}
-				{attributeFacets}
 				selectedCategorySlug={queryState.categorySlug}
-				selectedAttributeFilters={queryState.attributeFilters}
 				onCategoryChange={(categorySlug) => updateQuery({ categorySlug })}
-				onAttributeToggle={toggleAttributeFilter}
 				onReset={resetFilters}
 			/>
 		</div>

@@ -45,7 +45,7 @@
 		<div class="mt-6 space-y-6">
 			{#each model.optionGroups as group (group.key)}
 				<fieldset>
-					<legend class="mb-2 text-sm font-semibold text-text-heading">{group.key}</legend>
+					<legend class="mb-2 text-sm font-semibold text-text-heading">{group.label}</legend>
 					<div class="flex flex-wrap gap-2">
 						{#each group.options as option (option.value)}
 							<button
@@ -56,7 +56,7 @@
 								class={`min-h-10 rounded-md border px-3 py-2 text-left font-mono text-xs font-semibold transition-[color,background-color,border-color,transform,opacity] duration-base ease-ui ${option.selected ? 'border-brand bg-brand text-text-on-accent shadow-xs' : 'border-border-strong bg-bg-surface text-text-body hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle'} ${option.available ? '' : 'cursor-not-allowed opacity-35'}`}
 								onclick={() => onSelectOption(group.key, option.value)}
 							>
-								{option.value}
+								{option.label}
 							</button>
 						{/each}
 					</div>
@@ -87,11 +87,11 @@
 			aria-live="polite"
 		>
 			{m.catalog_available_configuration()} ·
-			{#each Object.entries(model.selectedAttributes) as [key, value], index (key)}
+			{#each model.selectedAttributeEntries as entry, index (entry.key)}
 				{#if index > 0}
 					·
 				{/if}
-				{key}: {value}
+				{entry.label}: {entry.valueLabel}
 			{/each}
 		</p>
 	</div>

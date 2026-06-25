@@ -6,25 +6,13 @@
 		query: string;
 		categorySlug: string | null;
 		categoryLabel: string | null;
-		attributeFilters: Record<string, string[]>;
 		onQueryClear: () => void;
 		onCategoryClear: () => void;
-		onAttributeToggle: (key: string, value: string) => void;
 	};
 
-	let {
-		query,
-		categorySlug,
-		categoryLabel,
-		attributeFilters,
-		onQueryClear,
-		onCategoryClear,
-		onAttributeToggle
-	}: Props = $props();
+	let { query, categorySlug, categoryLabel, onQueryClear, onCategoryClear }: Props = $props();
 
-	let hasFilters = $derived(
-		Boolean(query || categorySlug || Object.keys(attributeFilters).length > 0)
-	);
+	let hasFilters = $derived(Boolean(query || categorySlug));
 </script>
 
 {#if hasFilters}
@@ -49,17 +37,5 @@
 				<X class="size-3" />
 			</button>
 		{/if}
-		{#each Object.entries(attributeFilters) as [key, values] (key)}
-			{#each values as value (value)}
-				<button
-					type="button"
-					class="inline-flex items-center gap-2 rounded-sm border border-border-accent bg-brand-subtle px-2.5 py-1.5 text-xs font-medium text-text-accent"
-					onclick={() => onAttributeToggle(key, value)}
-				>
-					{key}: {value}
-					<X class="size-3" />
-				</button>
-			{/each}
-		{/each}
 	</div>
 {/if}

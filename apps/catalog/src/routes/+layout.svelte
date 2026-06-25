@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { PUBLIC_COOKIE_DOMAIN, PUBLIC_CTA_URL, PUBLIC_HOME_URL } from '$env/static/public';
 	import { page } from '$app/state';
 	import type { Pathname } from '$app/types';
 	import * as m from '$lib/paraglide/messages';
@@ -14,9 +15,10 @@
 	import './layout.css';
 
 	const THEME_COOKIE_NAME = 'theme';
-	const THEME_COOKIE_DOMAIN = import.meta.env['PUBLIC_COOKIE_DOMAIN']?.trim() ?? '';
+	const THEME_COOKIE_DOMAIN = PUBLIC_COOKIE_DOMAIN.trim();
 	const THEME_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
-	const ctaUrl = import.meta.env['PUBLIC_CTA_URL']?.trim() ?? '';
+	const ctaUrl = PUBLIC_CTA_URL.trim();
+	const homeUrl = PUBLIC_HOME_URL.trim();
 
 	let { children } = $props();
 	let locale = $derived((extractLocaleFromUrl(page.url) ?? 'zh-tw') as Locale);
@@ -30,7 +32,25 @@
 		href: ctaUrl,
 		label: 'CTA Text'
 	};
+
+	function getLocalizedLandingHref(nextLocale: Locale): string {
+		if (!homeUrl) {
+			return resolve(localizeHref('/', { locale: nextLocale }) as Pathname);
+		}
+
+		try {
+			return new URL(nextLocale === 'en' ? '/en' : '/', homeUrl).toString();
+		} catch {
+			return resolve(localizeHref('/', { locale: nextLocale }) as Pathname);
+		}
+	}
+
 	const navigationLinks = $derived.by<NavLinkItem[]>(() => [
+		{
+			href: getLocalizedLandingHref(locale),
+			id: 'home',
+			label: m.nav_home()
+		},
 		{
 			href: resolve(localizeHref('/', { locale }) as Pathname),
 			id: 'products',

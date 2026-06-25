@@ -1,5 +1,4 @@
 import type {
-	CatalogAttributeFacet,
 	CatalogCategoryNode,
 	CatalogCategoryListEntry,
 	CatalogCategoryRecord,
@@ -12,7 +11,7 @@ import type {
 	CatalogSkuRecord,
 	ProductConfigurationModel
 } from './types.js';
-import { localizeValue } from './ui.js';
+import { formatAttributeKey, formatAttributeValue, localizeValue } from './ui.js';
 
 function isScalarAttributeValue(
 	value: CatalogJsonValue | undefined
@@ -71,17 +70,6 @@ function getRepresentativeImage(product: CatalogProductRecord): CatalogImageReco
 	return null;
 }
 
-function getRepresentativeAttributeKeys(product: CatalogProductRecord): string[] {
-	const firstSku = product.skus[0];
-	if (!firstSku) {
-		return [];
-	}
-
-	return Object.keys(firstSku.attributes)
-		.filter((key) => product.skus.some((sku) => asAttributeText(sku.attributes[key]) !== null))
-		.slice(0, 2);
-}
-
 function getSearchTerms(
 	product: CatalogProductRecord,
 	category: CatalogCategoryRecord | undefined
@@ -109,22 +97,6 @@ function getSearchTerms(
 	}
 
 	return terms;
-}
-
-function getAttributeFilterMatch(
-	product: CatalogProductRecord,
-	attributeFilters: Record<string, string[]>
-): boolean {
-	return Object.entries(attributeFilters).every(([key, values]) => {
-		if (values.length === 0) {
-			return true;
-		}
-
-		return product.skus.some((sku) => {
-			const attributeValue = asAttributeText(sku.attributes[key]);
-			return attributeValue !== null && values.includes(attributeValue);
-		});
-	});
 }
 
 function sortViews(
@@ -199,12 +171,6 @@ export function deriveCatalogProductView(
 ): CatalogProductView {
 	const minimumPrice = Math.min(...product.skus.map((sku) => sku.price));
 	const maximumPrice = Math.max(...product.skus.map((sku) => sku.price));
-	const representativeAttributes = getRepresentativeAttributeKeys(product).map((key) => ({
-		key,
-		values: [
-			...new Set(product.skus.map((sku) => asAttributeText(sku.attributes[key])).filter(Boolean))
-		] as string[]
-	}));
 
 	return {
 		id: product.id,
@@ -215,7 +181,6 @@ export function deriveCatalogProductView(
 		minimumPrice,
 		maximumPrice,
 		skuCount: product.skus.length,
-		representativeAttributes,
 		representativeImage: getRepresentativeImage(product),
 		product
 	};
@@ -240,7 +205,6 @@ export function filterCatalogProducts(
 
 			return categoryScope.has(product.categorySlug);
 		})
-		.filter((product) => getAttributeFilterMatch(product, state.attributeFilters))
 		.filter((product) => {
 			if (!normalizedQuery) {
 				return true;
@@ -253,35 +217,6 @@ export function filterCatalogProducts(
 		.map((product) => deriveCatalogProductView(product, state.locale));
 
 	return sortViews(views, state.locale, state.sort);
-}
-
-export function deriveAttributeFacets(products: CatalogProductRecord[]): CatalogAttributeFacet[] {
-	const valueMap = new Map<string, Set<string>>();
-
-	for (const product of products) {
-		for (const sku of product.skus) {
-			for (const [key, value] of Object.entries(sku.attributes)) {
-				const attributeValue = asAttributeText(value);
-				if (!attributeValue) {
-					continue;
-				}
-
-				const entry = valueMap.get(key) ?? new Set<string>();
-				entry.add(attributeValue);
-				valueMap.set(key, entry);
-			}
-		}
-	}
-
-	return [...valueMap.entries()]
-		.map(([key, values]) => ({
-			key,
-			values: [...values].sort((left, right) => left.localeCompare(right))
-		}))
-		.sort(
-			(left, right) => right.values.length - left.values.length || left.key.localeCompare(right.key)
-		)
-		.slice(0, 4);
 }
 
 function resolveDefaultSku(product: CatalogProductRecord): CatalogSkuRecord {
@@ -347,6 +282,7 @@ function normalizeSelection(
 
 export function createProductConfigurationModel(
 	product: CatalogProductRecord,
+	locale: CatalogLocale,
 	selection?: Record<string, string>
 ): ProductConfigurationModel {
 	const defaultSku = resolveDefaultSku(product);
@@ -364,6 +300,7 @@ export function createProductConfigurationModel(
 		] as string[];
 		return {
 			key,
+			label: formatAttributeKey(locale, key),
 			options: values.map((value) => {
 				const available = product.skus.some((sku) =>
 					attributeKeys.every((attributeKey) => {
@@ -379,6 +316,7 @@ export function createProductConfigurationModel(
 
 				return {
 					value,
+					label: formatAttributeValue(locale, value),
 					available,
 					selected: selectedAttributes[key] === value
 				};
@@ -389,6 +327,12 @@ export function createProductConfigurationModel(
 	return {
 		activeSku,
 		selectedAttributes,
+		selectedAttributeEntries: attributeKeys.map((key) => ({
+			key,
+			label: formatAttributeKey(locale, key),
+			value: selectedAttributes[key] ?? '',
+			valueLabel: formatAttributeValue(locale, selectedAttributes[key] ?? '')
+		})),
 		attributeKeys,
 		optionGroups
 	};
