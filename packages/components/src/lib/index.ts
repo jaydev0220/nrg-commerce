@@ -3,5 +3,6 @@ export { default as LanguageSwitcher } from './LanguageSwitcher.svelte';
 export { default as Logo } from './Logo.svelte';
 export { default as Navbar } from './Navbar.svelte';
 export { default as ThemeSwitcher } from './ThemeSwitcher.svelte';
+export { default as SocialIcon } from './SocialIcon.svelte';
 
 export type * from './types';

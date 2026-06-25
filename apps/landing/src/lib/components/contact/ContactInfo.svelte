@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
 	import { contactItems, socialLinks, googleMapsEmbedUrl } from '$lib/data';
-	import SocialIcon from '$lib/components/SocialIcon.svelte';
+	import { SocialIcon } from '@packages/components';
 </script>
 
 <!-- Desktop Layout -->
