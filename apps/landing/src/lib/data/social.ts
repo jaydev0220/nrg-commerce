@@ -1,8 +1,9 @@
+import { PUBLIC_FACEBOOK_URL, PUBLIC_LINE_URL } from '$env/static/public';
 import { siFacebook, siLine } from 'simple-icons';
 import * as m from '$lib/paraglide/messages';
 
-const facebookUrl = import.meta.env['PUBLIC_FACEBOOK_URL']?.trim() ?? '';
-const lineUrl = import.meta.env['PUBLIC_LINE_URL']?.trim() ?? '';
+const facebookUrl = PUBLIC_FACEBOOK_URL.trim();
+const lineUrl = PUBLIC_LINE_URL.trim();
 
 export const socialLinks = [
 	{

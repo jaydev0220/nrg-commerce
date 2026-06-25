@@ -1,4 +1,5 @@
 import { socialLinks } from '$lib/data/social';
+import { PUBLIC_SITE_URL } from '$env/static/public';
 import { CDN_ASSETS, cdnUrl } from '$lib/utils/cdn';
 import { deLocalizeUrl, localizeUrl } from '$lib/paraglide/runtime';
 import type { SchemaOrgProps, SeoConfig } from 'svead';
@@ -66,7 +67,7 @@ const OG_LOCALES: Record<SupportedLocale, string> = {
 };
 
 function getSiteOrigin(): string {
-	return new URL('/', import.meta.env['PUBLIC_SITE_URL'] || DEFAULT_SITE_URL).href;
+	return new URL('/', PUBLIC_SITE_URL || DEFAULT_SITE_URL).href;
 }
 
 function getBaseUrl(pathname: string): URL {

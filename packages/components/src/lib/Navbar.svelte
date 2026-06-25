@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
 	import { PUBLIC_CDN_BASE_URL } from '$env/static/public';
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { Menu } from '@lucide/svelte';
 	import LanguageSwitcher from './LanguageSwitcher.svelte';
@@ -20,8 +20,9 @@
 	let { cta, navLinks, onSelectLanguage, onToggleTheme }: Props = $props();
 
 	const mobileMenuLabel = 'Toggle mobile menu';
-	const brandLogoLight = `${PUBLIC_CDN_BASE_URL}/logo-light.svg`;
-	const brandLogoDark = `${PUBLIC_CDN_BASE_URL}/logo-dark.svg`;
+	const cdnBaseUrl = PUBLIC_CDN_BASE_URL.trim();
+	const brandLogoLight = $derived(`${cdnBaseUrl}/logo-light.svg`);
+	const brandLogoDark = $derived(`${cdnBaseUrl}/logo-dark.svg`);
 	const languageOptions: LanguageOption[] = [
 		{ label: '繁體中文', shortLabel: '繁中', value: 'zh-tw' },
 		{ label: 'English', shortLabel: 'EN', value: 'en' }

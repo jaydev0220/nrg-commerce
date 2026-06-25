@@ -1,4 +1,6 @@
-export const CDN_BASE_URL = import.meta.env['PUBLIC_CDN_BASE_URL']?.trim() ?? '';
+import { PUBLIC_CDN_BASE_URL } from '$env/static/public';
+
+export const CDN_BASE_URL = PUBLIC_CDN_BASE_URL.trim();
 
 export const CDN_ASSETS = {
 	// Branding

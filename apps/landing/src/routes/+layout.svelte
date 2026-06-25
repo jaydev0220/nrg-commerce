@@ -28,6 +28,7 @@
 	let { children } = $props();
 
 	const currentYear = new Date().getFullYear();
+
 	const fallbackSeo: SeoPageData = getDefaultSeoPageData(
 		m.home_meta_title(),
 		m.home_meta_description(),

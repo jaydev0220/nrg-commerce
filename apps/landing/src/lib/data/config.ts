@@ -1,7 +1,8 @@
 import * as m from '$lib/paraglide/messages';
+import { PUBLIC_CTA_URL } from '$env/static/public';
 import type { SupportedLocale } from '$lib/seo';
 
-export const shopUrl = import.meta.env['PUBLIC_CTA_URL']?.trim() ?? '';
+export const shopUrl = PUBLIC_CTA_URL.trim();
 
 export function getShopUrl(locale: SupportedLocale): string {
 	return locale === 'en' ? `${shopUrl}/en` : `${shopUrl}/`;

@@ -1,9 +1,10 @@
 import { browser } from '$app/environment';
+import { PUBLIC_COOKIE_DOMAIN } from '$env/static/public';
 
 export type Theme = 'light' | 'dark';
 
 const THEME_COOKIE_NAME = 'theme';
-const THEME_COOKIE_DOMAIN = import.meta.env['PUBLIC_COOKIE_DOMAIN']?.trim() ?? '';
+const THEME_COOKIE_DOMAIN = PUBLIC_COOKIE_DOMAIN.trim();
 const THEME_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 const DEFAULT_THEME: Theme = 'light';
 

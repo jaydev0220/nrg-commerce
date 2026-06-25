@@ -13,10 +13,11 @@
 
 	let { description, copyrightText, onToggleLanguage }: Props = $props();
 
-	const brandLogoLight = `${PUBLIC_CDN_BASE_URL.trim()}/logo-light.svg`;
-	const brandLogoDark = `${PUBLIC_CDN_BASE_URL.trim()}/logo-dark.svg`;
+	const cdnBaseUrl = PUBLIC_CDN_BASE_URL.trim();
 	const facebookUrl = PUBLIC_FACEBOOK_URL.trim();
 	const lineUrl = PUBLIC_LINE_URL.trim();
+	const brandLogoLight = $derived(`${cdnBaseUrl}/logo-light.svg`);
+	const brandLogoDark = $derived(`${cdnBaseUrl}/logo-dark.svg`);
 </script>
 
 <footer class="bg-accent-700 text-text-on-accent">
