@@ -162,14 +162,6 @@
 	});
 </script>
 
-<svelte:head>
-	<title>{m.catalog_title()}</title>
-	<meta
-		name="description"
-		content={m.catalog_description()}
-	/>
-</svelte:head>
-
 <main>
 	<CatalogHero
 		title={m.catalog_title()}

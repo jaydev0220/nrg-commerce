@@ -2,24 +2,26 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { Pathname } from '$app/types';
+	import { PUBLIC_SITE_URL } from '$env/static/public';
 	import { Footer, Navbar, type CtaConfig, type NavLinkItem } from '@packages/components';
-	import * as m from '$lib/paraglide/messages';
-	import { getShopUrl, navLinks } from '$lib/data';
-	import {
-		extractLocaleFromUrl,
-		localizeHref,
-		setLocale,
-		type Locale
-	} from '$lib/paraglide/runtime';
 	import {
 		buildAlternateLinks,
 		buildSeoConfig,
 		buildStructuredData,
-		getDefaultSeoPageData,
-		type SeoPageData,
+		createSeoPageData,
 		type SeoOrganizationData,
 		type SupportedLocale
-	} from '$lib/seo';
+	} from '@packages/seo';
+	import * as m from '$lib/paraglide/messages';
+	import { getShopUrl, navLinks, socialLinks } from '$lib/data';
+	import {
+		deLocalizeUrl,
+		extractLocaleFromUrl,
+		localizeHref,
+		localizeUrl,
+		setLocale,
+		type Locale
+	} from '$lib/paraglide/runtime';
 	import { theme } from '$lib/state/theme.svelte';
 	import { CDN_ASSETS, cdnUrl } from '$lib/utils/cdn';
 	import { Head, SchemaOrg } from 'svead';
@@ -27,13 +29,16 @@
 
 	let { children } = $props();
 
+	const siteOrigin = new URL('/', PUBLIC_SITE_URL || 'https://example.com').href;
 	const currentYear = new Date().getFullYear();
 
-	const fallbackSeo: SeoPageData = getDefaultSeoPageData(
-		m.home_meta_title(),
-		m.home_meta_description(),
-		m.home_meta_title()
-	);
+	const fallbackSeo = createSeoPageData({
+		title: m.home_meta_title(),
+		description: m.home_meta_description(),
+		pageType: 'WebPage',
+		openGraphImage: cdnUrl(CDN_ASSETS.productBeakers),
+		openGraphImageAlt: m.home_meta_title()
+	}).seo;
 	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
 	const ctaConfig: CtaConfig = $derived({
 		href: getShopUrl(locale),
@@ -49,11 +54,44 @@
 		fax: m.contact_fax_value(),
 		email: m.contact_email_value()
 	});
-	const seoConfig = $derived(buildSeoConfig(seoPage, page.url.pathname, locale, organization.name));
-	const structuredData = $derived(
-		buildStructuredData(seoPage, page.url.pathname, locale, organization, m.nav_home())
+	const seoConfig = $derived(
+		buildSeoConfig({
+			seo: seoPage,
+			pathname: page.url.pathname,
+			locale,
+			siteName: organization.name,
+			siteOrigin,
+			resolveLocalizedUrl: resolveLandingSeoUrl
+		})
 	);
-	const alternateLinks = $derived(buildAlternateLinks(page.url.pathname));
+	const structuredData = $derived(
+		buildStructuredData({
+			seo: seoPage,
+			pathname: page.url.pathname,
+			locale,
+			siteOrigin,
+			resolveLocalizedUrl: resolveLandingSeoUrl,
+			logoUrl: cdnUrl(CDN_ASSETS.logoLight),
+			organization,
+			sameAs: socialLinks.map((social) => social.href).filter(Boolean),
+			breadcrumbItems:
+				deLocalizeUrl(page.url).pathname === '/'
+					? []
+					: [
+							{
+								name: m.nav_home(),
+								pathname: '/'
+							}
+						],
+			mainEntityOrganization: seoPage.pageType === 'AboutPage' || seoPage.pageType === 'ContactPage'
+		})
+	);
+	const alternateLinks = $derived(
+		buildAlternateLinks({
+			pathname: page.url.pathname,
+			resolveLocalizedUrl: resolveLandingSeoUrl
+		})
+	);
 	const navigationLinks = $derived.by<NavLinkItem[]>(() =>
 		navLinks.map((link) => {
 			return {
@@ -63,6 +101,10 @@
 			};
 		})
 	);
+
+	function resolveLandingSeoUrl(pathname: string, nextLocale: SupportedLocale): URL {
+		return localizeUrl(deLocalizeUrl(new URL(pathname, siteOrigin)), { locale: nextLocale });
+	}
 
 	function toggleTheme() {
 		theme.toggle();

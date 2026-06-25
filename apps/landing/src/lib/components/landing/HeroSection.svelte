@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import type { SupportedLocale } from '@packages/seo';
 	import * as m from '$lib/paraglide/messages';
 	import { extractLocaleFromUrl } from '$lib/paraglide/runtime';
 	import { getShopUrl, shopCta } from '$lib/data';
-	import type { SupportedLocale } from '$lib/seo';
 	import { splitLineBreakTags } from '$lib/utils/line-breaks';
 
 	let shopHref = $derived(getShopUrl(extractLocaleFromUrl(page.url) as SupportedLocale));

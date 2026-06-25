@@ -1,4 +1,4 @@
-import type { SeoPageData } from '$lib/seo';
+import type { SeoPageData } from '@packages/seo';
 
 declare global {
 	namespace App {

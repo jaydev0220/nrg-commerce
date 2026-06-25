@@ -24,6 +24,7 @@
 		"@packages/components": "workspace:*",
 		"@packages/eslint-config": "workspace:*",
 		"@packages/prettier-config": "workspace:*",
+		"@packages/seo": "workspace:*",
 		"@packages/styles": "workspace:*",
 		"@packages/tsconfig": "workspace:*",
 		"@playwright/test": "catalog:test",

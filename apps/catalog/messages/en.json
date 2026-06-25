@@ -41,5 +41,9 @@
 	"nav_home": "Home",
 	"company_name": "NRG Glass",
 	"company_description": "Professional laboratory glassware manufacturer providing high-quality scientific equipment",
+	"contact_address_value": "No. 97, Sec. 2, Jingguo Rd., North Dist., Hsinchu City, Taiwan (R.O.C.)",
+	"contact_phone_value": "+886-3-533-5190",
+	"contact_fax_value": "+886-3-532-6560",
+	"contact_email_value": "contact@nrglabware.com",
 	"footer_copyright": "All right reserved."
 }

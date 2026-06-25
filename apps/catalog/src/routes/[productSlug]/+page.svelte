@@ -49,16 +49,6 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{localizedName} | {m.catalog_title()}</title>
-	{#if localizedDescription}
-		<meta
-			name="description"
-			content={localizedDescription}
-		/>
-	{/if}
-</svelte:head>
-
 <main id="product-content">
 	<ProductBreadcrumb
 		{catalogHref}
