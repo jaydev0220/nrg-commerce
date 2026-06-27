@@ -5,7 +5,7 @@
 ```
 project-root/
 |-- apps/
-|   |-- api/
+|   |-- api/                                  # Backend API server
 |   |   |-- src/
 |   |   |   |-- config/
 |   |   |   |-- routes/
@@ -22,7 +22,7 @@ project-root/
 |   |   |-- eslint.config.js
 |   |   |-- prettier.config.js
 |   |   `-- tsconfig.json
-|   |-- admin/
+|   |-- admin/                                # Management page for staff
 |   |   |-- src/
 |   |   |   |-- lib/
 |   |   |   |-- routes/
@@ -40,7 +40,7 @@ project-root/
 |   |   |-- playwright.config.ts
 |   |   |-- tsconfig.json
 |   |   `-- vite.config.ts
-|   |-- catalog/
+|   |-- catalog/                              # Product catalog page
 |   |   |-- src/
 |   |   |   |-- lib/
 |   |   |   |   |-- components/
@@ -73,7 +73,7 @@ project-root/
 |   |   |-- tsconfig.json
 |   |   |-- vite.config.ts
 |   |   `-- wrangler.jsonc
-|   `-- landing/
+|   `-- landing/                              # Landing page
 |       |-- src/
 |       |   |-- lib/
 |       |   |   |-- components/
@@ -107,19 +107,19 @@ project-root/
 |       |-- tsconfig.json
 |       `-- vite.config.ts
 |-- packages/
-|   |-- eslint-config/
+|   |-- eslint-config/                        # Shared ESLint config
 |   |   |-- package.json
 |   |   |-- eslint.config.js
 |   |   `-- svelte.js
-|   |-- prettier-config/
+|   |-- prettier-config/                      # Shared Prettier config
 |   |   |-- package.json
 |   |   `-- prettier.config.js
-|   |-- tsconfig/
+|   |-- tsconfig/                             # Shared TypeScript config
 |   |   |-- package.json
 |   |   |-- base.json
 |   |   |-- node.json
 |   |   `-- svelte.json
-|   |-- database/
+|   |-- database/                             # Database module
 |   |   |-- prisma/
 |   |   |   |-- migrations/
 |   |   |   |-- generated/
@@ -135,7 +135,7 @@ project-root/
 |   |   |-- prettier.config.js
 |   |   |-- tsconfig.json
 |   |   `-- prisma.config.ts
-|   |-- schemas/
+|   |-- schemas/                              # Zod schemas for API data validation
 |   |   |-- src/
 |   |   |   |-- common.ts
 |   |   |   |-- auth.ts
@@ -147,10 +147,10 @@ project-root/
 |   |   |-- eslint.config.js
 |   |   |-- prettier.config.js
 |   |   `-- tsconfig.json
-|   |-- styles/
+|   |-- styles/                               # Shared CSS styles for web apps
 |   |   |-- shared.css
 |   |   `-- package.json
-|   |-- components/
+|   |-- components/                           # Shared web app UI components
 |   |   |-- src/
 |   |   |   `-- lib/
 |   |   |       |-- Logo.svelte
@@ -166,7 +166,7 @@ project-root/
 |   |   |-- prettier.config.js
 |   |   |-- tsconfig.json
 |   |   `-- vite.config.ts
-|   `-- seo/
+|   `-- seo/                                  # SEO helper functions for web apps
 |       |-- src/
 |       |   `-- index.ts
 |       |-- package.json
