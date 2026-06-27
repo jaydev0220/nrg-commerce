@@ -147,22 +147,32 @@ project-root/
 |   |   |-- eslint.config.js
 |   |   |-- prettier.config.js
 |   |   `-- tsconfig.json
-|   `-- components/
+|   |-- styles/
+|   |   |-- shared.css
+|   |   `-- package.json
+|   |-- components/
+|   |   |-- src/
+|   |   |   `-- lib/
+|   |   |       |-- Logo.svelte
+|   |   |       |-- LanguageSwitcher.svelte
+|   |   |       |-- ThemeSwitcher.svelte
+|   |   |       |-- SocialIcon.svelte
+|   |   |       |-- Navbar.svelte
+|   |   |       |-- Footer.svelte
+|   |   |       |-- index.ts
+|   |   |       `-- types.ts
+|   |   |-- package.json
+|   |   |-- eslint.config.js
+|   |   |-- prettier.config.js
+|   |   |-- tsconfig.json
+|   |   `-- vite.config.ts
+|   `-- seo/
 |       |-- src/
-|       |   `-- lib/
-|       |       |-- Logo.svelte
-|       |       |-- LanguageSwitcher.svelte
-|       |       |-- ThemeSwitcher.svelte
-|       |       |-- SocialIcon.svelte
-|       |       |-- Navbar.svelte
-|       |       |-- Footer.svelte
-|       |       |-- index.ts
-|       |       `-- types.ts
+|       |   `-- index.ts
 |       |-- package.json
 |       |-- eslint.config.js
 |       |-- prettier.config.js
-|       |-- tsconfig.json
-|       `-- vite.config.ts
+|       `-- tsconfig.json
 |-- .gitignore
 |-- .prettierignore
 |-- package.json
@@ -222,6 +232,14 @@ Keep test files the same structure as src.
 #### `packages/schemas`
 
 - **Validation library:** Zod 4
+- **Testing:** Node.js built-in test runner
+
+### `packages/components`
+
+- **Framework:** Svelte 5
+
+### `packages/seo`
+
 - **Testing:** Node.js built-in test runner
 
 ## Breaking Changes
