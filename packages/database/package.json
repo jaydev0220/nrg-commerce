@@ -5,13 +5,10 @@
 	"type": "module",
 	"exports": {
 		".": {
-			"types": "./build/src/index.d.ts",
-			"default": "./build/src/index.js"
+			"default": "./src/index.ts"
 		}
 	},
-	"types": "./build/src/index.d.ts",
 	"scripts": {
-		"build": "prisma generate && tsc --project tsconfig.json",
 		"check": "prisma validate && tsc --noEmit --project tsconfig.json",
 		"format": "prettier --ignore-path ../../.prettierignore --write . && prisma format",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",

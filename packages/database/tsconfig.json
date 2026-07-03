@@ -2,12 +2,10 @@
 	"extends": "@packages/tsconfig/node.json",
 	"compilerOptions": {
 		"rootDir": ".",
-		"outDir": "./build",
 		"ignoreDeprecations": "6.0",
 		"declaration": true,
 		"declarationMap": true
 	},
-	"files": [],
 	"include": ["src/**/*.ts", "tests/**/*.ts", "prisma.config.ts", "prisma/seed.ts"],
-	"exclude": ["build", "node_modules"]
+	"exclude": ["node_modules"]
 }
