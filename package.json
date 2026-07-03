@@ -14,14 +14,14 @@
 		"test": "pnpm -r run test",
 		"test:e2e": "pnpm --filter './apps/*' run test:e2e"
 	},
-	"engines": {
-		"node": "24.16.0"
-	},
 	"devEngines": {
 		"packageManager": {
 			"name": "pnpm",
 			"version": "11.4.0",
 			"onFail": "download"
 		}
+	},
+	"devDependencies": {
+		"node": "catalog:"
 	}
 }

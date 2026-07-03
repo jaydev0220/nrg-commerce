@@ -8,6 +8,7 @@ catalogMode: strict
 
 catalog:
   '@types/node': ^24.13.1
+  node: runtime:^24.18.0
   tsx: ^4.22.4
   typescript: ^6.0.3
   zod: ^4.4.3
