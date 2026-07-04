@@ -1,6 +1,11 @@
 import { expect, test } from 'vitest';
 
-import { buildCatalogQueryString, parseCatalogQueryState } from '$lib/catalog/query.js';
+import {
+	buildCatalogQueryString,
+	buildInquiryQueryString,
+	parseCatalogQueryState,
+	parseInquiryQueryState
+} from '$lib/catalog/query.js';
 
 test('parseCatalogQueryState reads category and sort without attribute state', () => {
 	const state = parseCatalogQueryState(
@@ -24,4 +29,20 @@ test('buildCatalogQueryString clears category when null is passed', () => {
 	});
 
 	expect(queryString).toBe('');
+});
+
+test('parseInquiryQueryState reads and trims sku', () => {
+	const state = parseInquiryQueryState(new URLSearchParams('sku=%20NRG-250%20'));
+
+	expect(state).toEqual({
+		skuCode: 'NRG-250'
+	});
+});
+
+test('buildInquiryQueryString omits empty sku', () => {
+	expect(buildInquiryQueryString({ skuCode: '  ' })).toBe('');
+});
+
+test('buildInquiryQueryString writes sku', () => {
+	expect(buildInquiryQueryString({ skuCode: 'NRG-250' })).toBe('sku=NRG-250');
 });

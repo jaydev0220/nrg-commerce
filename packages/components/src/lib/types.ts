@@ -12,6 +12,7 @@ export type LogoConfig = {
 export type CtaConfig = {
 	label: string;
 	href: string;
+	external?: boolean;
 };
 
 export type NavLinkItem = {

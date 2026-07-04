@@ -32,6 +32,16 @@
 	let theme = $state<ThemeMode>('light');
 	let currentLocale = $derived(page.url.pathname.startsWith('/en') ? 'en' : 'zh-tw');
 	let currentPath = $derived(page.url.pathname);
+	let ctaExternal = $derived(
+		cta.external ??
+			(() => {
+				try {
+					return new URL(cta.href, page.url.origin).origin !== page.url.origin;
+				} catch {
+					return false;
+				}
+			})()
+	);
 
 	function syncTheme() {
 		if (!browser) {
@@ -129,8 +139,8 @@
 				/>
 				<a
 					href={cta.href}
-					target="_blank"
-					rel="external noopener noreferrer"
+					target={ctaExternal ? '_blank' : undefined}
+					rel={ctaExternal ? 'external noopener noreferrer' : undefined}
 					class="
 						inline-flex h-10 w-37 items-center justify-center rounded-md bg-brand px-4 py-2
 						text-sm font-medium text-text-on-accent transition-colors duration-200 hover:-translate-y-0.5 hover:bg-brand-hover
@@ -198,8 +208,8 @@
 					</div>
 					<a
 						href={cta.href}
-						target="_blank"
-						rel="external noopener noreferrer"
+						target={ctaExternal ? '_blank' : undefined}
+						rel={ctaExternal ? 'external noopener noreferrer' : undefined}
 						onclick={closeMobileMenu}
 						class="
 							block w-full rounded-md bg-brand px-4 py-3 text-center text-sm font-medium text-text-on-accent

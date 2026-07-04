@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import type { Pathname } from '$app/types';
+	import { Send } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages';
 	import type { CatalogLocale, ProductConfigurationModel } from '$lib/catalog/types.js';
 	import { formatMoney } from '$lib/catalog/ui.js';
@@ -9,11 +12,19 @@
 		productName: string;
 		productSkuCount: number;
 		model: ProductConfigurationModel;
+		inquiryHref: string;
 		onSelectOption: (key: string, value: string) => void;
 	};
 
-	let { locale, categoryLabel, productName, productSkuCount, model, onSelectOption }: Props =
-		$props();
+	let {
+		locale,
+		categoryLabel,
+		productName,
+		productSkuCount,
+		model,
+		inquiryHref,
+		onSelectOption
+	}: Props = $props();
 </script>
 
 <article class="rounded-lg border border-border bg-bg-surface p-5 shadow-xs sm:p-7">
@@ -96,5 +107,12 @@
 				{entry.label}: {entry.valueLabel}
 			{/each}
 		</p>
+		<a
+			href={resolve(inquiryHref as Pathname)}
+			class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand px-4 py-3 text-sm font-semibold text-text-on-accent transition-[color,background-color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+		>
+			<Send class="size-4" />
+			{m.catalog_inquiry_cta()}
+		</a>
 	</div>
 </article>

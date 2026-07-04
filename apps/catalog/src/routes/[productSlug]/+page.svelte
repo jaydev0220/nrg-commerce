@@ -7,7 +7,7 @@
 
 	import type { PageProps } from './$types';
 	import { createProductConfigurationModel } from '$lib/catalog/logic.js';
-	import { localeFromPathname } from '$lib/catalog/query.js';
+	import { buildInquiryQueryString, localeFromPathname } from '$lib/catalog/query.js';
 	import { localizeValue } from '$lib/catalog/ui.js';
 	import { localizeHref } from '$lib/paraglide/runtime';
 	import MarkdownContent from '$lib/components/MarkdownContent.svelte';
@@ -39,6 +39,11 @@
 		Math.min(selectedImageIndex, Math.max(activeImages.length - 1, 0))
 	);
 	let catalogHref = $derived(localizeHref('/', { locale }) as Pathname);
+	let inquiryHref = $derived.by(() => {
+		const queryString = buildInquiryQueryString({ skuCode: model.activeSku.skuCode });
+		const href = localizeHref('/inquiry', { locale });
+		return queryString ? `${href}?${queryString}` : href;
+	});
 
 	function updateSelection(key: string, value: string) {
 		requestedSelection = {
@@ -83,6 +88,7 @@
 				productName={localizedName}
 				productSkuCount={data.product.skus.length}
 				{model}
+				{inquiryHref}
 				onSelectOption={updateSelection}
 			/>
 		</div>

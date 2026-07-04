@@ -1,4 +1,4 @@
-import type { CatalogLocale, CatalogQueryState, CatalogSort } from './types.js';
+import type { CatalogLocale, CatalogQueryState, CatalogSort, InquiryQueryState } from './types.js';
 import { normalizeLocale, sortOptions } from './ui.js';
 
 export function parseCatalogQueryState(
@@ -35,6 +35,23 @@ export function buildCatalogQueryString(state: {
 
 	if (state.sort !== 'featured') {
 		params.set('sort', state.sort);
+	}
+
+	return params.toString();
+}
+
+export function parseInquiryQueryState(searchParams: URLSearchParams): InquiryQueryState {
+	return {
+		skuCode: searchParams.get('sku')?.trim() ?? ''
+	};
+}
+
+export function buildInquiryQueryString(state: InquiryQueryState): string {
+	const params = new URLSearchParams();
+	const skuCode = state.skuCode.trim();
+
+	if (skuCode) {
+		params.set('sku', skuCode);
 	}
 
 	return params.toString();

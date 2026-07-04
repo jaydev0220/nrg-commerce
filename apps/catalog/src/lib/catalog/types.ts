@@ -113,6 +113,10 @@ export type CatalogQueryState = {
 	sort: CatalogSort;
 };
 
+export type InquiryQueryState = {
+	skuCode: string;
+};
+
 export type ProductOption = {
 	value: string;
 	label: string;

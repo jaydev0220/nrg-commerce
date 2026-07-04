@@ -3,7 +3,6 @@
 	import {
 		PUBLIC_CDN_BASE_URL,
 		PUBLIC_COOKIE_DOMAIN,
-		PUBLIC_CTA_URL,
 		PUBLIC_FACEBOOK_URL,
 		PUBLIC_HOME_URL,
 		PUBLIC_LINE_URL
@@ -35,7 +34,6 @@
 	const cdnBaseUrl = PUBLIC_CDN_BASE_URL.trim();
 	const THEME_COOKIE_DOMAIN = PUBLIC_COOKIE_DOMAIN.trim();
 	const THEME_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
-	const ctaUrl = PUBLIC_CTA_URL.trim();
 	const facebookUrl = PUBLIC_FACEBOOK_URL.trim();
 	const homeUrl = PUBLIC_HOME_URL.trim();
 	const lineUrl = PUBLIC_LINE_URL.trim();
@@ -56,10 +54,10 @@
 		openGraphImage: catalogCdnUrl('/landing/products-beakers.webp'),
 		openGraphImageAlt: m.catalog_title()
 	}).seo;
-	const ctaConfig: CtaConfig = {
-		href: ctaUrl,
-		label: 'CTA Text'
-	};
+	const ctaConfig: CtaConfig = $derived({
+		href: resolve(localizeHref('/inquiry', { locale }) as Pathname),
+		label: m.catalog_inquiry_cta()
+	});
 	const canonicalPathname = $derived(deLocalizeUrl(page.url).pathname);
 	const seoPage = $derived(page.data.seo ?? fallbackSeo);
 	const organization: SeoOrganizationData = $derived({
