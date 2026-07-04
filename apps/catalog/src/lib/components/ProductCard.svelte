@@ -7,7 +7,7 @@
 
 	type Props = {
 		view: CatalogProductView;
-		categoryLabel: string;
+		categoryLabel: string | null;
 		href: string;
 	};
 
@@ -48,7 +48,11 @@
 	</a>
 	<div class="flex min-h-67.5 flex-col p-5">
 		<div class="mb-3 flex items-start justify-between gap-3">
-			<p class="text-xs font-medium text-text-accent">{categoryLabel}</p>
+			{#if categoryLabel}
+				<p class="text-xs font-medium text-text-accent">{categoryLabel}</p>
+			{:else}
+				<span></span>
+			{/if}
 			<span
 				class="whitespace-nowrap rounded-sm bg-brand-subtle px-2 py-1 font-mono text-[10px] text-text-accent"
 			>

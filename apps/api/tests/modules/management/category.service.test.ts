@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { AppError } from '../../../src/errors/app-error.js';
-import { createCategoryService } from '../../../src/modules/management/category.service.js';
+import { createCategoryService } from '../../../src/modules/management/category/category.service.js';
 
 test('updateCategory rejects circular category parent changes', async () => {
 	const categoryService = createCategoryService({

@@ -1,8 +1,8 @@
-import { AppError } from '../../errors/app-error.js';
-import type { ImageObjectStorage } from '../../utils/object-storage.js';
+import { AppError } from '../../../errors/app-error.js';
+import type { ImageObjectStorage } from '../../../utils/object-storage.js';
 
-import type { CatalogImageRecord } from '../../types/catalog.js';
-import type { CatalogRepository } from './catalog.repository.js';
+import type { CatalogImageRecord } from '../../../types/catalog.js';
+import type { CatalogRepository } from '../catalog.repository.js';
 
 type ImageServiceDependencies = {
 	repository: Pick<

@@ -1,7 +1,7 @@
-import { AppError } from '../../errors/app-error.js';
-import type { CatalogProductRecord } from '../../types/catalog.js';
+import { AppError } from '../../../errors/app-error.js';
+import type { CatalogProductRecord } from '../../../types/catalog.js';
 
-import type { CatalogRepository } from './catalog.repository.js';
+import type { CatalogRepository } from '../catalog.repository.js';
 
 type ProductListQuery = {
 	page: number;
@@ -67,10 +67,10 @@ export function createProductService(dependencies: ProductServiceDependencies) {
 			nameEn?: string;
 			description?: string;
 			descriptionEn?: string;
-			categoryId: string;
+			categoryId?: string | null;
 			published: boolean;
 		}): Promise<CatalogProductRecord> {
-			if (!(await dependencies.repository.findCategoryById(input.categoryId))) {
+			if (input.categoryId && !(await dependencies.repository.findCategoryById(input.categoryId))) {
 				throw new AppError(
 					404,
 					'CATEGORY_NOT_FOUND',
@@ -97,7 +97,7 @@ export function createProductService(dependencies: ProductServiceDependencies) {
 				nameEn?: string | null;
 				description?: string | null;
 				descriptionEn?: string | null;
-				categoryId?: string;
+				categoryId?: string | null;
 				published?: boolean;
 			}
 		): Promise<CatalogProductRecord> {

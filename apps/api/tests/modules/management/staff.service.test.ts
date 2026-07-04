@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { AppError } from '../../../src/errors/app-error.js';
-import { createStaffService } from '../../../src/modules/management/staff.service.js';
+import { createStaffService } from '../../../src/modules/management/staff/staff.service.js';
 
 const actingAdmin = {
 	id: '0189076c-4f2a-7fe1-b9fd-2d68df455111',

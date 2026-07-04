@@ -1,6 +1,6 @@
 import type { DatabaseClient, RoleKey } from '@packages/database';
 
-import type { ManagedStaffRecord } from '../../types/management.js';
+import type { ManagedStaffRecord } from '../../../types/management.js';
 
 type StaffListResult = {
 	data: ManagedStaffRecord[];

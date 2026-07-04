@@ -1,7 +1,7 @@
-import { AppError } from '../../errors/app-error.js';
+import { AppError } from '../../../errors/app-error.js';
 
-import type { CatalogJsonValue, CatalogSkuRecord } from '../../types/catalog.js';
-import type { CatalogRepository } from './catalog.repository.js';
+import type { CatalogJsonValue, CatalogSkuRecord } from '../../../types/catalog.js';
+import type { CatalogRepository } from '../catalog.repository.js';
 
 type SkuServiceDependencies = {
 	repository: Pick<

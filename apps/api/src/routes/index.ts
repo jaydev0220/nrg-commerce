@@ -8,12 +8,12 @@ import { createAuthRateLimiter } from '../middlewares/rate-limit.js';
 import { createAuthRouter } from '../modules/auth/auth.routes.js';
 import type { AuthService } from '../modules/auth/auth.service.js';
 import { createCatalogManagementRouter } from '../modules/management/management.routes.js';
-import type { CategoryService } from '../modules/management/category.service.js';
-import type { ImageService } from '../modules/management/image.service.js';
-import type { ProductService } from '../modules/management/product.service.js';
-import type { SkuService } from '../modules/management/sku.service.js';
-import { createStaffManagementRouter } from '../modules/management/staff.routes.js';
-import type { StaffService } from '../modules/management/staff.service.js';
+import type { CategoryService } from '../modules/management/category/category.service.js';
+import type { ImageService } from '../modules/management/image/image.service.js';
+import type { ProductService } from '../modules/management/product/product.service.js';
+import type { SkuService } from '../modules/management/sku/sku.service.js';
+import { createStaffManagementRouter } from '../modules/management/staff/staff.routes.js';
+import type { StaffService } from '../modules/management/staff/staff.service.js';
 import { createStorefrontCatalogRouter } from '../modules/storefront/storefront.routes.js';
 import type { StorefrontCatalogService } from '../modules/storefront/storefront.service.js';
 

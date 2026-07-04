@@ -1,5 +1,5 @@
-import { AppError } from '../../errors/app-error.js';
-import type { PasswordHasher } from '../../utils/password-hasher.js';
+import { AppError } from '../../../errors/app-error.js';
+import type { PasswordHasher } from '../../../utils/password-hasher.js';
 import type { StaffRepository } from './staff.repository.js';
 
 type StaffServiceDependencies = {

@@ -5,7 +5,7 @@
 
 	type Props = {
 		locale: CatalogLocale;
-		categoryLabel: string;
+		categoryLabel: string | null;
 		productName: string;
 		productSkuCount: number;
 		model: ProductConfigurationModel;
@@ -17,7 +17,9 @@
 </script>
 
 <article class="rounded-lg border border-border bg-bg-surface p-5 shadow-xs sm:p-7">
-	<p class="text-xs font-semibold text-text-accent">{categoryLabel}</p>
+	{#if categoryLabel}
+		<p class="text-xs font-semibold text-text-accent">{categoryLabel}</p>
+	{/if}
 	<div class="mt-2 flex items-center gap-2">
 		<span class="rounded-sm bg-brand-subtle px-2 py-1 font-mono text-[10px] text-text-accent">
 			{productSkuCount}

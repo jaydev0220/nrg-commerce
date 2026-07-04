@@ -7,6 +7,8 @@ export const load: PageServerLoad = async ({ fetch, params }) => {
 
 	return {
 		product,
-		category: await fetchCatalogCategoryBySlug(fetch, product.categorySlug)
+		category: product.categorySlug
+			? await fetchCatalogCategoryBySlug(fetch, product.categorySlug)
+			: null
 	};
 };

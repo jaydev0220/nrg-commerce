@@ -1,13 +1,13 @@
 import { Router } from 'express';
 
-import { createCategoryManagementRouter } from './category.routes.js';
-import { createImageManagementRouter } from './image.routes.js';
-import { createProductManagementRouter } from './product.routes.js';
-import { createSkuManagementRouter } from './sku.routes.js';
-import type { CategoryService } from './category.service.js';
-import type { ImageService } from './image.service.js';
-import type { ProductService } from './product.service.js';
-import type { SkuService } from './sku.service.js';
+import { createCategoryManagementRouter } from './category/category.routes.js';
+import { createImageManagementRouter } from './image/image.routes.js';
+import { createProductManagementRouter } from './product/product.routes.js';
+import { createSkuManagementRouter } from './sku/sku.routes.js';
+import type { CategoryService } from './category/category.service.js';
+import type { ImageService } from './image/image.service.js';
+import type { ProductService } from './product/product.service.js';
+import type { SkuService } from './sku/sku.service.js';
 
 type CatalogManagementRouterDependencies = {
 	productService: ProductService;

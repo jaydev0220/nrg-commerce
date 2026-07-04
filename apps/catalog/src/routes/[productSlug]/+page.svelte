@@ -25,7 +25,7 @@
 		localizeValue(locale, data.product.description, data.product.descriptionEn)
 	);
 	let localizedCategoryName = $derived(
-		localizeValue(locale, data.category.name, data.category.nameEn)
+		data.category ? localizeValue(locale, data.category.name, data.category.nameEn) : null
 	);
 	let activeImages = $derived(
 		model.activeSku.images.length > 0

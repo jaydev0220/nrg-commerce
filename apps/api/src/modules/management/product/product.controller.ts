@@ -4,8 +4,8 @@ import {
 	getValidatedBody,
 	getValidatedParams,
 	getValidatedQuery
-} from '../../middlewares/validate-request.js';
-import { buildPaginatedResponse } from '../../utils/pagination.js';
+} from '../../../middlewares/validate-request.js';
+import { buildPaginatedResponse } from '../../../utils/pagination.js';
 import type { ProductService } from './product.service.js';
 
 type ProductManagementControllerDependencies = {

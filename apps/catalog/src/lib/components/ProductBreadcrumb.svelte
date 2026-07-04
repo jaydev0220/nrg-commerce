@@ -6,7 +6,7 @@
 	type Props = {
 		catalogHref: string;
 		catalogLabel: string;
-		categoryLabel: string;
+		categoryLabel: string | null;
 		productLabel: string;
 	};
 
@@ -25,8 +25,10 @@
 			>
 				{catalogLabel}
 			</a>
-			<ChevronRight class="size-3.5" />
-			<span>{categoryLabel}</span>
+			{#if categoryLabel}
+				<ChevronRight class="size-3.5" />
+				<span>{categoryLabel}</span>
+			{/if}
 			<ChevronRight class="size-3.5" />
 			<span class="text-text-body">{productLabel}</span>
 		</nav>

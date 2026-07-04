@@ -48,7 +48,7 @@ export const productSchema = z.object({
 	nameEn: z.string().trim().min(1).nullable(),
 	description: z.string().min(1).nullable(),
 	descriptionEn: z.string().min(1).nullable(),
-	categoryId: uuidSchema,
+	categoryId: uuidSchema.nullable(),
 	published: z.boolean(),
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
@@ -112,7 +112,7 @@ export const productCreateSchema = z.object({
 	nameEn: z.string().trim().min(1).optional(),
 	description: z.string().trim().min(1).optional(),
 	descriptionEn: z.string().trim().min(1).optional(),
-	categoryId: uuidSchema,
+	categoryId: uuidSchema.nullable().optional(),
 	published: booleanLikeSchema.default(false)
 });
 
@@ -132,7 +132,7 @@ export const productUpdateSchema = nonEmptyUpdate(
 		nameEn: z.string().trim().min(1).nullable().optional(),
 		description: z.string().trim().min(1).nullable().optional(),
 		descriptionEn: z.string().trim().min(1).nullable().optional(),
-		categoryId: uuidSchema.optional(),
+		categoryId: uuidSchema.nullable().optional(),
 		published: booleanLikeSchema.optional()
 	})
 );

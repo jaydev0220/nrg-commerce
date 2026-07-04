@@ -30,8 +30,8 @@ export type CatalogSkuRecord = {
 	nameEn: string | null;
 	description: string | null;
 	descriptionEn: string | null;
-	categoryId: string;
-	categorySlug: string;
+	categoryId: string | null;
+	categorySlug: string | null;
 	price: number;
 	published: boolean;
 	attributes: Record<string, CatalogJsonValue>;
@@ -48,8 +48,8 @@ export type CatalogProductRecord = {
 	nameEn: string | null;
 	description: string | null;
 	descriptionEn: string | null;
-	categoryId: string;
-	categorySlug: string;
+	categoryId: string | null;
+	categorySlug: string | null;
 	published: boolean;
 	deletedAt: string | null;
 	createdAt: string;
@@ -96,7 +96,7 @@ export type CatalogProductView = {
 	slug: string;
 	name: string;
 	description: string | null;
-	categorySlug: string;
+	categorySlug: string | null;
 	minimumPrice: number;
 	maximumPrice: number;
 	skuCount: number;

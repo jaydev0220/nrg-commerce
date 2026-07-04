@@ -9,8 +9,8 @@ import {
 	uuidSchema
 } from '@packages/schemas';
 
-import { requirePermission } from '../../middlewares/authorize.js';
-import { validateRequest } from '../../middlewares/validate-request.js';
+import { requirePermission } from '../../../middlewares/authorize.js';
+import { validateRequest } from '../../../middlewares/validate-request.js';
 import { createProductManagementController } from './product.controller.js';
 import type { ProductService } from './product.service.js';
 

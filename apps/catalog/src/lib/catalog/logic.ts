@@ -203,14 +203,17 @@ export function filterCatalogProducts(
 				return state.categorySlug === null;
 			}
 
-			return categoryScope.has(product.categorySlug);
+			return product.categorySlug !== null && categoryScope.has(product.categorySlug);
 		})
 		.filter((product) => {
 			if (!normalizedQuery) {
 				return true;
 			}
 
-			return getSearchTerms(product, categoryMap.get(product.categorySlug))
+			return getSearchTerms(
+				product,
+				product.categorySlug ? categoryMap.get(product.categorySlug) : undefined
+			)
 				.map(normalizeSearchValue)
 				.some((term) => term.includes(normalizedQuery));
 		})

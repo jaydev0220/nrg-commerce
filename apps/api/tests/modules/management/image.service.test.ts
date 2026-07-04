@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { AppError } from '../../../src/errors/app-error.js';
-import { createImageService } from '../../../src/modules/management/image.service.js';
+import { createImageService } from '../../../src/modules/management/image/image.service.js';
 
 function createCatalogSkuRecord() {
 	return {

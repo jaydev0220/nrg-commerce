@@ -9,8 +9,8 @@ import {
 	uuidSchema
 } from '@packages/schemas';
 
-import { requirePermission } from '../../middlewares/authorize.js';
-import { validateRequest } from '../../middlewares/validate-request.js';
+import { requirePermission } from '../../../middlewares/authorize.js';
+import { validateRequest } from '../../../middlewares/validate-request.js';
 import { createSkuManagementController } from './sku.controller.js';
 import type { SkuService } from './sku.service.js';
 

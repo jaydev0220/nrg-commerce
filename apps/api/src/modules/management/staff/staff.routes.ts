@@ -9,8 +9,8 @@ import {
 	uuidSchema
 } from '@packages/schemas';
 
-import { requirePermission, requireRole } from '../../middlewares/authorize.js';
-import { validateRequest } from '../../middlewares/validate-request.js';
+import { requirePermission, requireRole } from '../../../middlewares/authorize.js';
+import { validateRequest } from '../../../middlewares/validate-request.js';
 import { createStaffManagementController } from './staff.controller.js';
 import type { StaffService } from './staff.service.js';
 

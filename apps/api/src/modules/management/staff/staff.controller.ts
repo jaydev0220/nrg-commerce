@@ -1,12 +1,12 @@
 import type { RequestHandler } from 'express';
 
-import { requireAuthContext } from '../../middlewares/authenticate.js';
+import { requireAuthContext } from '../../../middlewares/authenticate.js';
 import {
 	getValidatedBody,
 	getValidatedParams,
 	getValidatedQuery
-} from '../../middlewares/validate-request.js';
-import { buildPaginatedResponse } from '../../utils/pagination.js';
+} from '../../../middlewares/validate-request.js';
+import { buildPaginatedResponse } from '../../../utils/pagination.js';
 import type { StaffService } from './staff.service.js';
 
 type StaffControllerDependencies = {

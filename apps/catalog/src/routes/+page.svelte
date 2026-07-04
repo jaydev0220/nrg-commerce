@@ -43,7 +43,7 @@
 		}
 
 		if (queryState.categorySlug) {
-			return getCategoryLabel(queryState.categorySlug);
+			return getCategoryLabel(queryState.categorySlug) ?? queryState.categorySlug;
 		}
 
 		return m.catalog_all_products();
@@ -55,7 +55,11 @@
 		sort?: CatalogSort;
 	};
 
-	function getCategoryLabel(categorySlug: string): string {
+	function getCategoryLabel(categorySlug: string | null): string | null {
+		if (!categorySlug) {
+			return null;
+		}
+
 		const entry = categoryList.find((item) => item.category.slug === categorySlug)?.category;
 		if (!entry) {
 			return categorySlug;

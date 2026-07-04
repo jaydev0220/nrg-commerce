@@ -1,12 +1,12 @@
-import { AppError } from '../../errors/app-error.js';
+import { AppError } from '../../../errors/app-error.js';
 
 import type {
 	CatalogCategoryDetailRecord,
 	CatalogCategoryRecord,
 	CatalogCategoryTreeRecord
-} from '../../types/catalog.js';
-import { buildCategoryTree } from '../../utils/catalog.js';
-import type { CatalogRepository } from './catalog.repository.js';
+} from '../../../types/catalog.js';
+import { buildCategoryTree } from '../../../utils/catalog.js';
+import type { CatalogRepository } from '../catalog.repository.js';
 
 type CategoryListQuery = {
 	page: number;

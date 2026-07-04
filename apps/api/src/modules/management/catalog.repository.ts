@@ -145,9 +145,9 @@ function mapSkuRecordFromProduct(
 		nameEn: string | null;
 		description: string | null;
 		descriptionEn: string | null;
-		categoryId: string;
+		categoryId: string | null;
 		published: boolean;
-		category: { slug: string };
+		category: { slug: string } | null;
 	},
 	sku: {
 		id: string;
@@ -182,7 +182,7 @@ function mapSkuRecordFromProduct(
 		description: product.description,
 		descriptionEn: product.descriptionEn,
 		categoryId: product.categoryId,
-		categorySlug: product.category.slug,
+		categorySlug: product.category?.slug ?? null,
 		price: Number(sku.price.toString()),
 		published: product.published,
 		attributes: (sku.attributes ?? {}) as Record<string, CatalogJsonValue>,
@@ -203,9 +203,9 @@ function mapSkuRecord(sku: {
 		nameEn: string | null;
 		description: string | null;
 		descriptionEn: string | null;
-		categoryId: string;
+		categoryId: string | null;
 		published: boolean;
-		category: { slug: string };
+		category: { slug: string } | null;
 	};
 	price: { toString(): string };
 	attributes: unknown;
@@ -235,12 +235,12 @@ function mapProductRecord(product: {
 	nameEn: string | null;
 	description: string | null;
 	descriptionEn: string | null;
-	categoryId: string;
+	categoryId: string | null;
 	published: boolean;
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
-	category: { slug: string };
+	category: { slug: string } | null;
 	skus?: Array<{
 		id: string;
 		productId: string;
@@ -272,7 +272,7 @@ function mapProductRecord(product: {
 		description: product.description,
 		descriptionEn: product.descriptionEn,
 		categoryId: product.categoryId,
-		categorySlug: product.category.slug,
+		categorySlug: product.category?.slug ?? null,
 		published: product.published,
 		deletedAt: product.deletedAt,
 		createdAt: product.createdAt,
@@ -595,7 +595,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			nameEn?: string;
 			description?: string;
 			descriptionEn?: string;
-			categoryId: string;
+			categoryId?: string | null;
 			published: boolean;
 		}): Promise<CatalogProductRecord> {
 			const product = await database.product.create({
@@ -605,7 +605,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					nameEn: input.nameEn ?? null,
 					description: input.description ?? null,
 					descriptionEn: input.descriptionEn ?? null,
-					categoryId: input.categoryId,
+					categoryId: input.categoryId ?? null,
 					published: input.published
 				},
 				include: {
@@ -628,7 +628,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				nameEn?: string | null;
 				description?: string | null;
 				descriptionEn?: string | null;
-				categoryId?: string;
+				categoryId?: string | null;
 				published?: boolean;
 			}
 		): Promise<CatalogProductRecord> {
