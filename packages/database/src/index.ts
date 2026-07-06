@@ -19,6 +19,8 @@ export type {
 } from './access-control.js';
 export {
 	MfaMethod,
+	LogKind,
+	LogLevel,
 	PasskeyDeviceType,
 	Prisma,
 	PrismaClient,

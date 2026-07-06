@@ -46,3 +46,10 @@ test('roleDefinitions only reference seeded permission keys', () => {
 		}
 	}
 });
+
+test('administrator role receives log read permission', () => {
+	const administratorRole = roleDefinitions.find((role) => role.key === 'admin');
+
+	assert.ok(administratorRole);
+	assert.equal(administratorRole.permissions.includes('log.read'), true);
+});

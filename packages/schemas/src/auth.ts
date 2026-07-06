@@ -12,6 +12,10 @@ export const mfaMethodSchema = z.enum(mfaMethodValues);
 export const passkeyDeviceTypeSchema = z.enum(passkeyDeviceTypeValues);
 export const authPrimaryFactorSchema = z.enum(authPrimaryFactorValues);
 export const permissionKeySchema = z.enum([
+	'product.read',
+	'product.create',
+	'product.update',
+	'product.delete',
 	'product.sku.read',
 	'product.sku.create',
 	'product.sku.update',
@@ -23,6 +27,7 @@ export const permissionKeySchema = z.enum([
 	'product.image.read',
 	'product.image.create',
 	'product.image.delete',
+	'log.read',
 	'staff.read',
 	'staff.create',
 	'staff.update',

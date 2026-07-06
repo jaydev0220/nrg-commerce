@@ -19,7 +19,10 @@ export function validateRequest(schemas: RequestSchemas): RequestHandler {
 			}
 
 			if (schemas.query) {
-				request.query = schemas.query.parse(request.query) as Request['query'];
+				Object.defineProperty(request, 'query', {
+					configurable: true,
+					value: schemas.query.parse(request.query) as Request['query']
+				});
 			}
 
 			next();

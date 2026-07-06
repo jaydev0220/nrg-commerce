@@ -31,6 +31,19 @@ enum ProductImageType {
   gallery
 }
 
+enum LogLevel {
+  debug
+  info
+  warn
+  error
+  fatal
+}
+
+enum LogKind {
+  audit
+  request
+}
+
 model Staff {
   id                 String              @id @default(uuid()) @db.Uuid
   email              String              @unique
@@ -47,6 +60,7 @@ model Staff {
   sessions           AuthSession[]
   totpCredentials    TotpCredential[]
   passkeyCredentials PasskeyCredential[]
+  logs               Log[]
 
   @@index([status, createdAt])
   @@index([deletedAt])
@@ -243,4 +257,29 @@ model ProductImage {
 
   @@index([skuId, type, position])
   @@index([deletedAt])
+}
+
+model Log {
+  id           String   @id @default(uuid()) @db.Uuid
+  level        LogLevel
+  kind         LogKind
+  message      String
+  actorStaffId String?  @db.Uuid
+  requestId    String?
+  method       String?
+  path         String?
+  statusCode   Int?
+  entityType   String?
+  entityId     String?
+  metadata     Json?    @db.JsonB
+  expiresAt    DateTime @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  actorStaff   Staff?   @relation(fields: [actorStaffId], references: [id], onDelete: SetNull)
+
+  @@index([level, createdAt])
+  @@index([kind, createdAt])
+  @@index([actorStaffId, createdAt])
+  @@index([requestId])
+  @@index([entityType, entityId])
+  @@index([expiresAt])
 }

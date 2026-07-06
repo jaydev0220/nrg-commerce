@@ -20,7 +20,7 @@ test('accessTokenClaimsSchema accepts the expected JWT claims shape', () => {
 		jti: 'refresh-family-1',
 		type: 'access',
 		roles: ['admin'],
-		permissions: ['staff.read'],
+		permissions: ['staff.read', 'log.read'],
 		mfa: ['passkey'],
 		primaryFactor: 'password',
 		exp: 1_800_000_000,
@@ -28,7 +28,7 @@ test('accessTokenClaimsSchema accepts the expected JWT claims shape', () => {
 	});
 
 	assert.equal(parsedClaims.type, 'access');
-	assert.deepEqual(parsedClaims.permissions, ['staff.read']);
+	assert.deepEqual(parsedClaims.permissions, ['staff.read', 'log.read']);
 });
 
 test('refreshTokenClaimsSchema rejects access token payloads', () => {

@@ -13,6 +13,9 @@ import { createAuthService } from './modules/auth/auth.service.js';
 import { createPrismaCatalogRepository } from './modules/management/catalog.repository.js';
 import { createCategoryService } from './modules/management/category/category.service.js';
 import { createImageService } from './modules/management/image/image.service.js';
+import { createPrismaLogRepository } from './modules/management/log/log.repository.js';
+import { startLogRetentionPruner } from './modules/management/log/log-retention.js';
+import { createLogService } from './modules/management/log/log.service.js';
 import { createProductService } from './modules/management/product/product.service.js';
 import { createSkuService } from './modules/management/sku/sku.service.js';
 import { createPrismaStaffRepository } from './modules/management/staff/staff.repository.js';
@@ -37,6 +40,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 	const database = getDatabaseClient();
 	const authRepository = createPrismaAuthRepository(database);
 	const staffRepository = createPrismaStaffRepository(database);
+	const logRepository = createPrismaLogRepository(database);
 	const managementCatalogRepository = createPrismaCatalogRepository(database);
 	const storefrontCatalogRepository = createPrismaStorefrontCatalogRepository(database);
 	const passwordHasher = createPasswordHasher();
@@ -72,6 +76,9 @@ export function createApp(dependencies: AppDependencies = {}) {
 		repository: staffRepository,
 		passwordHasher
 	});
+	const logService = createLogService({
+		repository: logRepository
+	});
 	const categoryService = createCategoryService({
 		repository: managementCatalogRepository
 	});
@@ -99,6 +106,10 @@ export function createApp(dependencies: AppDependencies = {}) {
 	});
 	const authenticate = createAuthenticateMiddleware(authService);
 	const app = express();
+
+	if (config.nodeEnv !== 'test') {
+		startLogRetentionPruner({ logService });
+	}
 
 	if (config.trustProxy) {
 		app.set('trust proxy', 1);
@@ -128,6 +139,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 		authService,
 		authenticate,
 		staffService,
+		logService,
 		productService,
 		categoryService,
 		skuService,

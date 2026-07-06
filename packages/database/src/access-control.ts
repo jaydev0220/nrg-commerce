@@ -14,6 +14,7 @@ export const permissionKeys = [
 	'product.image.read',
 	'product.image.create',
 	'product.image.delete',
+	'log.read',
 	'staff.read',
 	'staff.create',
 	'staff.update',
@@ -103,6 +104,11 @@ export const permissionDefinitions = [
 		key: 'product.image.delete',
 		name: 'Delete product images',
 		description: 'Delete product images in management workflows.'
+	},
+	{
+		key: 'log.read',
+		name: 'Read logs',
+		description: 'View audit and request logs in management workflows.'
 	},
 	{
 		key: 'staff.read',

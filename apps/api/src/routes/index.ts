@@ -10,6 +10,8 @@ import type { AuthService } from '../modules/auth/auth.service.js';
 import { createCatalogManagementRouter } from '../modules/management/management.routes.js';
 import type { CategoryService } from '../modules/management/category/category.service.js';
 import type { ImageService } from '../modules/management/image/image.service.js';
+import { createLogManagementRouter } from '../modules/management/log/log.routes.js';
+import type { LogService } from '../modules/management/log/log.service.js';
 import type { ProductService } from '../modules/management/product/product.service.js';
 import type { SkuService } from '../modules/management/sku/sku.service.js';
 import { createStaffManagementRouter } from '../modules/management/staff/staff.routes.js';
@@ -23,6 +25,7 @@ type RouteDependencies = {
 	authService: AuthService;
 	authenticate: RequestHandler;
 	staffService: StaffService;
+	logService: LogService;
 	productService: ProductService;
 	categoryService: CategoryService;
 	skuService: SkuService;
@@ -48,6 +51,10 @@ export function initializeRoutes(app: Application, dependencies: RouteDependenci
 	app.use(
 		'/api/management/staff',
 		createStaffManagementRouter({ staffService: dependencies.staffService })
+	);
+	app.use(
+		'/api/management/logs',
+		createLogManagementRouter({ logService: dependencies.logService })
 	);
 	app.use(
 		'/api/management/products',

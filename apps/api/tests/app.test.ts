@@ -113,6 +113,7 @@ test('management upload noop route is not exposed', async () => {
 			next();
 		},
 		staffService: {} as Parameters<typeof initializeRoutes>[1]['staffService'],
+		logService: {} as Parameters<typeof initializeRoutes>[1]['logService'],
 		productService: {} as Parameters<typeof initializeRoutes>[1]['productService'],
 		categoryService: {} as Parameters<typeof initializeRoutes>[1]['categoryService'],
 		skuService: {} as Parameters<typeof initializeRoutes>[1]['skuService'],
