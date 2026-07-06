@@ -1,15 +1,19 @@
 import type { RequestHandler } from 'express';
 
+import { requireAuthContext } from '../../../middlewares/authenticate.js';
+import { getRequestContext, getRequestPath } from '../../../middlewares/request-context.js';
 import {
 	getValidatedBody,
 	getValidatedParams,
 	getValidatedQuery
 } from '../../../middlewares/validate-request.js';
 import { buildPaginatedResponse } from '../../../utils/pagination.js';
+import type { LogService } from '../log/log.service.js';
 import type { ProductService } from './product.service.js';
 
 type ProductManagementControllerDependencies = {
 	productService: ProductService;
+	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
 type ProductParams = {
@@ -41,8 +45,20 @@ export function createProductManagementController(
 		},
 
 		createProduct: async (request, response) => {
+			const authContext = requireAuthContext(response);
 			const body = getValidatedBody<Parameters<ProductService['createProduct']>[0]>(request);
 			const product = await dependencies.productService.createProduct(body);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff created a product.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 201,
+				entityType: 'product',
+				entityId: product.id
+			});
 			response.status(201).location(`/api/management/products/${product.id}`).json(product);
 		},
 
@@ -54,16 +70,41 @@ export function createProductManagementController(
 		},
 
 		updateProduct: async (request, response) => {
+			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<ProductParams>(request);
 			const body = getValidatedBody<Parameters<ProductService['updateProduct']>[1]>(request);
 			const product = await dependencies.productService.updateProduct(params.productId, body);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff updated a product.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'product',
+				entityId: product.id
+			});
 			response.status(200).json(product);
 		},
 
 		deleteProduct: async (request, response) => {
+			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<ProductParams>(request);
 			const query = getValidatedQuery<Parameters<ProductService['deleteProduct']>[1]>(request);
 			const mode = await dependencies.productService.deleteProduct(params.productId, query);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff deleted a product.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'product',
+				entityId: params.productId,
+				metadata: { mode }
+			});
 			response.status(200).json({
 				deleted: true,
 				mode

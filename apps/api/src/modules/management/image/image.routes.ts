@@ -10,11 +10,13 @@ import {
 
 import { requirePermission } from '../../../middlewares/authorize.js';
 import { validateRequest } from '../../../middlewares/validate-request.js';
+import type { LogService } from '../log/log.service.js';
 import { createImageManagementController } from './image.controller.js';
 import type { ImageService } from './image.service.js';
 
 type ImageManagementRouterDependencies = {
 	imageService: ImageService;
+	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
 const skuParamsSchema = z.object({

@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { createCategoryManagementRouter } from './category/category.routes.js';
 import { createImageManagementRouter } from './image/image.routes.js';
+import type { LogService } from './log/log.service.js';
 import { createProductManagementRouter } from './product/product.routes.js';
 import { createSkuManagementRouter } from './sku/sku.routes.js';
 import type { CategoryService } from './category/category.service.js';
@@ -14,6 +15,7 @@ type CatalogManagementRouterDependencies = {
 	categoryService: CategoryService;
 	skuService: SkuService;
 	imageService: ImageService;
+	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
 export function createCatalogManagementRouter(
@@ -21,10 +23,30 @@ export function createCatalogManagementRouter(
 ): Router {
 	const router = Router();
 
-	router.use(createSkuManagementRouter({ skuService: dependencies.skuService }));
-	router.use(createCategoryManagementRouter({ categoryService: dependencies.categoryService }));
-	router.use(createImageManagementRouter({ imageService: dependencies.imageService }));
-	router.use(createProductManagementRouter({ productService: dependencies.productService }));
+	router.use(
+		createSkuManagementRouter({
+			skuService: dependencies.skuService,
+			logService: dependencies.logService
+		})
+	);
+	router.use(
+		createCategoryManagementRouter({
+			categoryService: dependencies.categoryService,
+			logService: dependencies.logService
+		})
+	);
+	router.use(
+		createImageManagementRouter({
+			imageService: dependencies.imageService,
+			logService: dependencies.logService
+		})
+	);
+	router.use(
+		createProductManagementRouter({
+			productService: dependencies.productService,
+			logService: dependencies.logService
+		})
+	);
 
 	return router;
 }

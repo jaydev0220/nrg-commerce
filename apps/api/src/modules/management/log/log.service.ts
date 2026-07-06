@@ -1,4 +1,4 @@
-import type { LogLevel } from '@packages/database';
+import type { LogLevel, Prisma } from '@packages/database';
 
 import type { LogRepository } from './log.repository.js';
 
@@ -17,6 +17,19 @@ type LogServiceDependencies = {
 	now?: () => Date;
 };
 
+type AuditLogInput = {
+	level?: LogLevel;
+	message: string;
+	actorStaffId?: string | null;
+	requestId?: string | null;
+	method?: string | null;
+	path?: string | null;
+	statusCode?: number | null;
+	entityType?: string | null;
+	entityId?: string | null;
+	metadata?: Prisma.InputJsonValue | null;
+};
+
 export function resolveLogExpiresAt(level: LogLevel, now = new Date()): Date {
 	return new Date(now.getTime() + logRetentionDaysByLevel[level] * millisecondsPerDay);
 }
@@ -25,6 +38,26 @@ export function createLogService(dependencies: LogServiceDependencies) {
 	const now = dependencies.now ?? (() => new Date());
 
 	return {
+		recordAuditLog(input: AuditLogInput) {
+			const createdAt = now();
+			const level = input.level ?? 'info';
+
+			return dependencies.repository.createLog({
+				level,
+				kind: 'audit',
+				message: input.message,
+				actorStaffId: input.actorStaffId ?? null,
+				requestId: input.requestId ?? null,
+				method: input.method ?? null,
+				path: input.path ?? null,
+				statusCode: input.statusCode ?? null,
+				entityType: input.entityType ?? null,
+				entityId: input.entityId ?? null,
+				metadata: input.metadata ?? null,
+				expiresAt: resolveLogExpiresAt(level, createdAt)
+			});
+		},
+
 		listLogs(query: Omit<Parameters<LogRepository['listLogs']>[0], 'now'>) {
 			return dependencies.repository.listLogs({
 				...query,

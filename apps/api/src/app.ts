@@ -7,6 +7,7 @@ import { getDatabaseClient } from '@packages/database';
 import { readAppConfig, type AppConfig } from './config/app-config.js';
 import { createAuthenticateMiddleware } from './middlewares/authenticate.js';
 import { createGlobalRateLimiter } from './middlewares/rate-limit.js';
+import { createRequestContextMiddleware } from './middlewares/request-context.js';
 import type { HealthDependencies } from './health/health.routes.js';
 import { createPrismaAuthRepository } from './modules/auth/auth.repository.js';
 import { createAuthService } from './modules/auth/auth.service.js';
@@ -132,6 +133,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 	app.use(express.json({ limit: config.bodyLimit }));
 	app.use(express.urlencoded({ extended: false, limit: config.bodyLimit }));
 	app.use(createGlobalRateLimiter(config));
+	app.use(createRequestContextMiddleware());
 
 	initializeRoutes(app, {
 		config,

@@ -36,6 +36,7 @@ type RouteDependencies = {
 export function initializeRoutes(app: Application, dependencies: RouteDependencies): void {
 	const authRouterDependencies: Parameters<typeof createAuthRouter>[0] = {
 		authService: dependencies.authService,
+		logService: dependencies.logService,
 		authRateLimiter: createAuthRateLimiter(dependencies.config),
 		authenticate: dependencies.authenticate
 	};
@@ -50,7 +51,10 @@ export function initializeRoutes(app: Application, dependencies: RouteDependenci
 	app.use('/api/management', dependencies.authenticate);
 	app.use(
 		'/api/management/staff',
-		createStaffManagementRouter({ staffService: dependencies.staffService })
+		createStaffManagementRouter({
+			staffService: dependencies.staffService,
+			logService: dependencies.logService
+		})
 	);
 	app.use(
 		'/api/management/logs',
@@ -62,7 +66,8 @@ export function initializeRoutes(app: Application, dependencies: RouteDependenci
 			productService: dependencies.productService,
 			categoryService: dependencies.categoryService,
 			skuService: dependencies.skuService,
-			imageService: dependencies.imageService
+			imageService: dependencies.imageService,
+			logService: dependencies.logService
 		})
 	);
 

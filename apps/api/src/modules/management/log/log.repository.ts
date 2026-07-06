@@ -4,6 +4,21 @@ import type { ManagedLogRecord } from '../../../types/management.js';
 
 type LogSortField = 'createdAt' | 'expiresAt';
 
+type CreateLogInput = {
+	level: LogLevel;
+	kind: LogKind;
+	message: string;
+	actorStaffId: string | null;
+	requestId: string | null;
+	method: string | null;
+	path: string | null;
+	statusCode: number | null;
+	entityType: string | null;
+	entityId: string | null;
+	metadata: Prisma.InputJsonValue | null;
+	expiresAt: Date;
+};
+
 type ListLogsInput = {
 	page: number;
 	limit: number;
@@ -67,6 +82,27 @@ function resolveLogOrderBy(sort: LogSortField, order: 'asc' | 'desc') {
 
 export function createPrismaLogRepository(database: DatabaseClient) {
 	return {
+		async createLog(input: CreateLogInput): Promise<ManagedLogRecord> {
+			const log = await database.log.create({
+				data: {
+					level: input.level,
+					kind: input.kind,
+					message: input.message,
+					actorStaffId: input.actorStaffId,
+					requestId: input.requestId,
+					method: input.method,
+					path: input.path,
+					statusCode: input.statusCode,
+					entityType: input.entityType,
+					entityId: input.entityId,
+					...(input.metadata === null ? {} : { metadata: input.metadata }),
+					expiresAt: input.expiresAt
+				}
+			});
+
+			return mapLogRecord(log);
+		},
+
 		async listLogs(input: ListLogsInput): Promise<LogListResult> {
 			const where: Prisma.LogWhereInput = {
 				expiresAt: {

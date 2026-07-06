@@ -7,7 +7,7 @@ import { createLogManagementController } from './log.controller.js';
 import type { LogService } from './log.service.js';
 
 type LogManagementRouterDependencies = {
-	logService: LogService;
+	logService: Pick<LogService, 'listLogs'>;
 };
 
 export function createLogManagementRouter(dependencies: LogManagementRouterDependencies): Router {

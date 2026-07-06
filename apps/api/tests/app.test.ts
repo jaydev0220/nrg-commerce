@@ -3,6 +3,7 @@ import test from 'node:test';
 import express from 'express';
 
 import { errorHandler } from '../src/errors/error-handler.js';
+import { createRequestContextMiddleware } from '../src/middlewares/request-context.js';
 import { createCatalogManagementRouter } from '../src/modules/management/management.routes.js';
 import type { AuthenticatedStaffContext } from '../src/types/auth.js';
 import { createApp } from '../src/app.js';
@@ -144,6 +145,7 @@ test('management product image upload-url route returns a presigned upload targe
 			productService: {} as Parameters<typeof createCatalogManagementRouter>[0]['productService'],
 			categoryService: {} as Parameters<typeof createCatalogManagementRouter>[0]['categoryService'],
 			skuService: {} as Parameters<typeof createCatalogManagementRouter>[0]['skuService'],
+			logService: {} as Parameters<typeof createCatalogManagementRouter>[0]['logService'],
 			imageService: {
 				createImageUploadTarget: async () => ({
 					method: 'PUT',
@@ -194,5 +196,107 @@ test('management product image upload-url route returns a presigned upload targe
 	assert.equal(payload.uploadUrl, 'https://signed-upload.example.com');
 	assert.deepEqual(payload.headers, {
 		'Content-Type': 'image/png'
+	});
+});
+
+test('management product creation records an audit log', async () => {
+	const app = express();
+	const now = new Date('2026-07-06T00:00:00.000Z');
+	let auditInput:
+		| Parameters<
+				Parameters<typeof createCatalogManagementRouter>[0]['logService']['recordAuditLog']
+		  >[0]
+		| undefined;
+
+	app.use(express.json());
+	app.use(createRequestContextMiddleware(() => 'generated-request-id'));
+	app.use((_request, response, next) => {
+		response.locals['auth'] = {
+			...createManagementAuthContext(),
+			permissions: ['product.create']
+		};
+		next();
+	});
+	app.use(
+		'/api/management/products',
+		createCatalogManagementRouter({
+			productService: {
+				createProduct: async () => ({
+					id: '0189076c-4f2a-7fe1-b9fd-2d68df455222',
+					slug: 'energy-shot',
+					name: 'Energy Shot',
+					nameEn: null,
+					description: null,
+					descriptionEn: null,
+					categoryId: null,
+					categorySlug: null,
+					published: false,
+					deletedAt: null,
+					createdAt: now,
+					updatedAt: now,
+					skus: []
+				}),
+				listProducts: async () => ({ data: [], total: 0 }),
+				getProduct: async () => {
+					throw new Error('not used');
+				},
+				updateProduct: async () => {
+					throw new Error('not used');
+				},
+				deleteProduct: async () => {
+					throw new Error('not used');
+				}
+			},
+			categoryService: {} as Parameters<typeof createCatalogManagementRouter>[0]['categoryService'],
+			skuService: {} as Parameters<typeof createCatalogManagementRouter>[0]['skuService'],
+			imageService: {} as Parameters<typeof createCatalogManagementRouter>[0]['imageService'],
+			logService: {
+				recordAuditLog: async (input) => {
+					auditInput = input;
+					return {
+						id: '9be808ab-bd34-4cf4-b8ae-db0f819ff5e6',
+						level: input.level ?? 'info',
+						kind: 'audit',
+						message: input.message,
+						actorStaffId: input.actorStaffId ?? null,
+						requestId: input.requestId ?? null,
+						method: input.method ?? null,
+						path: input.path ?? null,
+						statusCode: input.statusCode ?? null,
+						entityType: input.entityType ?? null,
+						entityId: input.entityId ?? null,
+						metadata: null,
+						expiresAt: now,
+						createdAt: now
+					};
+				}
+			}
+		})
+	);
+	app.use(errorHandler);
+
+	const response = await requestApp(app, {
+		method: 'POST',
+		path: '/api/management/products',
+		headers: {
+			'Content-Type': 'application/json',
+			'x-request-id': 'request-123'
+		},
+		body: JSON.stringify({
+			slug: 'energy-shot',
+			name: 'Energy Shot'
+		})
+	});
+
+	assert.equal(response.status, 201, response.text());
+	assert.deepEqual(auditInput, {
+		message: 'Staff created a product.',
+		actorStaffId: '0189076c-4f2a-7fe1-b9fd-2d68df455111',
+		requestId: 'request-123',
+		method: 'POST',
+		path: '/api/management/products',
+		statusCode: 201,
+		entityType: 'product',
+		entityId: '0189076c-4f2a-7fe1-b9fd-2d68df455222'
 	});
 });

@@ -14,11 +14,13 @@ import {
 } from '@packages/schemas';
 
 import { validateRequest } from '../../middlewares/validate-request.js';
+import type { LogService } from '../management/log/log.service.js';
 import { createAuthController } from './auth.controller.js';
 import type { AuthService } from './auth.service.js';
 
 type AuthRouterDependencies = {
 	authService: AuthService;
+	logService: Pick<LogService, 'recordAuditLog'>;
 	authRateLimiter: ReturnType<typeof import('express-rate-limit').rateLimit>;
 	authenticate: RequestHandler;
 };
@@ -33,7 +35,8 @@ const pendingTotpChallengeSchema = pendingAuthTokenSchema.extend({
 
 export function createAuthRouter(dependencies: AuthRouterDependencies): Router {
 	const controller = createAuthController({
-		authService: dependencies.authService
+		authService: dependencies.authService,
+		logService: dependencies.logService
 	});
 	const router = Router();
 	const protectedRouter = Router();

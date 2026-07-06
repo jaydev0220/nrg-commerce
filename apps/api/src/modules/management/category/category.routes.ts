@@ -11,11 +11,13 @@ import {
 
 import { requirePermission } from '../../../middlewares/authorize.js';
 import { validateRequest } from '../../../middlewares/validate-request.js';
+import type { LogService } from '../log/log.service.js';
 import { createCategoryManagementController } from './category.controller.js';
 import type { CategoryService } from './category.service.js';
 
 type CategoryManagementRouterDependencies = {
 	categoryService: CategoryService;
+	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
 const categoryParamsSchema = z.object({

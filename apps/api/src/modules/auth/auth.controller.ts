@@ -1,11 +1,14 @@
 import type { Request, RequestHandler } from 'express';
 
 import { requireAuthContext } from '../../middlewares/authenticate.js';
+import { getRequestContext, getRequestPath } from '../../middlewares/request-context.js';
 import { getValidatedBody, getValidatedParams } from '../../middlewares/validate-request.js';
+import type { LogService } from '../management/log/log.service.js';
 import type { AuthService } from './auth.service.js';
 
 type AuthControllerDependencies = {
 	authService: AuthService;
+	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
 type PasswordLoginBody = Omit<
@@ -72,8 +75,24 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 				password: body.password,
 				...getRequestMetadata(request)
 			});
+			const statusCode = result.status === 'authenticated' ? 200 : 202;
 
-			response.status(result.status === 'authenticated' ? 200 : 202).json(result);
+			if (result.status === 'authenticated') {
+				const requestContext = getRequestContext(request, response);
+				await dependencies.logService.recordAuditLog({
+					message: 'Staff logged in with password.',
+					actorStaffId: result.staff.id,
+					requestId: requestContext.requestId,
+					method: request.method,
+					path: getRequestPath(request),
+					statusCode,
+					entityType: 'auth_session',
+					entityId: result.session.id,
+					metadata: { primaryFactor: 'password' }
+				});
+			}
+
+			response.status(statusCode).json(result);
 		},
 
 		beginPasskeyLogin: async (request, response) => {
@@ -89,8 +108,24 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 				credential: body.credential,
 				...getRequestMetadata(request)
 			});
+			const statusCode = result.status === 'authenticated' ? 200 : 202;
 
-			response.status(result.status === 'authenticated' ? 200 : 202).json(result);
+			if (result.status === 'authenticated') {
+				const requestContext = getRequestContext(request, response);
+				await dependencies.logService.recordAuditLog({
+					message: 'Staff logged in with passkey.',
+					actorStaffId: result.staff.id,
+					requestId: requestContext.requestId,
+					method: request.method,
+					path: getRequestPath(request),
+					statusCode,
+					entityType: 'auth_session',
+					entityId: result.session.id,
+					metadata: { primaryFactor: 'passkey' }
+				});
+			}
+
+			response.status(statusCode).json(result);
 		},
 
 		completeTotpLogin: async (request, response) => {
@@ -99,6 +134,18 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 				pendingToken: body.pendingToken,
 				code: body.code,
 				...getRequestMetadata(request)
+			});
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff completed TOTP login.',
+				actorStaffId: result.staff.id,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'auth_session',
+				entityId: result.session.id,
+				metadata: { mfa: 'authenticator' }
 			});
 
 			response.status(200).json(result);
@@ -117,6 +164,18 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 				credential: body.credential,
 				...getRequestMetadata(request)
 			});
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff completed passkey MFA login.',
+				actorStaffId: result.staff.id,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'auth_session',
+				entityId: result.session.id,
+				metadata: { mfa: 'passkey' }
+			});
 
 			response.status(200).json(result);
 		},
@@ -128,12 +187,35 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 				request.get('user-agent') ?? null,
 				request.ip ?? null
 			);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff refreshed an auth session.',
+				actorStaffId: result.staff.id,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'auth_session',
+				entityId: result.session.id
+			});
 
 			response.status(200).json(result);
 		},
 
-		logout: async (_request, response) => {
-			await dependencies.authService.logout(requireAuthContext(response).sessionId);
+		logout: async (request, response) => {
+			const authContext = requireAuthContext(response);
+			await dependencies.authService.logout(authContext.sessionId);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff logged out.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 204,
+				entityType: 'auth_session',
+				entityId: authContext.sessionId
+			});
 			response.status(204).send();
 		},
 
@@ -157,14 +239,42 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 				requireAuthContext(response).staffId,
 				params.sessionId
 			);
+			const authContext = requireAuthContext(response);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff revoked an auth session.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 204,
+				entityType: 'auth_session',
+				entityId: params.sessionId
+			});
 			response.status(204).send();
 		},
 
 		updateMfaPreference: async (request, response) => {
+			const authContext = requireAuthContext(response);
 			const body = getValidatedBody<MfaPreferenceBody>(request);
-			await dependencies.authService.updateMfaPreference(requireAuthContext(response).staffId, {
+			await dependencies.authService.updateMfaPreference(authContext.staffId, {
 				mfaRequired: body.mfaRequired,
 				preferredMfaMethod: body.preferredMfaMethod ?? null
+			});
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff updated MFA preference.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 204,
+				entityType: 'mfa_preference',
+				entityId: authContext.staffId,
+				metadata: {
+					mfaRequired: body.mfaRequired,
+					preferredMfaMethod: body.preferredMfaMethod ?? null
+				}
 			});
 			response.status(204).send();
 		},
@@ -180,16 +290,40 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 
 		confirmTotpSetup: async (request, response) => {
 			const body = getValidatedBody<TotpSetupConfirmationBody>(request);
+			const authContext = requireAuthContext(response);
 			await dependencies.authService.confirmTotpSetup(
-				requireAuthContext(response).staffId,
+				authContext.staffId,
 				body.setupToken,
 				body.code
 			);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff confirmed TOTP setup.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 204,
+				entityType: 'totp_credential',
+				entityId: authContext.staffId
+			});
 			response.status(204).send();
 		},
 
-		removeTotp: async (_request, response) => {
-			await dependencies.authService.removeTotp(requireAuthContext(response).staffId);
+		removeTotp: async (request, response) => {
+			const authContext = requireAuthContext(response);
+			await dependencies.authService.removeTotp(authContext.staffId);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff removed TOTP.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 204,
+				entityType: 'totp_credential',
+				entityId: authContext.staffId
+			});
 			response.status(204).send();
 		},
 
@@ -212,6 +346,18 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 					credential: body.credential
 				}
 			);
+			const authContext = requireAuthContext(response);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff registered a passkey.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 201,
+				entityType: 'passkey_credential',
+				entityId: result.id
+			});
 
 			response.status(201).json(result);
 		}

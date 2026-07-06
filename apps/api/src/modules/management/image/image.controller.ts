@@ -1,15 +1,19 @@
 import type { RequestHandler } from 'express';
 
+import { requireAuthContext } from '../../../middlewares/authenticate.js';
+import { getRequestContext, getRequestPath } from '../../../middlewares/request-context.js';
 import {
 	getValidatedBody,
 	getValidatedParams,
 	getValidatedQuery
 } from '../../../middlewares/validate-request.js';
 import { buildPaginatedResponse } from '../../../utils/pagination.js';
+import type { LogService } from '../log/log.service.js';
 import type { ImageService } from './image.service.js';
 
 type ImageManagementControllerDependencies = {
 	imageService: ImageService;
+	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
 type SkuParams = {
@@ -58,9 +62,22 @@ export function createImageManagementController(
 		},
 
 		createImage: async (request, response) => {
+			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<SkuParams>(request);
 			const body = getValidatedBody<Parameters<ImageService['createImage']>[1]>(request);
 			const image = await dependencies.imageService.createImage(params.skuId, body);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff created a product image.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 201,
+				entityType: 'product_image',
+				entityId: image.id,
+				metadata: { skuId: params.skuId }
+			});
 			response
 				.status(201)
 				.location(`/api/management/products/skus/${params.skuId}/images/${image.id}`)
@@ -74,6 +91,7 @@ export function createImageManagementController(
 		},
 
 		deleteImage: async (request, response) => {
+			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<ImageParams>(request);
 			const query = getValidatedQuery<Parameters<ImageService['deleteImage']>[2]>(request);
 			const result = await dependencies.imageService.deleteImage(
@@ -81,6 +99,22 @@ export function createImageManagementController(
 				params.imageId,
 				query
 			);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff deleted a product image.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'product_image',
+				entityId: params.imageId,
+				metadata: {
+					skuId: params.skuId,
+					mode: result.mode,
+					assetDeleted: result.assetDeleted
+				}
+			});
 
 			response.status(200).json({
 				deleted: true,

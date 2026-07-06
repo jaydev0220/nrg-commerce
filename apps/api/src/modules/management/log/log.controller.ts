@@ -5,7 +5,7 @@ import { buildPaginatedResponse } from '../../../utils/pagination.js';
 import type { LogService } from './log.service.js';
 
 type LogManagementControllerDependencies = {
-	logService: LogService;
+	logService: Pick<LogService, 'listLogs'>;
 };
 
 type LogManagementController = {

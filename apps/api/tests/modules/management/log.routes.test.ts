@@ -30,7 +30,10 @@ const authContext: AuthenticatedStaffContext = {
 	}
 };
 
-function createAppWithLogs(logService: LogService, permissions = authContext.permissions) {
+function createAppWithLogs(
+	logService: Pick<LogService, 'listLogs'>,
+	permissions = authContext.permissions
+) {
 	const app = express();
 
 	app.use((_request, response, next) => {
@@ -72,8 +75,7 @@ test('management log route returns paginated log records', async () => {
 				],
 				total: 1
 			};
-		},
-		pruneExpiredLogs: async () => 0
+		}
 	});
 
 	const response = await requestApp(app, {
@@ -98,8 +100,7 @@ test('management log route returns paginated log records', async () => {
 test('management log route requires log read permission', async () => {
 	const app = createAppWithLogs(
 		{
-			listLogs: async () => ({ data: [], total: 0 }),
-			pruneExpiredLogs: async () => 0
+			listLogs: async () => ({ data: [], total: 0 })
 		},
 		['staff.read']
 	);

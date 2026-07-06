@@ -11,11 +11,13 @@ import {
 
 import { requirePermission, requireRole } from '../../../middlewares/authorize.js';
 import { validateRequest } from '../../../middlewares/validate-request.js';
+import type { LogService } from '../log/log.service.js';
 import { createStaffManagementController } from './staff.controller.js';
 import type { StaffService } from './staff.service.js';
 
 type StaffRouterDependencies = {
 	staffService: StaffService;
+	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
 const staffParamsSchema = z.object({

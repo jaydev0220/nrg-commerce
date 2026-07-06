@@ -11,11 +11,13 @@ import {
 
 import { requirePermission } from '../../../middlewares/authorize.js';
 import { validateRequest } from '../../../middlewares/validate-request.js';
+import type { LogService } from '../log/log.service.js';
 import { createProductManagementController } from './product.controller.js';
 import type { ProductService } from './product.service.js';
 
 type ProductManagementRouterDependencies = {
 	productService: ProductService;
+	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
 const productParamsSchema = z.object({

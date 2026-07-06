@@ -11,11 +11,13 @@ import {
 
 import { requirePermission } from '../../../middlewares/authorize.js';
 import { validateRequest } from '../../../middlewares/validate-request.js';
+import type { LogService } from '../log/log.service.js';
 import { createSkuManagementController } from './sku.controller.js';
 import type { SkuService } from './sku.service.js';
 
 type SkuManagementRouterDependencies = {
 	skuService: SkuService;
+	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
 const skuParamsSchema = z.object({

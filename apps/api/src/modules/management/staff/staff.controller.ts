@@ -1,16 +1,19 @@
 import type { RequestHandler } from 'express';
 
 import { requireAuthContext } from '../../../middlewares/authenticate.js';
+import { getRequestContext, getRequestPath } from '../../../middlewares/request-context.js';
 import {
 	getValidatedBody,
 	getValidatedParams,
 	getValidatedQuery
 } from '../../../middlewares/validate-request.js';
 import { buildPaginatedResponse } from '../../../utils/pagination.js';
+import type { LogService } from '../log/log.service.js';
 import type { StaffService } from './staff.service.js';
 
 type StaffControllerDependencies = {
 	staffService: StaffService;
+	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
 type StaffParams = {
@@ -40,8 +43,20 @@ export function createStaffManagementController(dependencies: StaffControllerDep
 		},
 
 		createStaff: async (request, response) => {
+			const authContext = requireAuthContext(response);
 			const body = getValidatedBody<Parameters<StaffService['createStaff']>[0]>(request);
 			const staff = await dependencies.staffService.createStaff(body);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff created a staff account.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 201,
+				entityType: 'staff',
+				entityId: staff.id
+			});
 			response.status(201).location(`/api/management/staff/${staff.id}`).json(staff);
 		},
 
@@ -63,6 +78,17 @@ export function createStaffManagementController(dependencies: StaffControllerDep
 				params.staffId,
 				body
 			);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff updated a staff account.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'staff',
+				entityId: staff.id
+			});
 			response.status(200).json(staff);
 		},
 
@@ -78,6 +104,18 @@ export function createStaffManagementController(dependencies: StaffControllerDep
 				params.staffId,
 				query.force
 			);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff deleted a staff account.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'staff',
+				entityId: params.staffId,
+				metadata: { mode }
+			});
 			response.status(200).json({
 				deleted: true,
 				mode
@@ -96,6 +134,17 @@ export function createStaffManagementController(dependencies: StaffControllerDep
 				params.staffId,
 				body.password
 			);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff updated a staff account password.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 204,
+				entityType: 'staff',
+				entityId: params.staffId
+			});
 			response.status(204).send();
 		}
 	};
