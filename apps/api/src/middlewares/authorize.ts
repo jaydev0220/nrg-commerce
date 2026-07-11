@@ -43,3 +43,23 @@ export function requireRole(role: RoleKey): RequestHandler {
 		}
 	};
 }
+
+export function requireVerifiedMfa(): RequestHandler {
+	return (_request, response, next) => {
+		try {
+			const authContext = requireAuthContext(response);
+
+			if (authContext.mfa.length === 0) {
+				throw new AppError(
+					403,
+					'MFA_SETUP_REQUIRED',
+					'Complete MFA enrollment before accessing management APIs.'
+				);
+			}
+
+			next();
+		} catch (error) {
+			next(error);
+		}
+	};
+}

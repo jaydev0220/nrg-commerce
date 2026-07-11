@@ -4,6 +4,7 @@ import type { AppConfig } from '../config/app-config.js';
 import { AppError } from '../errors/app-error.js';
 import { errorHandler } from '../errors/error-handler.js';
 import { createHealthRouter, type HealthDependencies } from '../health/health.routes.js';
+import { requireVerifiedMfa } from '../middlewares/authorize.js';
 import { createAuthRateLimiter } from '../middlewares/rate-limit.js';
 import { createAuthRouter } from '../modules/auth/auth.routes.js';
 import type { AuthService } from '../modules/auth/auth.service.js';
@@ -57,7 +58,7 @@ export function initializeRoutes(app: Application, dependencies: RouteDependenci
 		createStorefrontCatalogRouter({ storefrontService: dependencies.storefrontService })
 	);
 
-	app.use('/api/management', dependencies.authenticate);
+	app.use('/api/management', dependencies.authenticate, requireVerifiedMfa());
 	app.use(
 		'/api/management/businesses',
 		createBusinessManagementRouter({

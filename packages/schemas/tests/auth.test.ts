@@ -7,6 +7,7 @@ import {
 	passwordLoginSchema,
 	refreshTokenRequestSchema,
 	refreshTokenClaimsSchema,
+	setupTokenRequestSchema,
 	staffPasswordUpdateSchema,
 	totpSetupConfirmationSchema,
 	totpCredentialSchema,
@@ -19,8 +20,8 @@ test('accessTokenClaimsSchema accepts the expected JWT claims shape', () => {
 		sid: 'ca7641b9-6856-42b6-99f0-f75f1a4d9e79',
 		jti: 'refresh-family-1',
 		type: 'access',
-		roles: ['admin'],
-		permissions: ['staff.read', 'log.read'],
+		roles: ['admin', 'sales-manager'],
+		permissions: ['staff.read', 'log.read', 'business.read', 'order.write'],
 		mfa: ['passkey'],
 		primaryFactor: 'password',
 		exp: 1_800_000_000,
@@ -28,7 +29,13 @@ test('accessTokenClaimsSchema accepts the expected JWT claims shape', () => {
 	});
 
 	assert.equal(parsedClaims.type, 'access');
-	assert.deepEqual(parsedClaims.permissions, ['staff.read', 'log.read']);
+	assert.deepEqual(parsedClaims.permissions, [
+		'staff.read',
+		'log.read',
+		'business.read',
+		'order.write'
+	]);
+	assert.deepEqual(parsedClaims.roles, ['admin', 'sales-manager']);
 });
 
 test('refreshTokenClaimsSchema rejects access token payloads', () => {
@@ -99,6 +106,12 @@ test('passkey and TOTP ceremony schemas accept opaque tokens and validation code
 		totpSetupConfirmationSchema.parse({
 			setupToken: 'setup-token',
 			code: '123456'
+		}).setupToken,
+		'setup-token'
+	);
+	assert.equal(
+		setupTokenRequestSchema.parse({
+			setupToken: 'setup-token'
 		}).setupToken,
 		'setup-token'
 	);

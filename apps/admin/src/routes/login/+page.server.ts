@@ -1,10 +1,25 @@
 import { fail, isRedirect, redirect } from '@sveltejs/kit';
 
-import { AdminApiError, loginWithPassword } from '$lib/server/admin-api';
+import {
+	AdminApiError,
+	hasMfaSetupToken,
+	hasPendingMfaChallenge,
+	loginWithPassword
+} from '$lib/server/admin-api';
 
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => ({});
+export const load: PageServerLoad = async (event) => {
+	if (hasPendingMfaChallenge(event.cookies)) {
+		throw redirect(303, '/login/verify');
+	}
+
+	if (hasMfaSetupToken(event.cookies)) {
+		throw redirect(303, '/login/setup');
+	}
+
+	return {};
+};
 
 export const actions: Actions = {
 	default: async (event) => {
@@ -23,10 +38,11 @@ export const actions: Actions = {
 			const result = await loginWithPassword(event, { email, password });
 
 			if (result.status === 'mfa_required') {
-				return fail(400, {
-					email,
-					message: '此管理後台尚未支援多因素登入流程。'
-				});
+				throw redirect(303, '/login/verify');
+			}
+
+			if (result.status === 'mfa_setup_required') {
+				throw redirect(303, '/login/setup');
 			}
 
 			throw redirect(303, '/');

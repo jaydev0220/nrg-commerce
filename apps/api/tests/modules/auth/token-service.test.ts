@@ -60,3 +60,28 @@ test('createTokenService issues refresh and pending-auth tokens with separate cl
 	assert.equal(pendingClaims.staffId, '0189076c-4f2a-7fe1-b9fd-2d68df455111');
 	assert.equal(pendingClaims.requiredMfaMethod, 'authenticator');
 });
+
+test('createTokenService issues ceremony tokens for MFA setup flows', async () => {
+	const tokenService = createTokenService({
+		accessTokenSecret: 'access-secret',
+		refreshTokenSecret: 'refresh-secret',
+		pendingTokenSecret: 'pending-secret',
+		accessTokenTtlSeconds: 900,
+		refreshTokenTtlSeconds: 86_400,
+		pendingTokenTtlSeconds: 300
+	});
+
+	const setupToken = await tokenService.issueCeremonyToken({
+		type: 'ceremony',
+		purpose: 'mfa_setup',
+		staffId: '0189076c-4f2a-7fe1-b9fd-2d68df455111',
+		primaryFactor: 'password'
+	});
+	const claims = await tokenService.verifyCeremonyToken<{
+		staffId: string;
+		primaryFactor: 'password' | 'passkey';
+	}>(setupToken, 'mfa_setup');
+
+	assert.equal(claims.staffId, '0189076c-4f2a-7fe1-b9fd-2d68df455111');
+	assert.equal(claims.primaryFactor, 'password');
+});

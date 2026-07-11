@@ -105,10 +105,17 @@ export type PendingAuthPayload = {
 };
 
 export type CeremonyTokenPurpose =
+	| 'mfa_setup'
 	| 'totp_setup'
 	| 'passkey_registration'
 	| 'passkey_login'
 	| 'passkey_mfa';
+
+export type MfaSetupTokenPayload = {
+	purpose: 'mfa_setup';
+	staffId: string;
+	primaryFactor: 'password' | 'passkey';
+};
 
 export type TotpSetupTokenPayload = {
 	purpose: 'totp_setup';
@@ -124,6 +131,7 @@ export type PasskeyRegistrationTokenPayload = {
 	staffId: string;
 	challenge: string;
 	nickname: string | null;
+	primaryFactor?: 'password' | 'passkey';
 };
 
 export type PasskeyAuthenticationTokenPayload = {
@@ -155,6 +163,13 @@ export type AuthMfaChallengeResult = {
 	status: 'mfa_required';
 	method: MfaMethod;
 	pendingToken: string;
+};
+
+export type AuthMfaSetupRequiredResult = {
+	status: 'mfa_setup_required';
+	setupToken: string;
+	availableMethods: MfaMethod[];
+	staffId: string;
 };
 
 export type PasskeyOptionsResult = {

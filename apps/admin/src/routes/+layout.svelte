@@ -8,13 +8,13 @@
 
 	let { children, data }: { children: Snippet; data: LayoutData } = $props();
 
-	const isLoginRoute = $derived(page.url.pathname === '/login');
+	const isLoginRoute = $derived(page.url.pathname.startsWith('/login'));
 </script>
 
 {#if isLoginRoute}
 	{@render children()}
 {:else}
-	<AdminShell currentStaff={data.currentStaff}>
+	<AdminShell currentStaff={data.currentStaff ?? undefined}>
 		{@render children()}
 	</AdminShell>
 {/if}

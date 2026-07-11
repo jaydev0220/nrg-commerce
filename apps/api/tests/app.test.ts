@@ -104,13 +104,48 @@ test('management routes require authentication', async () => {
 	assert.equal(payload.error.code, 'AUTHENTICATION_REQUIRED');
 });
 
+test('management routes require a verified MFA claim', async () => {
+	const app = express();
+
+	initializeRoutes(app, {
+		config: createTestConfig(),
+		authService: {} as Parameters<typeof initializeRoutes>[1]['authService'],
+		authenticate: (_request, response, next) => {
+			response.locals['auth'] = {
+				...createManagementAuthContext(),
+				mfa: []
+			};
+			next();
+		},
+		dashboardService: {} as Parameters<typeof initializeRoutes>[1]['dashboardService'],
+		businessService: {} as Parameters<typeof initializeRoutes>[1]['businessService'],
+		orderService: {} as Parameters<typeof initializeRoutes>[1]['orderService'],
+		staffService: {} as Parameters<typeof initializeRoutes>[1]['staffService'],
+		logService: {} as Parameters<typeof initializeRoutes>[1]['logService'],
+		productService: {} as Parameters<typeof initializeRoutes>[1]['productService'],
+		categoryService: {} as Parameters<typeof initializeRoutes>[1]['categoryService'],
+		skuService: {} as Parameters<typeof initializeRoutes>[1]['skuService'],
+		imageService: {} as Parameters<typeof initializeRoutes>[1]['imageService'],
+		storefrontService: {} as Parameters<typeof initializeRoutes>[1]['storefrontService']
+	});
+
+	const response = await requestApp(app, {
+		path: '/api/management/staff'
+	});
+	const payload = response.json<{ error: { code: string } }>();
+
+	assert.equal(response.status, 403);
+	assert.equal(payload.error.code, 'MFA_SETUP_REQUIRED');
+});
+
 test('management upload noop route is not exposed', async () => {
 	const app = express();
 
 	initializeRoutes(app, {
 		config: createTestConfig(),
 		authService: {} as Parameters<typeof initializeRoutes>[1]['authService'],
-		authenticate: (_request, _response, next) => {
+		authenticate: (_request, response, next) => {
+			response.locals['auth'] = createManagementAuthContext();
 			next();
 		},
 		dashboardService: {} as Parameters<typeof initializeRoutes>[1]['dashboardService'],

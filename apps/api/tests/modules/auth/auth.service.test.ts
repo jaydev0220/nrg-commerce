@@ -264,3 +264,100 @@ test('completeTotpLogin rejects invalid TOTP codes', async () => {
 		(error: unknown) => error instanceof AppError && error.statusCode === 401
 	);
 });
+
+test('loginWithPassword returns setup-required when the staff account has no bound MFA credential', async () => {
+	const authService = createTestAuthService({
+		repository: {
+			findStaffByEmail: async () => ({
+				...activeStaff,
+				mfaRequired: false,
+				preferredMfaMethod: null,
+				totpCredentialCount: 0,
+				passkeyCredentialCount: 0
+			})
+		},
+		tokenService: {
+			issueCeremonyToken: async () => 'setup-token'
+		}
+	});
+
+	const result = await authService.loginWithPassword({
+		email: 'admin@example.com',
+		password: 'correct horse battery staple',
+		userAgent: 'test-agent',
+		ipAddress: '127.0.0.1'
+	});
+
+	assert.equal(result.status, 'mfa_setup_required');
+	if (result.status === 'mfa_setup_required') {
+		assert.equal(result.setupToken, 'setup-token');
+		assert.deepEqual(result.availableMethods, ['authenticator', 'passkey']);
+	}
+});
+
+test('confirmLoginTotpSetup stores a credential, enables MFA, and returns an authenticated session', async () => {
+	let savedPreference:
+		| { mfaRequired: boolean; preferredMfaMethod: 'authenticator' | 'passkey' | null }
+		| undefined;
+	let savedCredential:
+		| { staffId: string; secretEncrypted: string; digits: number; period: number; verifiedAt: Date }
+		| undefined;
+	let findStaffByIdCalls = 0;
+
+	const authService = createTestAuthService({
+		repository: {
+			findStaffById: async () => {
+				findStaffByIdCalls += 1;
+
+				if (findStaffByIdCalls === 1) {
+					return {
+						...activeStaff,
+						mfaRequired: false,
+						preferredMfaMethod: null,
+						totpCredentialCount: 0,
+						passkeyCredentialCount: 0
+					};
+				}
+
+				return {
+					...activeStaff,
+					mfaRequired: true,
+					preferredMfaMethod: 'authenticator',
+					totpCredentialCount: 1,
+					passkeyCredentialCount: 0
+				};
+			},
+			upsertTotpCredential: async (input) => {
+				savedCredential = input;
+			},
+			updateMfaPreference: async (_staffId, preferences) => {
+				savedPreference = preferences;
+			}
+		},
+		tokenService: {
+			verifyCeremonyToken: async <T>() =>
+				({
+					staffId: activeStaff.id,
+					secret: 'totp-secret',
+					digits: 6,
+					period: 30,
+					primaryFactor: 'password'
+				}) as T
+		}
+	});
+
+	const result = await authService.confirmLoginTotpSetup({
+		setupToken: 'setup-token',
+		code: '123456',
+		userAgent: 'test-agent',
+		ipAddress: '127.0.0.1'
+	});
+
+	assert.equal(result.status, 'authenticated');
+	assert.deepEqual(savedPreference, {
+		mfaRequired: true,
+		preferredMfaMethod: 'authenticator'
+	});
+	assert.equal(savedCredential?.staffId, activeStaff.id);
+	assert.equal(savedCredential?.secretEncrypted, 'totp-secret');
+});

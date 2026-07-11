@@ -12,6 +12,10 @@ export const mfaMethodSchema = z.enum(mfaMethodValues);
 export const passkeyDeviceTypeSchema = z.enum(passkeyDeviceTypeValues);
 export const authPrimaryFactorSchema = z.enum(authPrimaryFactorValues);
 export const permissionKeySchema = z.enum([
+	'business.read',
+	'business.write',
+	'order.read',
+	'order.write',
 	'product.read',
 	'product.create',
 	'product.update',
@@ -33,7 +37,7 @@ export const permissionKeySchema = z.enum([
 	'staff.update',
 	'staff.delete'
 ]);
-export const roleKeySchema = z.enum(['admin', 'catalog-manager', 'staff-manager']);
+export const roleKeySchema = z.enum(['admin', 'catalog-manager', 'staff-manager', 'sales-manager']);
 
 export const permissionSchema = z.object({
 	id: uuidSchema,
@@ -157,6 +161,10 @@ export const passwordLoginSchema = z.object({
 
 export const pendingAuthTokenSchema = z.object({
 	pendingToken: z.string().min(1)
+});
+
+export const setupTokenRequestSchema = z.object({
+	setupToken: z.string().min(1)
 });
 
 export const passkeyAuthenticationStartSchema = z.object({

@@ -17,7 +17,7 @@ export const staffSchema = z.object({
 	status: staffStatusSchema,
 	passwordHash: z.string().min(1).nullable(),
 	mfaRequired: z.boolean(),
-	preferredMfaMethod: mfaMethodSchema.nullable(),
+	preferredMfaMethod: z.preprocess((value) => value ?? null, mfaMethodSchema.nullable()),
 	lastLoginAt: dateSchema.nullable(),
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,

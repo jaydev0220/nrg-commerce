@@ -13,7 +13,11 @@ import {
 
 const accessTokenCookieName = 'admin_access_token';
 const refreshTokenCookieName = 'admin_refresh_token';
+const mfaSetupTokenCookieName = 'admin_mfa_setup_token';
+const mfaPendingTokenCookieName = 'admin_mfa_pending_token';
+const mfaPendingMethodCookieName = 'admin_mfa_pending_method';
 const sessionCookieMaxAgeSeconds = 60 * 60 * 24 * 7;
+const authFlowCookieMaxAgeSeconds = 60 * 10;
 const pageSize = 100;
 
 const jsonDateSchema = z.coerce.date();
@@ -37,7 +41,7 @@ const currentStaffSchema = z.object({
 	name: z.string().min(1),
 	status: staffStatusSchema,
 	mfaRequired: z.boolean(),
-	preferredMfaMethod: mfaMethodSchema.nullable(),
+	preferredMfaMethod: z.preprocess((value) => value ?? null, mfaMethodSchema.nullable()),
 	lastLoginAt: jsonDateSchema.nullable(),
 	roles: z.array(managedRoleSchema).default([]),
 	totpCredentialCount: z.number().int().min(0),
@@ -69,11 +73,27 @@ const mfaChallengeSchema = z.object({
 	pendingToken: z.string().min(1)
 });
 
-const passwordLoginResponseSchema = z.union([authenticatedLoginSchema, mfaChallengeSchema]);
+const mfaSetupRequiredSchema = z.object({
+	status: z.literal('mfa_setup_required'),
+	setupToken: z.string().min(1),
+	availableMethods: z.array(mfaMethodSchema).min(1)
+});
+
+const passkeyOptionsSchema = z.object({
+	ceremonyToken: z.string().min(1),
+	options: z.unknown()
+});
+
+const passwordLoginResponseSchema = z.union([
+	authenticatedLoginSchema,
+	mfaChallengeSchema,
+	mfaSetupRequiredSchema
+]);
 
 const authMeResponseSchema = z.object({
 	staff: currentStaffSchema,
-	sessionId: z.uuid()
+	sessionId: z.uuid(),
+	mfaMethods: z.array(mfaMethodSchema).default([])
 });
 
 const managedCategorySchema = z.object({
@@ -132,7 +152,7 @@ const managedStaffSchema = z.object({
 	name: z.string().min(1),
 	status: staffStatusSchema,
 	mfaRequired: z.boolean(),
-	preferredMfaMethod: mfaMethodSchema.nullable(),
+	preferredMfaMethod: z.preprocess((value) => value ?? null, mfaMethodSchema.nullable()),
 	lastLoginAt: jsonDateSchema.nullable(),
 	deletedAt: jsonDateSchema.nullable(),
 	createdAt: jsonDateSchema,
@@ -284,33 +304,65 @@ function buildApiUrl(path: string): string {
 	return `${resolveApiBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
-function setSessionCookies(
-	cookies: Cookies,
-	tokens: { accessToken: string; refreshToken: string }
-): void {
-	const cookieOptions = {
+function createCookieOptions(maxAge: number) {
+	return {
 		httpOnly: true,
 		path: '/',
 		sameSite: 'lax' as const,
 		secure: env['NODE_ENV'] === 'production',
-		maxAge: sessionCookieMaxAgeSeconds
+		maxAge
 	};
+}
+
+function setSessionCookies(
+	cookies: Cookies,
+	tokens: { accessToken: string; refreshToken: string }
+): void {
+	const cookieOptions = createCookieOptions(sessionCookieMaxAgeSeconds);
 
 	cookies.set(accessTokenCookieName, tokens.accessToken, cookieOptions);
 	cookies.set(refreshTokenCookieName, tokens.refreshToken, cookieOptions);
 }
 
 export function clearSessionCookies(cookies: Cookies): void {
-	const cookieOptions = {
-		httpOnly: true,
-		path: '/',
-		sameSite: 'lax' as const,
-		secure: env['NODE_ENV'] === 'production',
-		maxAge: 0
-	};
+	const cookieOptions = createCookieOptions(0);
 
 	cookies.set(accessTokenCookieName, '', cookieOptions);
 	cookies.set(refreshTokenCookieName, '', cookieOptions);
+}
+
+function setMfaSetupCookie(cookies: Cookies, setupToken: string): void {
+	cookies.set(
+		mfaSetupTokenCookieName,
+		setupToken,
+		createCookieOptions(authFlowCookieMaxAgeSeconds)
+	);
+}
+
+export function clearMfaSetupCookie(cookies: Cookies): void {
+	cookies.set(mfaSetupTokenCookieName, '', createCookieOptions(0));
+}
+
+function setMfaPendingCookies(
+	cookies: Cookies,
+	challenge: { pendingToken: string; method: z.infer<typeof mfaMethodSchema> }
+): void {
+	const cookieOptions = createCookieOptions(authFlowCookieMaxAgeSeconds);
+
+	cookies.set(mfaPendingTokenCookieName, challenge.pendingToken, cookieOptions);
+	cookies.set(mfaPendingMethodCookieName, challenge.method, cookieOptions);
+}
+
+export function clearMfaPendingCookies(cookies: Cookies): void {
+	const cookieOptions = createCookieOptions(0);
+
+	cookies.set(mfaPendingTokenCookieName, '', cookieOptions);
+	cookies.set(mfaPendingMethodCookieName, '', cookieOptions);
+}
+
+function clearTransientAuthCookies(cookies: Cookies): void {
+	clearMfaSetupCookie(cookies);
+	clearMfaPendingCookies(cookies);
 }
 
 function readAccessToken(cookies: Cookies): string | null {
@@ -319,6 +371,28 @@ function readAccessToken(cookies: Cookies): string | null {
 
 function readRefreshToken(cookies: Cookies): string | null {
 	return cookies.get(refreshTokenCookieName) ?? null;
+}
+
+function readMfaSetupToken(cookies: Cookies): string | null {
+	return cookies.get(mfaSetupTokenCookieName) ?? null;
+}
+
+function readMfaPendingToken(cookies: Cookies): string | null {
+	return cookies.get(mfaPendingTokenCookieName) ?? null;
+}
+
+export function readPendingMfaMethod(cookies: Cookies): z.infer<typeof mfaMethodSchema> | null {
+	const parsed = mfaMethodSchema.safeParse(cookies.get(mfaPendingMethodCookieName));
+
+	return parsed.success ? parsed.data : null;
+}
+
+export function hasMfaSetupToken(cookies: Cookies): boolean {
+	return readMfaSetupToken(cookies) !== null;
+}
+
+export function hasPendingMfaChallenge(cookies: Cookies): boolean {
+	return readMfaPendingToken(cookies) !== null && readPendingMfaMethod(cookies) !== null;
 }
 
 async function readErrorPayload(response: Response): Promise<ApiErrorPayload> {
@@ -554,7 +628,16 @@ export async function loginWithPassword(
 	);
 
 	if (payload.status === 'authenticated') {
+		clearTransientAuthCookies(event.cookies);
 		setSessionCookies(event.cookies, payload);
+	} else if (payload.status === 'mfa_required') {
+		clearSessionCookies(event.cookies);
+		clearMfaSetupCookie(event.cookies);
+		setMfaPendingCookies(event.cookies, payload);
+	} else {
+		clearSessionCookies(event.cookies);
+		clearMfaPendingCookies(event.cookies);
+		setMfaSetupCookie(event.cookies, payload.setupToken);
 	}
 
 	return payload;
@@ -595,6 +678,7 @@ export async function requireCurrentStaff(event: RequestEvent) {
 
 export async function logoutCurrentSession(event: RequestEvent): Promise<void> {
 	if (!readAccessToken(event.cookies)) {
+		clearTransientAuthCookies(event.cookies);
 		clearSessionCookies(event.cookies);
 		return;
 	}
@@ -616,8 +700,179 @@ export async function logoutCurrentSession(event: RequestEvent): Promise<void> {
 			await throwApiError(response);
 		}
 	} finally {
+		clearTransientAuthCookies(event.cookies);
 		clearSessionCookies(event.cookies);
 	}
+}
+
+export async function completeTotpLoginChallenge(event: RequestEvent, code: string) {
+	const pendingToken = readMfaPendingToken(event.cookies);
+
+	if (!pendingToken) {
+		throw redirect(303, '/login');
+	}
+
+	const payload = await parseApiResponse(
+		event,
+		'/api/auth/login/mfa/totp',
+		authenticatedLoginSchema,
+		{
+			method: 'POST',
+			body: JSON.stringify({ pendingToken, code })
+		},
+		{
+			authenticated: false,
+			retryOnUnauthorized: false
+		}
+	);
+
+	clearMfaPendingCookies(event.cookies);
+	setSessionCookies(event.cookies, payload);
+	return payload;
+}
+
+export async function beginPasskeyLoginChallenge(event: RequestEvent) {
+	const pendingToken = readMfaPendingToken(event.cookies);
+
+	if (!pendingToken) {
+		throw redirect(303, '/login');
+	}
+
+	return parseApiResponse(
+		event,
+		'/api/auth/login/mfa/passkey/options',
+		passkeyOptionsSchema,
+		{
+			method: 'POST',
+			body: JSON.stringify({ pendingToken })
+		},
+		{
+			authenticated: false,
+			retryOnUnauthorized: false
+		}
+	);
+}
+
+export async function completePasskeyLoginChallenge(
+	event: RequestEvent,
+	input: { ceremonyToken: string; credential: unknown }
+) {
+	const payload = await parseApiResponse(
+		event,
+		'/api/auth/login/mfa/passkey/verify',
+		authenticatedLoginSchema,
+		{
+			method: 'POST',
+			body: JSON.stringify(input)
+		},
+		{
+			authenticated: false,
+			retryOnUnauthorized: false
+		}
+	);
+
+	clearMfaPendingCookies(event.cookies);
+	setSessionCookies(event.cookies, payload);
+	return payload;
+}
+
+export async function beginTotpMfaSetup(event: RequestEvent) {
+	const setupToken = readMfaSetupToken(event.cookies);
+
+	if (!setupToken) {
+		throw redirect(303, '/login');
+	}
+
+	return parseApiResponse(
+		event,
+		'/api/auth/login/setup/totp/options',
+		z.object({
+			setupToken: z.string().min(1),
+			secret: z.string().min(1),
+			otpauthUrl: z.string().min(1),
+			digits: z.number().int().min(6).max(8),
+			period: z.number().int().min(15).max(120)
+		}),
+		{
+			method: 'POST',
+			body: JSON.stringify({ setupToken })
+		},
+		{
+			authenticated: false,
+			retryOnUnauthorized: false
+		}
+	);
+}
+
+export async function completeTotpMfaSetup(
+	event: RequestEvent,
+	input: { setupToken: string; code: string }
+) {
+	const payload = await parseApiResponse(
+		event,
+		'/api/auth/login/setup/totp/confirm',
+		authenticatedLoginSchema,
+		{
+			method: 'POST',
+			body: JSON.stringify(input)
+		},
+		{
+			authenticated: false,
+			retryOnUnauthorized: false
+		}
+	);
+
+	clearMfaSetupCookie(event.cookies);
+	setSessionCookies(event.cookies, payload);
+	return payload;
+}
+
+export async function beginPasskeyMfaSetup(event: RequestEvent, input: { nickname?: string } = {}) {
+	const setupToken = readMfaSetupToken(event.cookies);
+
+	if (!setupToken) {
+		throw redirect(303, '/login');
+	}
+
+	return parseApiResponse(
+		event,
+		'/api/auth/login/setup/passkey/options',
+		passkeyOptionsSchema,
+		{
+			method: 'POST',
+			body: JSON.stringify({
+				setupToken,
+				nickname: input.nickname
+			})
+		},
+		{
+			authenticated: false,
+			retryOnUnauthorized: false
+		}
+	);
+}
+
+export async function completePasskeyMfaSetup(
+	event: RequestEvent,
+	input: { ceremonyToken: string; credential: unknown }
+) {
+	const payload = await parseApiResponse(
+		event,
+		'/api/auth/login/setup/passkey/verify',
+		authenticatedLoginSchema,
+		{
+			method: 'POST',
+			body: JSON.stringify(input)
+		},
+		{
+			authenticated: false,
+			retryOnUnauthorized: false
+		}
+	);
+
+	clearMfaSetupCookie(event.cookies);
+	setSessionCookies(event.cookies, payload);
+	return payload;
 }
 
 export async function loadDashboardData(event: RequestEvent) {

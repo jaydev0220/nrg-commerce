@@ -7,9 +7,11 @@ import type { TotpService } from '../../utils/totp-service.js';
 import type { AuthRepository } from './auth.repository.js';
 import type {
 	AuthMfaChallengeResult,
+	AuthMfaSetupRequiredResult,
 	AuthenticatedStaffContext,
 	AuthStaffRecord,
 	AuthSuccessResult,
+	MfaSetupTokenPayload,
 	PasskeyOptionsResult,
 	PasskeyRegistrationInput,
 	PendingAuthPayload,
@@ -63,7 +65,7 @@ function deriveRoles(staff: AuthStaffRecord) {
 }
 
 function deriveMfaRequirement(staff: AuthStaffRecord): 'authenticator' | 'passkey' | null {
-	if (!staff.mfaRequired) {
+	if (!staff.mfaRequired && staff.totpCredentialCount === 0 && staff.passkeyCredentialCount === 0) {
 		return null;
 	}
 
@@ -84,6 +86,10 @@ function deriveMfaRequirement(staff: AuthStaffRecord): 'authenticator' | 'passke
 	}
 
 	return null;
+}
+
+function hasVerifiedMfaCredential(staff: AuthStaffRecord): boolean {
+	return staff.totpCredentialCount > 0 || staff.passkeyCredentialCount > 0;
 }
 
 function ensureActiveStaff(staff: AuthStaffRecord | null): AuthStaffRecord {
@@ -187,13 +193,100 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 		};
 	}
 
+	async function issueMfaSetupRequirement(
+		staff: AuthStaffRecord,
+		primaryFactor: 'password' | 'passkey'
+	): Promise<AuthMfaSetupRequiredResult> {
+		const setupToken = await dependencies.tokenService.issueCeremonyToken({
+			type: 'ceremony',
+			purpose: 'mfa_setup',
+			staffId: staff.id,
+			primaryFactor
+		});
+
+		return {
+			status: 'mfa_setup_required',
+			setupToken,
+			availableMethods: ['authenticator', 'passkey'],
+			staffId: staff.id
+		};
+	}
+
+	async function resolveMfaSetupToken(
+		setupToken: string
+	): Promise<{ staff: AuthStaffRecord; primaryFactor: 'password' | 'passkey' }> {
+		const claims = await dependencies.tokenService.verifyCeremonyToken<MfaSetupTokenPayload>(
+			setupToken,
+			'mfa_setup'
+		);
+		const staff = ensureActiveStaff(await dependencies.repository.findStaffById(claims.staffId));
+
+		if (hasVerifiedMfaCredential(staff)) {
+			throw new AppError(
+				409,
+				'MFA_ALREADY_CONFIGURED',
+				'A verified MFA credential has already been configured for this staff account.'
+			);
+		}
+
+		return {
+			staff,
+			primaryFactor: claims.primaryFactor
+		};
+	}
+
+	async function finalizeMfaSetup(
+		staffId: string,
+		method: 'authenticator' | 'passkey',
+		options: {
+			primaryFactor: 'password' | 'passkey';
+			userAgent: string | null;
+			ipAddress: string | null;
+		}
+	): Promise<AuthSuccessResult> {
+		await dependencies.repository.updateMfaPreference(staffId, {
+			mfaRequired: true,
+			preferredMfaMethod: method
+		});
+		const updatedStaff = ensureActiveStaff(await dependencies.repository.findStaffById(staffId));
+
+		return issueAuthenticatedSession(updatedStaff, {
+			primaryFactor: options.primaryFactor,
+			mfaMethods: [method],
+			userAgent: options.userAgent,
+			ipAddress: options.ipAddress
+		});
+	}
+
+	async function beginPasskeyRegistrationForStaff(
+		staff: AuthStaffRecord,
+		nickname: string | null,
+		primaryFactor?: 'password' | 'passkey'
+	): Promise<PasskeyOptionsResult> {
+		const credentials = await dependencies.repository.listPasskeyCredentials(staff.id);
+		const options = await dependencies.passkeyService.beginRegistration(staff, credentials);
+		const ceremonyToken = await dependencies.tokenService.issueCeremonyToken({
+			type: 'ceremony',
+			purpose: 'passkey_registration',
+			staffId: staff.id,
+			challenge: options.challenge,
+			nickname,
+			primaryFactor
+		});
+
+		return {
+			ceremonyToken,
+			options
+		};
+	}
+
 	return {
 		async loginWithPassword(input: {
 			email: string;
 			password: string;
 			userAgent: string | null;
 			ipAddress: string | null;
-		}): Promise<AuthSuccessResult | AuthMfaChallengeResult> {
+		}): Promise<AuthSuccessResult | AuthMfaChallengeResult | AuthMfaSetupRequiredResult> {
 			const staff = ensureActiveStaff(await dependencies.repository.findStaffByEmail(input.email));
 
 			if (!staff.passwordHash) {
@@ -216,16 +309,15 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 				);
 			}
 
-			if (staff.mfaRequired) {
+			if (!hasVerifiedMfaCredential(staff)) {
+				return issueMfaSetupRequirement(staff, 'password');
+			}
+
+			if (deriveMfaRequirement(staff)) {
 				return issueMfaChallenge(staff, 'password');
 			}
 
-			return issueAuthenticatedSession(staff, {
-				primaryFactor: 'password',
-				mfaMethods: [],
-				userAgent: input.userAgent,
-				ipAddress: input.ipAddress
-			});
+			return issueMfaSetupRequirement(staff, 'password');
 		},
 
 		async completeTotpLogin(input: {
@@ -314,7 +406,7 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 			credential: Parameters<PasskeyService['finishAuthentication']>[1];
 			userAgent: string | null;
 			ipAddress: string | null;
-		}): Promise<AuthSuccessResult | AuthMfaChallengeResult> {
+		}): Promise<AuthSuccessResult | AuthMfaChallengeResult | AuthMfaSetupRequiredResult> {
 			const claims = await dependencies.tokenService.verifyCeremonyToken<{
 				staffId: string;
 				challenge: string;
@@ -353,7 +445,7 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 				dependencies.now()
 			);
 
-			if (staff.mfaRequired && deriveMfaRequirement(staff) === 'authenticator') {
+			if (deriveMfaRequirement(staff) === 'authenticator') {
 				return issueMfaChallenge(staff, 'passkey');
 			}
 
@@ -675,22 +767,10 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 
 		async beginPasskeyRegistration(
 			staff: AuthStaffRecord,
-			nickname: string | null
+			nickname: string | null,
+			primaryFactor?: 'password' | 'passkey'
 		): Promise<PasskeyOptionsResult> {
-			const credentials = await dependencies.repository.listPasskeyCredentials(staff.id);
-			const options = await dependencies.passkeyService.beginRegistration(staff, credentials);
-			const ceremonyToken = await dependencies.tokenService.issueCeremonyToken({
-				type: 'ceremony',
-				purpose: 'passkey_registration',
-				staffId: staff.id,
-				challenge: options.challenge,
-				nickname
-			});
-
-			return {
-				ceremonyToken,
-				options
-			};
+			return beginPasskeyRegistrationForStaff(staff, nickname, primaryFactor);
 		},
 
 		async finishPasskeyRegistration(staffId: string, input: PasskeyRegistrationInput) {
@@ -734,6 +814,144 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 				deviceType: registrationInfo.credentialDeviceType,
 				backedUp: registrationInfo.credentialBackedUp,
 				nickname: claims.nickname
+			});
+		},
+
+		async beginLoginTotpSetup(setupToken: string): Promise<TOTPSetupResult> {
+			const { staff, primaryFactor } = await resolveMfaSetupToken(setupToken);
+			const setup = await dependencies.totpService.createSetup(staff.email);
+			const enrollmentToken = await dependencies.tokenService.issueCeremonyToken({
+				type: 'ceremony',
+				purpose: 'totp_setup',
+				staffId: staff.id,
+				secret: setup.secret,
+				label: staff.email,
+				digits: setup.digits,
+				period: setup.period,
+				primaryFactor
+			});
+
+			return {
+				setupToken: enrollmentToken,
+				secret: setup.secret,
+				otpauthUrl: setup.otpauthUrl,
+				digits: setup.digits,
+				period: setup.period
+			};
+		},
+
+		async confirmLoginTotpSetup(input: {
+			setupToken: string;
+			code: string;
+			userAgent: string | null;
+			ipAddress: string | null;
+		}): Promise<AuthSuccessResult> {
+			const claims = await dependencies.tokenService.verifyCeremonyToken<{
+				staffId: string;
+				secret: string;
+				digits: number;
+				period: number;
+				primaryFactor: 'password' | 'passkey';
+			}>(input.setupToken, 'totp_setup');
+			const staff = ensureActiveStaff(await dependencies.repository.findStaffById(claims.staffId));
+
+			if (hasVerifiedMfaCredential(staff)) {
+				throw new AppError(
+					409,
+					'MFA_ALREADY_CONFIGURED',
+					'A verified MFA credential has already been configured for this staff account.'
+				);
+			}
+
+			const isValidCode = await dependencies.totpService.verifyCode(
+				claims.secret,
+				input.code,
+				claims.digits,
+				claims.period
+			);
+
+			if (!isValidCode) {
+				throw new AppError(401, 'INVALID_TOTP_CODE', 'The provided one-time password is invalid.');
+			}
+
+			await dependencies.repository.upsertTotpCredential({
+				staffId: staff.id,
+				secretEncrypted: dependencies.totpService.encryptSecret(claims.secret),
+				digits: claims.digits,
+				period: claims.period,
+				verifiedAt: dependencies.now()
+			});
+
+			return finalizeMfaSetup(staff.id, 'authenticator', {
+				primaryFactor: claims.primaryFactor,
+				userAgent: input.userAgent,
+				ipAddress: input.ipAddress
+			});
+		},
+
+		async beginLoginPasskeySetup(
+			setupToken: string,
+			nickname: string | null
+		): Promise<PasskeyOptionsResult> {
+			const { staff, primaryFactor } = await resolveMfaSetupToken(setupToken);
+
+			return beginPasskeyRegistrationForStaff(staff, nickname, primaryFactor);
+		},
+
+		async finishLoginPasskeySetup(input: {
+			ceremonyToken: string;
+			credential: PasskeyRegistrationInput['credential'];
+			userAgent: string | null;
+			ipAddress: string | null;
+		}): Promise<AuthSuccessResult> {
+			const claims = await dependencies.tokenService.verifyCeremonyToken<{
+				staffId: string;
+				challenge: string;
+				nickname: string | null;
+				primaryFactor: 'password' | 'passkey';
+			}>(input.ceremonyToken, 'passkey_registration');
+			const staff = ensureActiveStaff(await dependencies.repository.findStaffById(claims.staffId));
+
+			if (hasVerifiedMfaCredential(staff)) {
+				throw new AppError(
+					409,
+					'MFA_ALREADY_CONFIGURED',
+					'A verified MFA credential has already been configured for this staff account.'
+				);
+			}
+
+			const verification = await dependencies.passkeyService.finishRegistration(
+				claims.challenge,
+				input.credential
+			);
+
+			if (!verification.verified) {
+				throw new AppError(
+					401,
+					'PASSKEY_REGISTRATION_FAILED',
+					'The passkey registration could not be verified.'
+				);
+			}
+
+			const registrationInfo = verification.registrationInfo;
+
+			await dependencies.repository.createPasskeyCredential({
+				staffId: staff.id,
+				credentialId: registrationInfo.credential.id,
+				publicKey: registrationInfo.credential.publicKey,
+				userHandle: null,
+				counter: registrationInfo.credential.counter,
+				transports: input.credential.response.transports ?? [],
+				aaguid: registrationInfo.aaguid,
+				deviceType: registrationInfo.credentialDeviceType,
+				backedUp: registrationInfo.credentialBackedUp,
+				nickname: claims.nickname
+			});
+
+			return finalizeMfaSetup(staff.id, 'passkey', {
+				primaryFactor: claims.primaryFactor,
+				userAgent: input.userAgent,
+				ipAddress: input.ipAddress
 			});
 		}
 	};

@@ -8,6 +8,7 @@ import {
 	passwordLoginSchema,
 	pendingAuthTokenSchema,
 	refreshTokenRequestSchema,
+	setupTokenRequestSchema,
 	totpChallengeSchema,
 	totpSetupConfirmationSchema,
 	uuidSchema
@@ -31,6 +32,10 @@ const sessionParamsSchema = z.object({
 
 const pendingTotpChallengeSchema = pendingAuthTokenSchema.extend({
 	code: totpChallengeSchema.shape.code
+});
+
+const setupPasskeyStartSchema = setupTokenRequestSchema.extend({
+	nickname: passkeyRegistrationStartSchema.shape.nickname
 });
 
 export function createAuthRouter(dependencies: AuthRouterDependencies): Router {
@@ -83,6 +88,34 @@ export function createAuthRouter(dependencies: AuthRouterDependencies): Router {
 		dependencies.authRateLimiter,
 		validateRequest({ body: passkeyAuthenticationVerificationSchema }),
 		controller.verifyPasskeyMfa
+	);
+
+	router.post(
+		'/login/setup/totp/options',
+		dependencies.authRateLimiter,
+		validateRequest({ body: setupTokenRequestSchema }),
+		controller.beginLoginTotpSetup
+	);
+
+	router.post(
+		'/login/setup/totp/confirm',
+		dependencies.authRateLimiter,
+		validateRequest({ body: totpSetupConfirmationSchema }),
+		controller.confirmLoginTotpSetup
+	);
+
+	router.post(
+		'/login/setup/passkey/options',
+		dependencies.authRateLimiter,
+		validateRequest({ body: setupPasskeyStartSchema }),
+		controller.beginLoginPasskeySetup
+	);
+
+	router.post(
+		'/login/setup/passkey/verify',
+		dependencies.authRateLimiter,
+		validateRequest({ body: passkeyAuthenticationVerificationSchema }),
+		controller.finishLoginPasskeySetup
 	);
 
 	router.post(

@@ -35,6 +35,12 @@ type TotpSetupConfirmationBody = {
 	setupToken: string;
 	code: string;
 };
+type SetupTokenBody = {
+	setupToken: string;
+};
+type SetupPasskeyStartBody = SetupTokenBody & {
+	nickname?: string;
+};
 type PasskeyRegistrationStartBody = {
 	nickname?: string;
 };
@@ -46,6 +52,10 @@ type AuthController = {
 	completeTotpLogin: RequestHandler;
 	beginPasskeyMfa: RequestHandler;
 	verifyPasskeyMfa: RequestHandler;
+	beginLoginTotpSetup: RequestHandler;
+	confirmLoginTotpSetup: RequestHandler;
+	beginLoginPasskeySetup: RequestHandler;
+	finishLoginPasskeySetup: RequestHandler;
 	refreshSession: RequestHandler;
 	logout: RequestHandler;
 	getCurrentStaff: RequestHandler;
@@ -90,6 +100,19 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 					entityId: result.session.id,
 					metadata: { primaryFactor: 'password' }
 				});
+			} else if (result.status === 'mfa_setup_required') {
+				const requestContext = getRequestContext(request, response);
+				await dependencies.logService.recordAuditLog({
+					message: 'Staff authenticated with password and must complete MFA setup.',
+					actorStaffId: result.staffId,
+					requestId: requestContext.requestId,
+					method: request.method,
+					path: getRequestPath(request),
+					statusCode,
+					entityType: 'staff',
+					entityId: result.staffId,
+					metadata: { primaryFactor: 'password' }
+				});
 			}
 
 			response.status(statusCode).json(result);
@@ -121,6 +144,19 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 					statusCode,
 					entityType: 'auth_session',
 					entityId: result.session.id,
+					metadata: { primaryFactor: 'passkey' }
+				});
+			} else if (result.status === 'mfa_setup_required') {
+				const requestContext = getRequestContext(request, response);
+				await dependencies.logService.recordAuditLog({
+					message: 'Staff authenticated with passkey and must complete MFA setup.',
+					actorStaffId: result.staffId,
+					requestId: requestContext.requestId,
+					method: request.method,
+					path: getRequestPath(request),
+					statusCode,
+					entityType: 'staff',
+					entityId: result.staffId,
 					metadata: { primaryFactor: 'passkey' }
 				});
 			}
@@ -180,6 +216,67 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 			response.status(200).json(result);
 		},
 
+		beginLoginTotpSetup: async (request, response) => {
+			const body = getValidatedBody<SetupTokenBody>(request);
+			const result = await dependencies.authService.beginLoginTotpSetup(body.setupToken);
+			response.status(200).json(result);
+		},
+
+		confirmLoginTotpSetup: async (request, response) => {
+			const body = getValidatedBody<TotpSetupConfirmationBody>(request);
+			const result = await dependencies.authService.confirmLoginTotpSetup({
+				setupToken: body.setupToken,
+				code: body.code,
+				...getRequestMetadata(request)
+			});
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff completed initial TOTP setup.',
+				actorStaffId: result.staff.id,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'totp_credential',
+				entityId: result.staff.id,
+				metadata: { mfa: 'authenticator', source: 'login_setup' }
+			});
+
+			response.status(200).json(result);
+		},
+
+		beginLoginPasskeySetup: async (request, response) => {
+			const body = getValidatedBody<SetupPasskeyStartBody>(request);
+			const result = await dependencies.authService.beginLoginPasskeySetup(
+				body.setupToken,
+				body.nickname ?? null
+			);
+			response.status(200).json(result);
+		},
+
+		finishLoginPasskeySetup: async (request, response) => {
+			const body = getValidatedBody<PasskeyRegistrationBody>(request);
+			const result = await dependencies.authService.finishLoginPasskeySetup({
+				ceremonyToken: body.ceremonyToken,
+				credential: body.credential,
+				...getRequestMetadata(request)
+			});
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff completed initial passkey setup.',
+				actorStaffId: result.staff.id,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'passkey_credential',
+				entityId: result.staff.id,
+				metadata: { mfa: 'passkey', source: 'login_setup' }
+			});
+
+			response.status(200).json(result);
+		},
+
 		refreshSession: async (request, response) => {
 			const body = getValidatedBody<{ refreshToken: string }>(request);
 			const result = await dependencies.authService.refreshSession(
@@ -223,7 +320,8 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 			const authContext = requireAuthContext(response);
 			response.status(200).json({
 				staff: authContext.staff,
-				sessionId: authContext.sessionId
+				sessionId: authContext.sessionId,
+				mfaMethods: authContext.mfa
 			});
 		},
 
