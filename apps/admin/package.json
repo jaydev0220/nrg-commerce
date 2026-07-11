@@ -18,8 +18,10 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "catalog:lint",
+		"@lucide/svelte": "catalog:svelte",
 		"@packages/eslint-config": "workspace:*",
 		"@packages/prettier-config": "workspace:*",
+		"@packages/schemas": "workspace:*",
 		"@packages/styles": "workspace:*",
 		"@packages/tsconfig": "workspace:*",
 		"@playwright/test": "catalog:test",

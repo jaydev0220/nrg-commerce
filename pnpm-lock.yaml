@@ -389,12 +389,18 @@ importers:
       '@eslint/js':
         specifier: catalog:lint
         version: 10.0.1(eslint@10.5.0(jiti@2.7.0))
+      '@lucide/svelte':
+        specifier: catalog:svelte
+        version: 1.20.0(svelte@5.56.3(@typescript-eslint/types@8.61.1))
       '@packages/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
       '@packages/prettier-config':
         specifier: workspace:*
         version: link:../../packages/prettier-config
+      '@packages/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
       '@packages/styles':
         specifier: workspace:*
         version: link:../../packages/styles
