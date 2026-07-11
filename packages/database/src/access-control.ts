@@ -1,4 +1,8 @@
 export const permissionKeys = [
+	'business.read',
+	'business.write',
+	'order.read',
+	'order.write',
 	'product.read',
 	'product.create',
 	'product.update',
@@ -30,6 +34,26 @@ export type PermissionDefinition = {
 };
 
 export const permissionDefinitions = [
+	{
+		key: 'business.read',
+		name: 'Read businesses',
+		description: 'View business records in management workflows.'
+	},
+	{
+		key: 'business.write',
+		name: 'Write businesses',
+		description: 'Create, update, delete, and restore business records in management workflows.'
+	},
+	{
+		key: 'order.read',
+		name: 'Read orders',
+		description: 'View order records in management workflows.'
+	},
+	{
+		key: 'order.write',
+		name: 'Write orders',
+		description: 'Create orders and update order status in management workflows.'
+	},
 	{
 		key: 'product.read',
 		name: 'Read products',
@@ -132,7 +156,7 @@ export const permissionDefinitions = [
 	}
 ] as const satisfies readonly PermissionDefinition[];
 
-export const roleKeys = ['admin', 'catalog-manager', 'staff-manager'] as const;
+export const roleKeys = ['admin', 'catalog-manager', 'staff-manager', 'sales-manager'] as const;
 
 export type RoleKey = (typeof roleKeys)[number];
 
@@ -177,5 +201,11 @@ export const roleDefinitions = [
 		name: 'Staff Manager',
 		description: 'Manage staff accounts and their assigned roles.',
 		permissions: ['staff.read', 'staff.create', 'staff.update', 'staff.delete']
+	},
+	{
+		key: 'sales-manager',
+		name: 'Sales Manager',
+		description: 'Manage business records and order workflows.',
+		permissions: ['business.read', 'business.write', 'order.read', 'order.write']
 	}
 ] as const satisfies readonly RoleDefinition[];

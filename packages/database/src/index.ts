@@ -21,6 +21,7 @@ export {
 	MfaMethod,
 	LogKind,
 	LogLevel,
+	OrderStatus,
 	PasskeyDeviceType,
 	Prisma,
 	PrismaClient,

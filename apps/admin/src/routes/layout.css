@@ -1,1 +1,25 @@
 @import '@packages/styles';
+
+@layer base {
+	body {
+		min-height: 100vh;
+		margin: 0;
+		background: var(--color-bg-page);
+	}
+
+	button,
+	input,
+	select,
+	textarea {
+		font: inherit;
+	}
+
+	button:focus-visible,
+	a:focus-visible,
+	input:focus-visible,
+	select:focus-visible,
+	textarea:focus-visible {
+		outline: 2px solid var(--color-brand);
+		outline-offset: 2px;
+	}
+}

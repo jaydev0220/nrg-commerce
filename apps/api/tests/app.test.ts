@@ -113,6 +113,9 @@ test('management upload noop route is not exposed', async () => {
 		authenticate: (_request, _response, next) => {
 			next();
 		},
+		dashboardService: {} as Parameters<typeof initializeRoutes>[1]['dashboardService'],
+		businessService: {} as Parameters<typeof initializeRoutes>[1]['businessService'],
+		orderService: {} as Parameters<typeof initializeRoutes>[1]['orderService'],
 		staffService: {} as Parameters<typeof initializeRoutes>[1]['staffService'],
 		logService: {} as Parameters<typeof initializeRoutes>[1]['logService'],
 		productService: {} as Parameters<typeof initializeRoutes>[1]['productService'],

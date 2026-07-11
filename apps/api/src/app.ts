@@ -12,11 +12,16 @@ import type { HealthDependencies } from './health/health.routes.js';
 import { createPrismaAuthRepository } from './modules/auth/auth.repository.js';
 import { createAuthService } from './modules/auth/auth.service.js';
 import { createPrismaCatalogRepository } from './modules/management/catalog.repository.js';
+import { createPrismaBusinessRepository } from './modules/management/business/business.repository.js';
+import { createBusinessService } from './modules/management/business/business.service.js';
 import { createCategoryService } from './modules/management/category/category.service.js';
+import { createDashboardService } from './modules/management/dashboard/dashboard.service.js';
 import { createImageService } from './modules/management/image/image.service.js';
 import { createPrismaLogRepository } from './modules/management/log/log.repository.js';
 import { startLogRetentionPruner } from './modules/management/log/log-retention.js';
 import { createLogService } from './modules/management/log/log.service.js';
+import { createPrismaOrderRepository } from './modules/management/order/order.repository.js';
+import { createOrderService } from './modules/management/order/order.service.js';
 import { createProductService } from './modules/management/product/product.service.js';
 import { createSkuService } from './modules/management/sku/sku.service.js';
 import { createPrismaStaffRepository } from './modules/management/staff/staff.repository.js';
@@ -43,6 +48,8 @@ export function createApp(dependencies: AppDependencies = {}) {
 	const staffRepository = createPrismaStaffRepository(database);
 	const logRepository = createPrismaLogRepository(database);
 	const managementCatalogRepository = createPrismaCatalogRepository(database);
+	const businessRepository = createPrismaBusinessRepository(database);
+	const orderRepository = createPrismaOrderRepository(database);
 	const storefrontCatalogRepository = createPrismaStorefrontCatalogRepository(database);
 	const passwordHasher = createPasswordHasher();
 	const tokenService = createTokenService({
@@ -79,6 +86,15 @@ export function createApp(dependencies: AppDependencies = {}) {
 	});
 	const logService = createLogService({
 		repository: logRepository
+	});
+	const dashboardService = createDashboardService({
+		database
+	});
+	const businessService = createBusinessService({
+		repository: businessRepository
+	});
+	const orderService = createOrderService({
+		repository: orderRepository
 	});
 	const categoryService = createCategoryService({
 		repository: managementCatalogRepository
@@ -142,6 +158,9 @@ export function createApp(dependencies: AppDependencies = {}) {
 		authenticate,
 		staffService,
 		logService,
+		dashboardService,
+		businessService,
+		orderService,
 		productService,
 		categoryService,
 		skuService,

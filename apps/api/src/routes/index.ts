@@ -7,11 +7,17 @@ import { createHealthRouter, type HealthDependencies } from '../health/health.ro
 import { createAuthRateLimiter } from '../middlewares/rate-limit.js';
 import { createAuthRouter } from '../modules/auth/auth.routes.js';
 import type { AuthService } from '../modules/auth/auth.service.js';
+import { createBusinessManagementRouter } from '../modules/management/business/business.routes.js';
+import type { BusinessService } from '../modules/management/business/business.service.js';
 import { createCatalogManagementRouter } from '../modules/management/management.routes.js';
 import type { CategoryService } from '../modules/management/category/category.service.js';
+import { createDashboardRouter } from '../modules/management/dashboard/dashboard.routes.js';
+import type { DashboardService } from '../modules/management/dashboard/dashboard.service.js';
 import type { ImageService } from '../modules/management/image/image.service.js';
 import { createLogManagementRouter } from '../modules/management/log/log.routes.js';
 import type { LogService } from '../modules/management/log/log.service.js';
+import { createOrderManagementRouter } from '../modules/management/order/order.routes.js';
+import type { OrderService } from '../modules/management/order/order.service.js';
 import type { ProductService } from '../modules/management/product/product.service.js';
 import type { SkuService } from '../modules/management/sku/sku.service.js';
 import { createStaffManagementRouter } from '../modules/management/staff/staff.routes.js';
@@ -26,6 +32,9 @@ type RouteDependencies = {
 	authenticate: RequestHandler;
 	staffService: StaffService;
 	logService: LogService;
+	dashboardService: DashboardService;
+	businessService: BusinessService;
+	orderService: OrderService;
 	productService: ProductService;
 	categoryService: CategoryService;
 	skuService: SkuService;
@@ -50,6 +59,20 @@ export function initializeRoutes(app: Application, dependencies: RouteDependenci
 
 	app.use('/api/management', dependencies.authenticate);
 	app.use(
+		'/api/management/businesses',
+		createBusinessManagementRouter({
+			businessService: dependencies.businessService,
+			logService: dependencies.logService
+		})
+	);
+	app.use(
+		'/api/management/orders',
+		createOrderManagementRouter({
+			orderService: dependencies.orderService,
+			logService: dependencies.logService
+		})
+	);
+	app.use(
 		'/api/management/staff',
 		createStaffManagementRouter({
 			staffService: dependencies.staffService,
@@ -59,6 +82,10 @@ export function initializeRoutes(app: Application, dependencies: RouteDependenci
 	app.use(
 		'/api/management/logs',
 		createLogManagementRouter({ logService: dependencies.logService })
+	);
+	app.use(
+		'/api/management/dashboard',
+		createDashboardRouter({ dashboardService: dependencies.dashboardService })
 	);
 	app.use(
 		'/api/management/products',
