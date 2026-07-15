@@ -35,6 +35,20 @@ test('session config provides sliding and absolute lifetime defaults', () => {
 	);
 });
 
+test('storefront cache configuration has bounded defaults and accepts positive integers', () => {
+	const defaults = readAppConfig({});
+	assert.equal(defaults.storefrontCacheTtlSeconds, 60);
+	assert.equal(defaults.storefrontCacheMaxEntries, 500);
+
+	const configured = readAppConfig({
+		STOREFRONT_CACHE_TTL_SECONDS: '30',
+		STOREFRONT_CACHE_MAX_ENTRIES: '25'
+	});
+	assert.equal(configured.storefrontCacheTtlSeconds, 30);
+	assert.equal(configured.storefrontCacheMaxEntries, 25);
+	assert.equal(readAppConfig({ STOREFRONT_CACHE_TTL_SECONDS: '0' }).storefrontCacheTtlSeconds, 60);
+});
+
 test('unsupported log levels fail configuration loading', () => {
 	assert.throws(
 		() => readAppConfig({ LOG_LEVEL: 'verbose' }),

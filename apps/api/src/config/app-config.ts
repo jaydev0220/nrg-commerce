@@ -33,6 +33,8 @@ export type AppConfig = {
 	r2PublicBaseUrl: string;
 	r2AssetKeyPrefix: string;
 	r2UploadUrlTtlSeconds: number;
+	storefrontCacheTtlSeconds: number;
+	storefrontCacheMaxEntries: number;
 };
 
 function readBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -51,6 +53,11 @@ function readNumber(value: string | undefined, fallback: number): number {
 	const parsedValue = Number(value);
 
 	return Number.isFinite(parsedValue) ? parsedValue : fallback;
+}
+
+function readPositiveInteger(value: string | undefined, fallback: number): number {
+	const parsedValue = readNumber(value, fallback);
+	return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
 }
 
 function readStringArray(value: string | undefined, fallback: string[]): string[] {
@@ -136,7 +143,9 @@ export function readAppConfig(environment: NodeJS.ProcessEnv = process.env): App
 		r2SecretAccessKey: environment['R2_SECRET_ACCESS_KEY'] ?? 'development-secret-access-key',
 		r2PublicBaseUrl: environment['R2_PUBLIC_BASE_URL'] ?? 'https://example.com/assets',
 		r2AssetKeyPrefix: environment['R2_ASSET_KEY_PREFIX'] ?? 'products/skus',
-		r2UploadUrlTtlSeconds: readNumber(environment['R2_UPLOAD_URL_TTL_SECONDS'], 900)
+		r2UploadUrlTtlSeconds: readNumber(environment['R2_UPLOAD_URL_TTL_SECONDS'], 900),
+		storefrontCacheTtlSeconds: readPositiveInteger(environment['STOREFRONT_CACHE_TTL_SECONDS'], 60),
+		storefrontCacheMaxEntries: readPositiveInteger(environment['STOREFRONT_CACHE_MAX_ENTRIES'], 500)
 	};
 }
 

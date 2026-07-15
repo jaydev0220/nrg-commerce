@@ -42,7 +42,9 @@ function createTestConfig() {
 		r2SecretAccessKey: 'secret-access-key',
 		r2PublicBaseUrl: 'https://assets.example.com',
 		r2AssetKeyPrefix: 'products/skus',
-		r2UploadUrlTtlSeconds: 900
+		r2UploadUrlTtlSeconds: 900,
+		storefrontCacheTtlSeconds: 60,
+		storefrontCacheMaxEntries: 500
 	};
 }
 
