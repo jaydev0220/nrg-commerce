@@ -22,7 +22,6 @@ const authContext: AuthenticatedStaffContext = {
 		name: 'Admin',
 		status: 'active',
 		passwordHash: null,
-		mfaRequired: true,
 		preferredMfaMethod: 'authenticator',
 		lastLoginAt: null,
 		roles: [],
@@ -41,7 +40,14 @@ function createOrderRecord(status: 'pending' | 'confirmed' = 'pending') {
 		customerPhone: null,
 		customerAddress: null,
 		itemCount: 3,
+		subtotalAmount: 29.97,
+		discountLabelId: null,
+		discountLabelName: null,
+		suggestedDiscountRate: null,
+		discountRate: 0,
+		discountAmount: 0,
 		totalAmount: 29.97,
+		completedAt: null,
 		createdAt: new Date('2026-07-08T08:00:00.000Z'),
 		updatedAt: new Date('2026-07-08T08:00:00.000Z'),
 		business: null,
@@ -63,7 +69,15 @@ function createOrderRecord(status: 'pending' | 'confirmed' = 'pending') {
 }
 
 function createAppWithOrders(
-	orderService: Pick<OrderService, 'listOrders' | 'createOrder' | 'getOrder' | 'updateOrderStatus'>,
+	orderService: Pick<
+		OrderService,
+		| 'listOrders'
+		| 'listOrderSkuLookups'
+		| 'createOrder'
+		| 'getOrder'
+		| 'updateOrderStatus'
+		| 'updateOrder'
+	>,
 	logService: Pick<LogService, 'recordAuditLog'>,
 	permissions = authContext.permissions
 ) {
@@ -94,12 +108,14 @@ test('management order route creates an order and records an audit log', async (
 	const app = createAppWithOrders(
 		{
 			listOrders: async () => ({ data: [], total: 0 }),
+			listOrderSkuLookups: async () => ({ data: [], total: 0 }),
 			createOrder: async () => createOrderRecord(),
 			getOrder: async () => createOrderRecord(),
 			updateOrderStatus: async () => ({
 				order: createOrderRecord('confirmed'),
 				previousStatus: 'pending'
-			})
+			}),
+			updateOrder: async () => ({ order: createOrderRecord(), previousStatus: 'pending' })
 		},
 		{
 			recordAuditLog: async (input) => {
@@ -113,10 +129,13 @@ test('management order route creates an order and records an audit log', async (
 		method: 'POST',
 		path: '/api/management/orders',
 		headers: {
-			'Content-Type': 'application/json'
+			'Content-Type': 'application/json',
+			'Idempotency-Key': '0189076c-4f2a-7fe1-b9fd-2d68df455403'
 		},
 		body: JSON.stringify({
+			businessId: null,
 			customerName: 'Walk-in Buyer',
+			customerPhone: '0912345678',
 			items: [
 				{
 					skuCode: 'CUSTOM-001',
@@ -139,12 +158,14 @@ test('management order route updates order status and records transition metadat
 	const app = createAppWithOrders(
 		{
 			listOrders: async () => ({ data: [], total: 0 }),
+			listOrderSkuLookups: async () => ({ data: [], total: 0 }),
 			createOrder: async () => createOrderRecord(),
 			getOrder: async () => createOrderRecord(),
 			updateOrderStatus: async () => ({
 				order: createOrderRecord('confirmed'),
 				previousStatus: 'pending'
-			})
+			}),
+			updateOrder: async () => ({ order: createOrderRecord(), previousStatus: 'pending' })
 		},
 		{
 			recordAuditLog: async (input) => {
@@ -176,12 +197,14 @@ test('management order route requires read permission for list', async () => {
 	const app = createAppWithOrders(
 		{
 			listOrders: async () => ({ data: [], total: 0 }),
+			listOrderSkuLookups: async () => ({ data: [], total: 0 }),
 			createOrder: async () => createOrderRecord(),
 			getOrder: async () => createOrderRecord(),
 			updateOrderStatus: async () => ({
 				order: createOrderRecord('confirmed'),
 				previousStatus: 'pending'
-			})
+			}),
+			updateOrder: async () => ({ order: createOrderRecord(), previousStatus: 'pending' })
 		},
 		{
 			recordAuditLog: async () => createAuditRecord()
@@ -196,6 +219,52 @@ test('management order route requires read permission for list', async () => {
 
 	assert.equal(response.status, 403);
 	assert.equal(payload.error.code, 'FORBIDDEN');
+});
+
+test('management order route lists SKU lookup records with order permission', async () => {
+	let receivedQuery: { page: number; limit: number; search?: string } | undefined;
+	const app = createAppWithOrders(
+		{
+			listOrders: async () => ({ data: [], total: 0 }),
+			listOrderSkuLookups: async (query) => {
+				receivedQuery = query;
+				return {
+					data: [
+						{
+							id: '0189076c-4f2a-7fe1-b9fd-2d68df455601',
+							skuCode: 'SKU-1',
+							productName: 'Catalog Item',
+							price: 100,
+							attributes: {}
+						}
+					],
+					total: 1
+				};
+			},
+			createOrder: async () => createOrderRecord(),
+			getOrder: async () => createOrderRecord(),
+			updateOrderStatus: async () => ({
+				order: createOrderRecord('confirmed'),
+				previousStatus: 'pending'
+			}),
+			updateOrder: async () => ({ order: createOrderRecord(), previousStatus: 'pending' })
+		},
+		{ recordAuditLog: async () => createAuditRecord() },
+		['order.write']
+	);
+
+	const response = await requestApp(app, {
+		path: '/api/management/orders/product-skus?search=SKU&page=2&limit=10'
+	});
+	const payload = response.json<{
+		data: Array<{ skuCode: string }>;
+		pagination: { page: number; limit: number; total: number; totalPages: number };
+	}>();
+
+	assert.equal(response.status, 200, response.text());
+	assert.deepEqual(receivedQuery, { page: 2, limit: 10, search: 'SKU' });
+	assert.equal(payload.data[0]?.skuCode, 'SKU-1');
+	assert.deepEqual(payload.pagination, { page: 2, limit: 10, total: 1, totalPages: 1 });
 });
 
 function createAuditRecord() {

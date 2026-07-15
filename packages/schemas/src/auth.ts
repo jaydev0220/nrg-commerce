@@ -1,16 +1,26 @@
 import { z } from 'zod';
 
-import { booleanLikeSchema, dateSchema, uuidSchema } from './common.js';
+import { dateSchema, uuidSchema } from './common.js';
 
 export const staffStatusValues = ['active', 'inactive', 'suspended'] as const;
 export const mfaMethodValues = ['authenticator', 'passkey'] as const;
 export const passkeyDeviceTypeValues = ['singleDevice', 'multiDevice'] as const;
 export const authPrimaryFactorValues = ['password', 'passkey'] as const;
+export const securityReauthMethodValues = ['password', 'authenticator', 'passkey'] as const;
+export const securityActionValues = [
+	'add_totp',
+	'remove_totp',
+	'add_passkey',
+	'rename_passkey',
+	'remove_passkey'
+] as const;
 
 export const staffStatusSchema = z.enum(staffStatusValues);
 export const mfaMethodSchema = z.enum(mfaMethodValues);
 export const passkeyDeviceTypeSchema = z.enum(passkeyDeviceTypeValues);
 export const authPrimaryFactorSchema = z.enum(authPrimaryFactorValues);
+export const securityReauthMethodSchema = z.enum(securityReauthMethodValues);
+export const securityActionSchema = z.enum(securityActionValues);
 export const permissionKeySchema = z.enum([
 	'business.read',
 	'business.write',
@@ -30,6 +40,7 @@ export const permissionKeySchema = z.enum([
 	'product.category.delete',
 	'product.image.read',
 	'product.image.create',
+	'product.image.update',
 	'product.image.delete',
 	'log.read',
 	'staff.read',
@@ -141,17 +152,14 @@ export const refreshTokenClaimsSchema = z.object({
 	iat: z.number().int().positive()
 });
 
-export const refreshTokenRequestSchema = z.object({
-	refreshToken: z.string().min(1)
-});
+export const refreshTokenRequestSchema = z.object({}).strict();
 
 export const totpChallengeSchema = z.object({
 	code: z.string().regex(/^\d{6,8}$/)
 });
 
 export const mfaPreferenceSchema = z.object({
-	mfaRequired: booleanLikeSchema.default(false),
-	preferredMfaMethod: mfaMethodSchema.nullable().optional()
+	preferredMfaMethod: mfaMethodSchema
 });
 
 export const passwordLoginSchema = z.object({
@@ -159,20 +167,28 @@ export const passwordLoginSchema = z.object({
 	password: z.string().min(8)
 });
 
-export const pendingAuthTokenSchema = z.object({
-	pendingToken: z.string().min(1)
+export const strongPasswordSchema = z
+	.string()
+	.min(17)
+	.regex(/[A-Z]/)
+	.regex(/[a-z]/)
+	.regex(/[0-9]/)
+	.regex(/[^A-Za-z0-9]/);
+
+export const passwordChangeSchema = z.object({
+	currentPassword: z.string().min(1),
+	newPassword: strongPasswordSchema
 });
 
-export const setupTokenRequestSchema = z.object({
-	setupToken: z.string().min(1)
-});
+export const pendingAuthTokenSchema = z.object({}).strict();
+
+export const setupTokenRequestSchema = z.object({}).strict();
 
 export const passkeyAuthenticationStartSchema = z.object({
-	email: z.email()
+	email: z.email().optional()
 });
 
 export const passkeyAuthenticationVerificationSchema = z.object({
-	ceremonyToken: z.string().min(1),
 	credential: z.unknown()
 });
 
@@ -181,6 +197,28 @@ export const passkeyRegistrationStartSchema = z.object({
 });
 
 export const totpSetupConfirmationSchema = z.object({
-	setupToken: z.string().min(1),
 	code: z.string().regex(/^\d{6,8}$/)
+});
+
+const securityReauthContextSchema = z.object({
+	action: securityActionSchema,
+	targetId: uuidSchema.nullish()
+});
+
+export const securityReauthPasswordSchema = securityReauthContextSchema.extend({
+	password: z.string().min(1)
+});
+
+export const securityReauthTotpSchema = securityReauthContextSchema.extend({
+	code: z.string().regex(/^\d{6,8}$/)
+});
+
+export const securityReauthOptionsSchema = securityReauthContextSchema;
+
+export const passkeyManagementRegistrationStartSchema = z.object({
+	nickname: z.string().trim().min(1).max(64)
+});
+
+export const passkeyNicknameUpdateSchema = z.object({
+	nickname: z.string().trim().min(1).max(64)
 });

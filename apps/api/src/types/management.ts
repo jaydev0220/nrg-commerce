@@ -20,7 +20,6 @@ export type ManagedStaffRecord = {
 	email: string;
 	name: string;
 	status: StaffStatus;
-	mfaRequired: boolean;
 	preferredMfaMethod: MfaMethod | null;
 	lastLoginAt: Date | null;
 	deletedAt: Date | null;
@@ -55,6 +54,18 @@ export type ManagedBusinessRecord = {
 	taxId: string | null;
 	address: string | null;
 	notes: string | null;
+	labelId?: string | null;
+	label?: ManagedBusinessLabelRecord | null;
+	deletedAt: Date | null;
+	createdAt: Date;
+	updatedAt: Date;
+};
+
+export type ManagedBusinessLabelRecord = {
+	id: string;
+	name: string;
+	color: string;
+	discountRate: number | null;
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -73,6 +84,14 @@ export type ManagedOrderItemRecord = {
 	createdAt: Date;
 };
 
+export type ManagedOrderSkuLookupRecord = {
+	id: string;
+	skuCode: string;
+	productName: string;
+	price: number;
+	attributes: Prisma.JsonValue;
+};
+
 export type ManagedOrderRecord = {
 	id: string;
 	businessId: string | null;
@@ -82,7 +101,14 @@ export type ManagedOrderRecord = {
 	customerPhone: string | null;
 	customerAddress: string | null;
 	itemCount: number;
+	subtotalAmount: number;
+	discountLabelId: string | null;
+	discountLabelName: string | null;
+	suggestedDiscountRate: number | null;
+	discountRate: number;
+	discountAmount: number;
 	totalAmount: number;
+	completedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 	business: ManagedBusinessRecord | null;

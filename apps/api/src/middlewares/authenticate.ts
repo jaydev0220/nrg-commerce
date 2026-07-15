@@ -3,19 +3,22 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { AppError } from '../errors/app-error.js';
 import type { AuthService } from '../modules/auth/auth.service.js';
 import type { AuthenticatedStaffContext } from '../types/auth.js';
+import { readCookie } from '../utils/http-cookies.js';
+
+export const accessTokenCookieName = 'admin_access_token';
 
 type AuthLocals = {
 	auth?: AuthenticatedStaffContext;
 };
 
-function parseBearerToken(request: Request): string {
-	const authorizationHeader = request.get('authorization');
+function readAccessToken(request: Request): string {
+	const accessToken = readCookie(request, accessTokenCookieName);
 
-	if (!authorizationHeader || !authorizationHeader.startsWith('Bearer ')) {
+	if (!accessToken) {
 		throw new AppError(401, 'AUTHENTICATION_REQUIRED', 'Authentication is required.');
 	}
 
-	return authorizationHeader.slice('Bearer '.length).trim();
+	return accessToken;
 }
 
 export function createAuthenticateMiddleware(
@@ -23,7 +26,7 @@ export function createAuthenticateMiddleware(
 ): RequestHandler {
 	return async (request, response, next) => {
 		try {
-			const accessToken = parseBearerToken(request);
+			const accessToken = readAccessToken(request);
 			const authContext = await authService.authenticateAccessToken(accessToken);
 			(response.locals as AuthLocals).auth = authContext;
 			next();
@@ -41,6 +44,10 @@ export function requireAuthContext(response: Response): AuthenticatedStaffContex
 	}
 
 	return authContext;
+}
+
+export function getOptionalAuthContext(response: Response): AuthenticatedStaffContext | null {
+	return (response.locals as AuthLocals).auth ?? null;
 }
 
 export function withAuthContext<T>(

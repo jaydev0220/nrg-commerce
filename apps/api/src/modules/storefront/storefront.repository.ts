@@ -120,6 +120,8 @@ function mapImageRecord(image: {
 	altText: string;
 	type: 'thumbnail' | 'gallery';
 	position: number;
+	focusX: number | null;
+	focusY: number | null;
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -132,6 +134,8 @@ function mapImageRecord(image: {
 		altText: image.altText,
 		type: image.type,
 		position: image.position,
+		focusX: image.focusX,
+		focusY: image.focusY,
 		deletedAt: image.deletedAt,
 		createdAt: image.createdAt,
 		updatedAt: image.updatedAt
@@ -166,6 +170,8 @@ function mapSkuRecordFromProduct(
 			altText: string;
 			type: 'thumbnail' | 'gallery';
 			position: number;
+			focusX: number | null;
+			focusY: number | null;
 			deletedAt: Date | null;
 			createdAt: Date;
 			updatedAt: Date;
@@ -220,6 +226,8 @@ function mapSkuRecord(sku: {
 		altText: string;
 		type: 'thumbnail' | 'gallery';
 		position: number;
+		focusX: number | null;
+		focusY: number | null;
 		deletedAt: Date | null;
 		createdAt: Date;
 		updatedAt: Date;
@@ -258,6 +266,8 @@ function mapProductRecord(product: {
 			altText: string;
 			type: 'thumbnail' | 'gallery';
 			position: number;
+			focusX: number | null;
+			focusY: number | null;
 			deletedAt: Date | null;
 			createdAt: Date;
 			updatedAt: Date;

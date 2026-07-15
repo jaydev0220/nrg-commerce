@@ -13,6 +13,8 @@ type ProductListQuery = {
 	order: 'asc' | 'desc';
 	includeSkus: boolean;
 	includeImages: boolean;
+	includeDeleted: boolean;
+	archived?: boolean;
 };
 
 type ProductDetailQuery = {
@@ -31,7 +33,9 @@ type ProductServiceDependencies = {
 		| 'createProduct'
 		| 'updateProduct'
 		| 'softDeleteProduct'
+		| 'restoreProduct'
 		| 'forceDeleteProduct'
+		| 'bulkUpdateProducts'
 	>;
 };
 
@@ -150,6 +154,35 @@ export function createProductService(dependencies: ProductServiceDependencies) {
 
 			await dependencies.repository.softDeleteProduct(productId);
 			return 'soft';
+		},
+
+		async restoreProduct(productId: string): Promise<CatalogProductRecord> {
+			const product = ensureProduct(
+				await dependencies.repository.findProductById(productId, {
+					includeSkus: false,
+					includeImages: false,
+					includeDeleted: true
+				})
+			);
+			if (!product.deletedAt) {
+				throw new AppError(409, 'PRODUCT_NOT_DELETED', 'The product is not archived.');
+			}
+			return dependencies.repository.restoreProduct(productId);
+		},
+
+		async bulkUpdateProducts(input: {
+			productIds: string[];
+			action: 'archive' | 'restore' | 'publish' | 'unpublish';
+		}): Promise<number> {
+			const result = await dependencies.repository.bulkUpdateProducts(input);
+			if (result.missingProductIds.length > 0 || result.invalidProductIds.length > 0) {
+				throw new AppError(
+					409,
+					'PRODUCT_BULK_UPDATE_CONFLICT',
+					'One or more selected products are unavailable for this bulk action.'
+				);
+			}
+			return result.updatedCount;
 		}
 	};
 }

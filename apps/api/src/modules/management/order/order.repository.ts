@@ -4,7 +4,8 @@ import type { PaginatedResult } from '../../../types/catalog.js';
 import type {
 	ManagedBusinessRecord,
 	ManagedOrderItemRecord,
-	ManagedOrderRecord
+	ManagedOrderRecord,
+	ManagedOrderSkuLookupRecord
 } from '../../../types/management.js';
 
 type OrderSortField = 'createdAt' | 'totalAmount';
@@ -20,12 +21,20 @@ type ListOrdersInput = {
 };
 
 type CreateOrderInput = {
-	businessId?: string;
-	customerName?: string;
-	customerEmail?: string;
-	customerPhone?: string;
-	customerAddress?: string;
+	idempotencyKey: string;
+	idempotencyFingerprint: string;
+	businessId?: string | null;
+	customerName?: string | null;
+	customerEmail?: string | null;
+	customerPhone?: string | null;
+	customerAddress?: string | null;
 	itemCount: number;
+	subtotalAmount: number;
+	discountLabelId: string | null;
+	discountLabelName: string | null;
+	suggestedDiscountRate: number | null;
+	discountRate: number;
+	discountAmount: number;
 	totalAmount: number;
 	items: Array<{
 		productSkuId?: string;
@@ -42,6 +51,12 @@ type ProductSkuLookup = {
 	id: string;
 };
 
+type OrderSkuLookupInput = {
+	search?: string;
+	page: number;
+	limit: number;
+};
+
 function mapBusiness(
 	business: {
 		id: string;
@@ -52,6 +67,16 @@ function mapBusiness(
 		taxId: string | null;
 		address: string | null;
 		notes: string | null;
+		labelId: string | null;
+		label: {
+			id: string;
+			name: string;
+			color: string;
+			discountRate: { toString(): string } | null;
+			deletedAt: Date | null;
+			createdAt: Date;
+			updatedAt: Date;
+		} | null;
 		deletedAt: Date | null;
 		createdAt: Date;
 		updatedAt: Date;
@@ -70,6 +95,20 @@ function mapBusiness(
 		taxId: business.taxId,
 		address: business.address,
 		notes: business.notes,
+		labelId: business.labelId,
+		label: business.label
+			? {
+					id: business.label.id,
+					name: business.label.name,
+					color: business.label.color,
+					discountRate: business.label.discountRate
+						? Number(business.label.discountRate.toString())
+						: null,
+					deletedAt: business.label.deletedAt,
+					createdAt: business.label.createdAt,
+					updatedAt: business.label.updatedAt
+				}
+			: null,
 		deletedAt: business.deletedAt,
 		createdAt: business.createdAt,
 		updatedAt: business.updatedAt
@@ -111,7 +150,14 @@ function mapOrder(order: {
 	customerPhone: string | null;
 	customerAddress: string | null;
 	itemCount: number;
+	subtotalAmount: { toString(): string };
+	discountLabelId: string | null;
+	discountLabelName: string | null;
+	suggestedDiscountRate: { toString(): string } | null;
+	discountRate: { toString(): string };
+	discountAmount: { toString(): string };
 	totalAmount: { toString(): string };
+	completedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 	business: {
@@ -123,6 +169,16 @@ function mapOrder(order: {
 		taxId: string | null;
 		address: string | null;
 		notes: string | null;
+		labelId: string | null;
+		label: {
+			id: string;
+			name: string;
+			color: string;
+			discountRate: { toString(): string } | null;
+			deletedAt: Date | null;
+			createdAt: Date;
+			updatedAt: Date;
+		} | null;
 		deletedAt: Date | null;
 		createdAt: Date;
 		updatedAt: Date;
@@ -149,7 +205,16 @@ function mapOrder(order: {
 		customerPhone: order.customerPhone,
 		customerAddress: order.customerAddress,
 		itemCount: order.itemCount,
+		subtotalAmount: Number(order.subtotalAmount.toString()),
+		discountLabelId: order.discountLabelId,
+		discountLabelName: order.discountLabelName,
+		suggestedDiscountRate: order.suggestedDiscountRate
+			? Number(order.suggestedDiscountRate.toString())
+			: null,
+		discountRate: Number(order.discountRate.toString()),
+		discountAmount: Number(order.discountAmount.toString()),
 		totalAmount: Number(order.totalAmount.toString()),
+		completedAt: order.completedAt,
 		createdAt: order.createdAt,
 		updatedAt: order.updatedAt,
 		business: mapBusiness(order.business),
@@ -195,7 +260,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 					skip: (input.page - 1) * input.limit,
 					take: input.limit,
 					include: {
-						business: true,
+						business: { include: { label: true } },
 						items: {
 							orderBy: [{ createdAt: 'asc' }]
 						}
@@ -214,7 +279,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 			const order = await database.order.findUnique({
 				where: { id: orderId },
 				include: {
-					business: true,
+					business: { include: { label: true } },
 					items: {
 						orderBy: [{ createdAt: 'asc' }]
 					}
@@ -224,12 +289,25 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 			return order ? mapOrder(order) : null;
 		},
 
+		async findOrderByIdempotencyKey(idempotencyKey: string) {
+			const order = await database.order.findUnique({
+				where: { idempotencyKey },
+				include: {
+					business: { include: { label: true } },
+					items: { orderBy: [{ createdAt: 'asc' }] }
+				}
+			});
+
+			return order ? { order: mapOrder(order), fingerprint: order.idempotencyFingerprint } : null;
+		},
+
 		async findBusinessById(businessId: string): Promise<ManagedBusinessRecord | null> {
 			const business = await database.business.findFirst({
 				where: {
 					id: businessId,
 					deletedAt: null
-				}
+				},
+				include: { label: true }
 			});
 
 			return mapBusiness(business);
@@ -254,15 +332,80 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 			return sku;
 		},
 
+		async listOrderSkuLookups(
+			input: OrderSkuLookupInput
+		): Promise<PaginatedResult<ManagedOrderSkuLookupRecord>> {
+			const where = {
+				deletedAt: null,
+				product: {
+					is: {
+						deletedAt: null
+					}
+				},
+				...(input.search
+					? {
+							OR: [
+								{ skuCode: { contains: input.search, mode: 'insensitive' as const } },
+								{
+									product: {
+										is: { name: { contains: input.search, mode: 'insensitive' as const } }
+									}
+								},
+								{
+									product: {
+										is: { nameEn: { contains: input.search, mode: 'insensitive' as const } }
+									}
+								}
+							]
+						}
+					: {})
+			};
+			const [skus, total] = await Promise.all([
+				database.productSku.findMany({
+					where,
+					orderBy: { skuCode: 'asc' },
+					skip: (input.page - 1) * input.limit,
+					take: input.limit,
+					select: {
+						id: true,
+						skuCode: true,
+						price: true,
+						attributes: true,
+						product: { select: { name: true } }
+					}
+				}),
+				database.productSku.count({ where })
+			]);
+
+			return {
+				data: skus.map((sku) => ({
+					id: sku.id,
+					skuCode: sku.skuCode,
+					productName: sku.product.name,
+					price: Number(sku.price.toString()),
+					attributes: sku.attributes
+				})),
+				total
+			};
+		},
+
 		async createOrder(input: CreateOrderInput): Promise<ManagedOrderRecord> {
 			const order = await database.order.create({
 				data: {
+					idempotencyKey: input.idempotencyKey,
+					idempotencyFingerprint: input.idempotencyFingerprint,
 					businessId: input.businessId ?? null,
 					customerName: input.customerName ?? null,
 					customerEmail: input.customerEmail ?? null,
 					customerPhone: input.customerPhone ?? null,
 					customerAddress: input.customerAddress ?? null,
 					itemCount: input.itemCount,
+					subtotalAmount: input.subtotalAmount,
+					discountLabelId: input.discountLabelId,
+					discountLabelName: input.discountLabelName,
+					suggestedDiscountRate: input.suggestedDiscountRate,
+					discountRate: input.discountRate,
+					discountAmount: input.discountAmount,
 					totalAmount: input.totalAmount,
 					items: {
 						create: input.items.map((item) => ({
@@ -277,7 +420,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 					}
 				},
 				include: {
-					business: true,
+					business: { include: { label: true } },
 					items: {
 						orderBy: [{ createdAt: 'asc' }]
 					}
@@ -287,18 +430,45 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 			return mapOrder(order);
 		},
 
-		async updateOrderStatus(orderId: string, status: OrderStatus): Promise<ManagedOrderRecord> {
+		async updateOrderStatus(
+			orderId: string,
+			status: OrderStatus,
+			completedAt: Date | null
+		): Promise<ManagedOrderRecord> {
 			const order = await database.order.update({
 				where: { id: orderId },
-				data: { status },
+				data: { status, completedAt },
 				include: {
-					business: true,
+					business: { include: { label: true } },
 					items: {
 						orderBy: [{ createdAt: 'asc' }]
 					}
 				}
 			});
 
+			return mapOrder(order);
+		},
+
+		async updateOrder(
+			orderId: string,
+			input: {
+				status?: OrderStatus;
+				completedAt?: Date | null;
+				businessId?: string | null;
+				customerName?: string | null;
+				customerEmail?: string | null;
+				customerPhone?: string | null;
+				customerAddress?: string | null;
+			}
+		): Promise<ManagedOrderRecord> {
+			const order = await database.order.update({
+				where: { id: orderId },
+				data: input,
+				include: {
+					business: { include: { label: true } },
+					items: { orderBy: [{ createdAt: 'asc' }] }
+				}
+			});
 			return mapOrder(order);
 		}
 	};

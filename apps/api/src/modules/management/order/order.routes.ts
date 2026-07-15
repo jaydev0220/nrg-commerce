@@ -2,7 +2,9 @@ import { Router } from 'express';
 import {
 	orderCreateSchema,
 	orderListQuerySchema,
+	orderSkuLookupQuerySchema,
 	orderStatusUpdateSchema,
+	orderUpdateSchema,
 	uuidSchema,
 	z
 } from '@packages/schemas';
@@ -33,6 +35,13 @@ export function createOrderManagementRouter(dependencies: OrderRouterDependencie
 		controller.listOrders
 	);
 
+	router.get(
+		'/product-skus',
+		requirePermission('order.write'),
+		validateRequest({ query: orderSkuLookupQuerySchema }),
+		controller.listOrderSkuLookups
+	);
+
 	router.post(
 		'/',
 		requirePermission('order.write'),
@@ -45,6 +54,13 @@ export function createOrderManagementRouter(dependencies: OrderRouterDependencie
 		requirePermission('order.read'),
 		validateRequest({ params: orderParamsSchema }),
 		controller.getOrder
+	);
+
+	router.patch(
+		'/:orderId',
+		requirePermission('order.write'),
+		validateRequest({ params: orderParamsSchema, body: orderUpdateSchema }),
+		controller.updateOrder
 	);
 
 	router.patch(

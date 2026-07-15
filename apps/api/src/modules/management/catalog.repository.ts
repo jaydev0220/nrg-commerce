@@ -46,12 +46,15 @@ type ListProductsInput = {
 	order: 'asc' | 'desc';
 	page?: number;
 	limit?: number;
+	includeDeleted?: boolean;
+	archived?: boolean;
 };
 
 type FindProductOptions = {
 	includeSkus: boolean;
 	includeImages: boolean;
 	publishedOnly?: boolean;
+	includeDeleted?: boolean;
 };
 
 type FindSkuOptions = {
@@ -61,10 +64,16 @@ type FindSkuOptions = {
 
 type ListImagesInput = {
 	type?: 'thumbnail' | 'gallery';
+	state: 'active' | 'deleted';
 	sort: ImageSortField;
 	order: 'asc' | 'desc';
 	page: number;
 	limit: number;
+};
+
+type BulkProductUpdateInput = {
+	productIds: string[];
+	action: 'archive' | 'restore' | 'publish' | 'unpublish';
 };
 
 type ListCategoriesOptions = {
@@ -120,6 +129,8 @@ function mapImageRecord(image: {
 	altText: string;
 	type: 'thumbnail' | 'gallery';
 	position: number;
+	focusX: number | null;
+	focusY: number | null;
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -132,6 +143,8 @@ function mapImageRecord(image: {
 		altText: image.altText,
 		type: image.type,
 		position: image.position,
+		focusX: image.focusX,
+		focusY: image.focusY,
 		deletedAt: image.deletedAt,
 		createdAt: image.createdAt,
 		updatedAt: image.updatedAt
@@ -166,6 +179,8 @@ function mapSkuRecordFromProduct(
 			altText: string;
 			type: 'thumbnail' | 'gallery';
 			position: number;
+			focusX: number | null;
+			focusY: number | null;
 			deletedAt: Date | null;
 			createdAt: Date;
 			updatedAt: Date;
@@ -220,6 +235,8 @@ function mapSkuRecord(sku: {
 		altText: string;
 		type: 'thumbnail' | 'gallery';
 		position: number;
+		focusX: number | null;
+		focusY: number | null;
 		deletedAt: Date | null;
 		createdAt: Date;
 		updatedAt: Date;
@@ -258,6 +275,8 @@ function mapProductRecord(product: {
 			altText: string;
 			type: 'thumbnail' | 'gallery';
 			position: number;
+			focusX: number | null;
+			focusY: number | null;
 			deletedAt: Date | null;
 			createdAt: Date;
 			updatedAt: Date;
@@ -421,7 +440,11 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			options: ListProductsOptions
 		): Promise<PaginatedResult<CatalogProductRecord>> {
 			const where = {
-				deletedAt: null,
+				...(input.archived === true
+					? { deletedAt: { not: null } }
+					: input.archived === false || !input.includeDeleted
+						? { deletedAt: null }
+						: {}),
 				...(options.publishedOnly ? { published: true } : {}),
 				...(input.published !== undefined ? { published: input.published } : {}),
 				...(input.categoryId ? { categoryId: input.categoryId } : {}),
@@ -505,7 +528,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			const product = await database.product.findFirst({
 				where: {
 					id: productId,
-					deletedAt: null,
+					...(options.includeDeleted ? {} : { deletedAt: null }),
 					...(options.publishedOnly ? { published: true } : {})
 				},
 				include: {
@@ -669,11 +692,55 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			});
 		},
 
+		async restoreProduct(productId: string): Promise<CatalogProductRecord> {
+			const product = await database.product.update({
+				where: { id: productId },
+				data: { deletedAt: null },
+				include: { category: { select: { slug: true } } }
+			});
+			return mapProductRecord(product);
+		},
+
 		async forceDeleteProduct(productId: string): Promise<void> {
 			await database.product.delete({
 				where: {
 					id: productId
 				}
+			});
+		},
+
+		async bulkUpdateProducts(
+			input: BulkProductUpdateInput
+		): Promise<{ updatedCount: number; missingProductIds: string[]; invalidProductIds: string[] }> {
+			return database.$transaction(async (transaction) => {
+				const products = await transaction.product.findMany({
+					where: { id: { in: input.productIds } },
+					select: { id: true, deletedAt: true }
+				});
+				const byId = new Map(products.map((product) => [product.id, product]));
+				const missingProductIds = input.productIds.filter((id) => !byId.has(id));
+				const invalidProductIds = input.productIds.filter((id) => {
+					const product = byId.get(id);
+					if (!product) return false;
+					if (input.action === 'restore') return !product.deletedAt;
+					return Boolean(product.deletedAt);
+				});
+
+				if (missingProductIds.length > 0 || invalidProductIds.length > 0) {
+					return { updatedCount: 0, missingProductIds, invalidProductIds };
+				}
+
+				const data =
+					input.action === 'archive'
+						? { deletedAt: new Date(), published: false }
+						: input.action === 'restore'
+							? { deletedAt: null }
+							: { published: input.action === 'publish' };
+				const result = await transaction.product.updateMany({
+					where: { id: { in: input.productIds } },
+					data
+				});
+				return { updatedCount: result.count, missingProductIds, invalidProductIds };
 			});
 		},
 
@@ -1172,7 +1239,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 		): Promise<PaginatedResult<CatalogImageRecord>> {
 			const where = {
 				skuId,
-				deletedAt: null,
+				deletedAt: input.state === 'deleted' ? { not: null } : null,
 				...(input.type ? { type: input.type } : {})
 			};
 			const images = await database.productImage.findMany({
@@ -1189,16 +1256,116 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			};
 		},
 
-		async findImageById(skuId: string, imageId: string): Promise<CatalogImageRecord | null> {
+		async findImageById(
+			skuId: string,
+			imageId: string,
+			includeDeleted = false
+		): Promise<CatalogImageRecord | null> {
 			const image = await database.productImage.findFirst({
 				where: {
 					id: imageId,
 					skuId,
-					deletedAt: null
+					...(includeDeleted ? {} : { deletedAt: null })
 				}
 			});
 
 			return image ? mapImageRecord(image) : null;
+		},
+
+		async createImageUpload(input: { skuId: string; assetKey: string; expiresAt: Date }) {
+			return database.productImageUpload.create({
+				data: input,
+				select: { id: true, assetKey: true, expiresAt: true }
+			});
+		},
+
+		async findImageUpload(skuId: string, uploadId: string) {
+			return database.productImageUpload.findFirst({
+				where: { id: uploadId, skuId, consumedAt: null },
+				select: { id: true, assetKey: true, expiresAt: true }
+			});
+		},
+
+		async consumeImageUpload(
+			skuId: string,
+			uploadId: string,
+			input: {
+				imageUrl: string;
+				assetKey: string;
+				altText: string;
+				type: 'thumbnail' | 'gallery';
+				focusX?: number | null;
+				focusY?: number | null;
+			}
+		): Promise<CatalogImageRecord | null> {
+			const now = new Date();
+			return database.$transaction(async (transaction) => {
+				const consumedUpload = await transaction.productImageUpload.updateMany({
+					where: {
+						id: uploadId,
+						skuId,
+						assetKey: input.assetKey,
+						consumedAt: null,
+						expiresAt: { gt: now }
+					},
+					data: { consumedAt: now }
+				});
+				if (consumedUpload.count !== 1) return null;
+
+				if (input.type === 'thumbnail') {
+					await transaction.productImage.updateMany({
+						where: { skuId, type: 'thumbnail', deletedAt: null },
+						data: { type: 'gallery', focusX: null, focusY: null }
+					});
+				}
+
+				const lastImage = await transaction.productImage.findFirst({
+					where: { skuId, deletedAt: null },
+					orderBy: { position: 'desc' },
+					select: { position: true }
+				});
+
+				const image = await transaction.productImage.create({
+					data: {
+						skuId,
+						imageUrl: input.imageUrl,
+						assetKey: input.assetKey,
+						altText: input.altText,
+						type: input.type,
+						position: (lastImage?.position ?? -1) + 1,
+						focusX: input.type === 'thumbnail' ? (input.focusX ?? 0.5) : null,
+						focusY: input.type === 'thumbnail' ? (input.focusY ?? 0.5) : null
+					}
+				});
+				return mapImageRecord(image);
+			});
+		},
+
+		async restoreImage(imageId: string): Promise<CatalogImageRecord> {
+			const image = await database.productImage.update({
+				where: { id: imageId },
+				data: { deletedAt: null }
+			});
+			return mapImageRecord(image);
+		},
+
+		async listExpiredImages(before: Date) {
+			const images = await database.productImage.findMany({
+				where: { deletedAt: { not: null, lte: before } },
+				select: { id: true, skuId: true, assetKey: true }
+			});
+			return images;
+		},
+
+		async listExpiredImageUploads(now: Date) {
+			return database.productImageUpload.findMany({
+				where: { consumedAt: null, expiresAt: { lte: now } },
+				select: { id: true, assetKey: true }
+			});
+		},
+
+		async deleteImageUpload(uploadId: string): Promise<void> {
+			await database.productImageUpload.delete({ where: { id: uploadId } });
 		},
 
 		async createImage(
@@ -1208,7 +1375,8 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				assetKey?: string;
 				altText: string;
 				type: 'thumbnail' | 'gallery';
-				position: number;
+				focusX?: number | null;
+				focusY?: number | null;
 			}
 		): Promise<CatalogImageRecord> {
 			const image = await database.productImage.create({
@@ -1218,10 +1386,23 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					assetKey: input.assetKey ?? null,
 					altText: input.altText,
 					type: input.type,
-					position: input.position
+					position: 0,
+					focusX: input.type === 'thumbnail' ? (input.focusX ?? 0.5) : null,
+					focusY: input.type === 'thumbnail' ? (input.focusY ?? 0.5) : null
 				}
 			});
 
+			return mapImageRecord(image);
+		},
+
+		async updateImageFocus(
+			imageId: string,
+			input: { focusX: number; focusY: number }
+		): Promise<CatalogImageRecord> {
+			const image = await database.productImage.update({
+				where: { id: imageId },
+				data: input
+			});
 			return mapImageRecord(image);
 		},
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { Prisma } from '@packages/database';
 
 import {
 	createLogService,
@@ -27,6 +28,7 @@ test('listLogs injects the current time so expired rows are excluded by the repo
 			createLog: async () => {
 				throw new Error('not used');
 			},
+			findLogById: async () => null,
 			deleteExpiredLogs: async () => 0
 		},
 		now: () => fixedNow
@@ -68,6 +70,7 @@ test('recordAuditLog creates an expiring audit record with default info severity
 					createdAt: fixedNow
 				};
 			},
+			findLogById: async () => null,
 			deleteExpiredLogs: async () => 0
 		},
 		now: () => fixedNow
@@ -101,6 +104,65 @@ test('recordAuditLog creates an expiring audit record with default info severity
 	});
 });
 
+test('recordRequestLog creates a sanitized expiring request record', async () => {
+	let createInput:
+		| Parameters<Parameters<typeof createLogService>[0]['repository']['createLog']>[0]
+		| undefined;
+	const logService = createLogService({
+		repository: {
+			listLogs: async () => ({ data: [], total: 0 }),
+			createLog: async (input) => {
+				createInput = input;
+				return {
+					id: '9be808ab-bd34-4cf4-b8ae-db0f819ff5e6',
+					level: input.level,
+					kind: input.kind,
+					message: input.message,
+					actorStaffId: input.actorStaffId,
+					requestId: input.requestId,
+					method: input.method,
+					path: input.path,
+					statusCode: input.statusCode,
+					entityType: input.entityType,
+					entityId: input.entityId,
+					metadata: input.metadata as Prisma.JsonValue | null,
+					expiresAt: input.expiresAt,
+					createdAt: fixedNow
+				};
+			},
+			findLogById: async () => null,
+			deleteExpiredLogs: async () => 0
+		},
+		now: () => fixedNow
+	});
+
+	await logService.recordRequestLog({
+		level: 'error',
+		message: 'API token=private-token failed.',
+		actorStaffId: null,
+		requestId: 'request-1',
+		method: 'GET',
+		path: '/api/management/orders',
+		statusCode: 500,
+		metadata: { error: { message: 'token=private-token' } }
+	});
+
+	assert.deepEqual(createInput, {
+		level: 'error',
+		kind: 'request',
+		message: 'API token=[REDACTED] failed.',
+		actorStaffId: null,
+		requestId: 'request-1',
+		method: 'GET',
+		path: '/api/management/orders',
+		statusCode: 500,
+		entityType: null,
+		entityId: null,
+		metadata: { error: { message: 'token=[REDACTED]' } },
+		expiresAt: new Date('2027-01-02T00:00:00.000Z')
+	});
+});
+
 test('pruneExpiredLogs deletes rows using the current time', async () => {
 	let pruneInputNow: Date | undefined;
 	const logService = createLogService({
@@ -109,6 +171,7 @@ test('pruneExpiredLogs deletes rows using the current time', async () => {
 			createLog: async () => {
 				throw new Error('not used');
 			},
+			findLogById: async () => null,
 			deleteExpiredLogs: async (now) => {
 				pruneInputNow = now;
 				return 3;
@@ -119,4 +182,44 @@ test('pruneExpiredLogs deletes rows using the current time', async () => {
 
 	assert.equal(await logService.pruneExpiredLogs(), 3);
 	assert.equal(pruneInputNow, fixedNow);
+});
+
+test('getLog redacts nested sensitive metadata', async () => {
+	const logService = createLogService({
+		repository: {
+			listLogs: async () => ({ data: [], total: 0 }),
+			createLog: async () => {
+				throw new Error('not used');
+			},
+			findLogById: async () => ({
+				id: '9be808ab-bd34-4cf4-b8ae-db0f819ff5e6',
+				level: 'info',
+				kind: 'audit',
+				message: 'Login',
+				actorStaffId: null,
+				requestId: null,
+				method: null,
+				path: null,
+				statusCode: null,
+				entityType: null,
+				entityId: null,
+				metadata: {
+					email: 'staff@example.com',
+					authorization: 'Bearer secret',
+					nested: { password: 'secret' }
+				},
+				expiresAt: new Date('2026-08-05T00:00:00.000Z'),
+				createdAt: fixedNow
+			}),
+			deleteExpiredLogs: async () => 0
+		},
+		now: () => fixedNow
+	});
+
+	const log = await logService.getLog('9be808ab-bd34-4cf4-b8ae-db0f819ff5e6');
+	assert.deepEqual(log.metadata, {
+		email: 'staff@example.com',
+		authorization: '[REDACTED]',
+		nested: { password: '[REDACTED]' }
+	});
 });

@@ -38,7 +38,8 @@ test('createR2ObjectStorage generates a sku-scoped presigned upload target', asy
 
 	const result = await storage.createImageUploadTarget('93f99825-2962-4a10-b453-daa375ff1c43', {
 		fileName: 'Front View.PNG',
-		contentType: 'image/png'
+		contentType: 'image/png',
+		fileSize: 1024
 	});
 
 	assert.equal(
@@ -55,7 +56,8 @@ test('createR2ObjectStorage generates a sku-scoped presigned upload target', asy
 	assert.deepEqual(signedCommandInput, {
 		Bucket: 'catalog-assets',
 		Key: result.assetKey,
-		ContentType: 'image/png'
+		ContentType: 'image/png',
+		ContentLength: 1024
 	});
 	assert.equal(signedExpiresIn, 900);
 });
@@ -88,4 +90,68 @@ test('createR2ObjectStorage rejects asset keys outside the sku path', async () =
 			}),
 		(error: unknown) => error instanceof AppError && error.code === 'INVALID_IMAGE_ASSET_KEY'
 	);
+});
+
+test('assertImageAssetExists accepts supported non-empty image objects', async () => {
+	const storage = createR2ObjectStorage(
+		{
+			accountId: 'account-id',
+			bucketName: 'catalog-assets',
+			accessKeyId: 'access-key-id',
+			secretAccessKey: 'secret-access-key',
+			publicBaseUrl: 'https://assets.example.com',
+			assetKeyPrefix: 'products/skus',
+			uploadUrlTtlSeconds: 900
+		},
+		{
+			s3Client: {
+				send: async () => ({ ContentType: 'image/avif', ContentLength: 2048 })
+			},
+			signUrl: async () => 'https://signed-upload.example.com'
+		}
+	);
+
+	const result = await storage.assertImageAssetExists('93f99825-2962-4a10-b453-daa375ff1c43', {
+		assetKey: 'products/skus/93f99825-2962-4a10-b453-daa375ff1c43/image.avif'
+	});
+
+	assert.deepEqual(result, {
+		assetKey: 'products/skus/93f99825-2962-4a10-b453-daa375ff1c43/image.avif',
+		imageUrl:
+			'https://assets.example.com/products/skus/93f99825-2962-4a10-b453-daa375ff1c43/image.avif',
+		contentType: 'image/avif'
+	});
+});
+
+test('assertImageAssetExists rejects unsupported and oversized image objects', async () => {
+	for (const [headObject, code] of [
+		[{ ContentType: 'text/plain', ContentLength: 2048 }, 'INVALID_IMAGE_ASSET'],
+		[{ ContentType: 'image/png', ContentLength: 10 * 1024 * 1024 + 1 }, 'IMAGE_ASSET_TOO_LARGE']
+	] as const) {
+		const storage = createR2ObjectStorage(
+			{
+				accountId: 'account-id',
+				bucketName: 'catalog-assets',
+				accessKeyId: 'access-key-id',
+				secretAccessKey: 'secret-access-key',
+				publicBaseUrl: 'https://assets.example.com',
+				assetKeyPrefix: 'products/skus',
+				uploadUrlTtlSeconds: 900
+			},
+			{
+				s3Client: {
+					send: async () => headObject
+				},
+				signUrl: async () => 'https://signed-upload.example.com'
+			}
+		);
+
+		await assert.rejects(
+			() =>
+				storage.assertImageAssetExists('93f99825-2962-4a10-b453-daa375ff1c43', {
+					assetKey: 'products/skus/93f99825-2962-4a10-b453-daa375ff1c43/image.png'
+				}),
+			(error: unknown) => error instanceof AppError && error.code === code
+		);
+	}
 });

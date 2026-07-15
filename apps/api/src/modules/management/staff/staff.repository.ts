@@ -8,7 +8,7 @@ type StaffListResult = {
 };
 
 function mapRoleKey(value: string): RoleKey {
-	if (value === 'catalog-manager' || value === 'staff-manager') {
+	if (value === 'catalog-manager' || value === 'staff-manager' || value === 'sales-manager') {
 		return value;
 	}
 
@@ -20,7 +20,6 @@ function mapStaffRecord(staff: {
 	email: string;
 	name: string;
 	status: 'active' | 'inactive' | 'suspended';
-	mfaRequired: boolean;
 	preferredMfaMethod: 'authenticator' | 'passkey' | null;
 	lastLoginAt: Date | null;
 	deletedAt: Date | null;
@@ -40,7 +39,6 @@ function mapStaffRecord(staff: {
 		email: staff.email,
 		name: staff.name,
 		status: staff.status,
-		mfaRequired: staff.mfaRequired,
 		preferredMfaMethod: staff.preferredMfaMethod,
 		lastLoginAt: staff.lastLoginAt,
 		deletedAt: staff.deletedAt,
@@ -79,11 +77,17 @@ export function createPrismaStaffRepository(database: DatabaseClient) {
 			search?: string;
 			status?: 'active' | 'inactive' | 'suspended';
 			roleId?: string;
+			includeDeleted: boolean;
+			archived?: boolean;
 			sort: 'createdAt' | 'updatedAt' | 'name' | 'email';
 			order: 'asc' | 'desc';
 		}): Promise<StaffListResult> {
 			const where = {
-				deletedAt: null,
+				...(query.archived === true
+					? { deletedAt: { not: null } }
+					: query.archived === false || !query.includeDeleted
+						? { deletedAt: null }
+						: {}),
 				...(query.search
 					? {
 							OR: [
@@ -127,16 +131,45 @@ export function createPrismaStaffRepository(database: DatabaseClient) {
 			return staff ? mapStaffRecord(staff) : null;
 		},
 
+		async findAnyById(staffId: string): Promise<ManagedStaffRecord | null> {
+			const staff = await database.staff.findUnique({
+				where: { id: staffId },
+				include: includeConfig
+			});
+
+			return staff ? mapStaffRecord(staff) : null;
+		},
+
+		async listRoles() {
+			const roles = await database.role.findMany({
+				orderBy: { name: 'asc' },
+				include: {
+					rolePermissions: {
+						include: { permission: true }
+					}
+				}
+			});
+
+			return roles.map((role) => ({
+				id: role.id,
+				key: mapRoleKey(role.key),
+				name: role.name,
+				permissions: role.rolePermissions.map(({ permission }) => permission.key)
+			}));
+		},
+
 		async createStaff(input: {
 			email: string;
 			name: string;
 			roleIds: string[];
+			passwordHash: string;
 		}): Promise<ManagedStaffRecord> {
 			const staff = await database.staff.create({
 				data: {
 					email: input.email,
 					name: input.name,
 					status: 'inactive',
+					passwordHash: input.passwordHash,
 					roles: {
 						createMany: {
 							data: input.roleIds.map((roleId) => ({
@@ -219,15 +252,55 @@ export function createPrismaStaffRepository(database: DatabaseClient) {
 			return 'soft';
 		},
 
-		async setPassword(staffId: string, passwordHash: string): Promise<void> {
+		async restoreStaff(staffId: string): Promise<ManagedStaffRecord> {
 			await database.staff.update({
-				where: {
-					id: staffId
-				},
-				data: {
-					passwordHash
-				}
+				where: { id: staffId },
+				data: { deletedAt: null, status: 'inactive' }
 			});
+
+			const staff = await this.findById(staffId);
+			if (!staff) throw new Error('Restored staff record could not be found.');
+			return staff;
+		},
+
+		async resetMfa(staffId: string): Promise<void> {
+			const deletedAt = new Date();
+			await database.$transaction([
+				database.staff.update({
+					where: { id: staffId },
+					data: { preferredMfaMethod: null }
+				}),
+				database.totpCredential.updateMany({
+					where: { staffId, deletedAt: null },
+					data: { deletedAt }
+				}),
+				database.passkeyCredential.updateMany({
+					where: { staffId, deletedAt: null },
+					data: { deletedAt }
+				}),
+				database.authSession.updateMany({
+					where: { staffId, revokedAt: null },
+					data: { revokedAt: deletedAt }
+				})
+			]);
+		},
+
+		async setPassword(staffId: string, passwordHash: string): Promise<void> {
+			const revokedAt = new Date();
+			await database.$transaction([
+				database.staff.update({
+					where: { id: staffId },
+					data: { passwordHash }
+				}),
+				database.authSession.updateMany({
+					where: { staffId, revokedAt: null },
+					data: { revokedAt }
+				}),
+				database.refreshToken.updateMany({
+					where: { session: { staffId }, revokedAt: null },
+					data: { revokedAt }
+				})
+			]);
 		},
 
 		async roleIdsExist(roleIds: string[]): Promise<boolean> {

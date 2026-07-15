@@ -29,7 +29,9 @@ type ImageManagementController = {
 	createImageUploadTarget: RequestHandler;
 	createImage: RequestHandler;
 	getImage: RequestHandler;
+	updateImageFocus: RequestHandler;
 	deleteImage: RequestHandler;
+	restoreImage: RequestHandler;
 };
 
 export function createImageManagementController(
@@ -90,6 +92,30 @@ export function createImageManagementController(
 			response.status(200).json(image);
 		},
 
+		updateImageFocus: async (request, response) => {
+			const authContext = requireAuthContext(response);
+			const params = getValidatedParams<ImageParams>(request);
+			const body = getValidatedBody<Parameters<ImageService['updateImageFocus']>[2]>(request);
+			const image = await dependencies.imageService.updateImageFocus(
+				params.skuId,
+				params.imageId,
+				body
+			);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff updated a product image focus point.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'product_image',
+				entityId: image.id,
+				metadata: { skuId: params.skuId, focusX: body.focusX, focusY: body.focusY }
+			});
+			response.status(200).json(image);
+		},
+
 		deleteImage: async (request, response) => {
 			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<ImageParams>(request);
@@ -121,6 +147,25 @@ export function createImageManagementController(
 				mode: result.mode,
 				assetDeleted: result.assetDeleted
 			});
+		},
+
+		restoreImage: async (request, response) => {
+			const authContext = requireAuthContext(response);
+			const params = getValidatedParams<ImageParams>(request);
+			const image = await dependencies.imageService.restoreImage(params.skuId, params.imageId);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff restored a product image.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'product_image',
+				entityId: image.id,
+				metadata: { skuId: params.skuId }
+			});
+			response.status(200).json(image);
 		}
 	};
 

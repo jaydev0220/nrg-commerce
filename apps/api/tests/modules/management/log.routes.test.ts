@@ -21,7 +21,6 @@ const authContext: AuthenticatedStaffContext = {
 		name: 'Admin',
 		status: 'active',
 		passwordHash: null,
-		mfaRequired: true,
 		preferredMfaMethod: 'authenticator',
 		lastLoginAt: null,
 		roles: [],
@@ -31,7 +30,7 @@ const authContext: AuthenticatedStaffContext = {
 };
 
 function createAppWithLogs(
-	logService: Pick<LogService, 'listLogs'>,
+	logService: Pick<LogService, 'listLogs' | 'getLog'>,
 	permissions = authContext.permissions
 ) {
 	const app = express();
@@ -52,6 +51,9 @@ function createAppWithLogs(
 test('management log route returns paginated log records', async () => {
 	let queryKind: string | undefined;
 	const app = createAppWithLogs({
+		getLog: async () => {
+			throw new Error('not used');
+		},
 		listLogs: async (query) => {
 			queryKind = query.kind;
 			return {
@@ -100,6 +102,9 @@ test('management log route returns paginated log records', async () => {
 test('management log route requires log read permission', async () => {
 	const app = createAppWithLogs(
 		{
+			getLog: async () => {
+				throw new Error('not used');
+			},
 			listLogs: async () => ({ data: [], total: 0 })
 		},
 		['staff.read']

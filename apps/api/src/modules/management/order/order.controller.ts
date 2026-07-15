@@ -1,5 +1,7 @@
 import type { RequestHandler } from 'express';
+import { orderIdempotencyKeySchema } from '@packages/schemas';
 
+import { AppError } from '../../../errors/app-error.js';
 import { requireAuthContext } from '../../../middlewares/authenticate.js';
 import { getRequestContext, getRequestPath } from '../../../middlewares/request-context.js';
 import {
@@ -34,22 +36,53 @@ export function createOrderManagementController(dependencies: OrderControllerDep
 			);
 		}) satisfies RequestHandler,
 
+		listOrderSkuLookups: (async (request, response) => {
+			const query = getValidatedQuery<Parameters<OrderService['listOrderSkuLookups']>[0]>(request);
+			const result = await dependencies.orderService.listOrderSkuLookups(query);
+			response.status(200).json(
+				buildPaginatedResponse(result.data, {
+					page: query.page,
+					limit: query.limit,
+					total: result.total
+				})
+			);
+		}) satisfies RequestHandler,
+
 		createOrder: (async (request, response) => {
 			const authContext = requireAuthContext(response);
 			const body = getValidatedBody<Parameters<OrderService['createOrder']>[0]>(request);
-			const order = await dependencies.orderService.createOrder(body);
-			const requestContext = getRequestContext(request, response);
-			await dependencies.logService.recordAuditLog({
-				message: 'Staff created an order.',
-				actorStaffId: authContext.staffId,
-				requestId: requestContext.requestId,
-				method: request.method,
-				path: getRequestPath(request),
-				statusCode: 201,
-				entityType: 'order',
-				entityId: order.id
+			const idempotencyKeyResult = orderIdempotencyKeySchema.safeParse(
+				request.get('idempotency-key')
+			);
+			if (!idempotencyKeyResult.success) {
+				throw new AppError(
+					400,
+					'IDEMPOTENCY_KEY_REQUIRED',
+					'A valid Idempotency-Key header is required when creating an order.'
+				);
+			}
+			const order = await dependencies.orderService.createOrder({
+				...body,
+				idempotencyKey: idempotencyKeyResult.data
 			});
-			response.status(201).location(`/api/management/orders/${order.id}`).json(order);
+			const { reused, ...orderRecord } = order;
+			const requestContext = getRequestContext(request, response);
+			if (!reused) {
+				await dependencies.logService.recordAuditLog({
+					message: 'Staff created an order.',
+					actorStaffId: authContext.staffId,
+					requestId: requestContext.requestId,
+					method: request.method,
+					path: getRequestPath(request),
+					statusCode: 201,
+					entityType: 'order',
+					entityId: order.id
+				});
+			}
+			response
+				.status(reused ? 200 : 201)
+				.location(`/api/management/orders/${orderRecord.id}`)
+				.json(orderRecord);
 		}) satisfies RequestHandler,
 
 		getOrder: (async (request, response) => {
@@ -79,6 +112,25 @@ export function createOrderManagementController(dependencies: OrderControllerDep
 					previousStatus: result.previousStatus,
 					status: result.order.status
 				}
+			});
+			response.status(200).json(result.order);
+		}) satisfies RequestHandler,
+		updateOrder: (async (request, response) => {
+			const authContext = requireAuthContext(response);
+			const params = getValidatedParams<OrderParams>(request);
+			const body = getValidatedBody<Parameters<OrderService['updateOrder']>[1]>(request);
+			const result = await dependencies.orderService.updateOrder(params.orderId, body);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff updated an order.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'order',
+				entityId: result.order.id,
+				metadata: { previousStatus: result.previousStatus, status: result.order.status }
 			});
 			response.status(200).json(result.order);
 		}) satisfies RequestHandler

@@ -127,6 +127,13 @@ export function createPrismaLogRepository(database: DatabaseClient) {
 			};
 		},
 
+		async findLogById(logId: string, now: Date): Promise<ManagedLogRecord | null> {
+			const log = await database.log.findFirst({
+				where: { id: logId, expiresAt: { gt: now } }
+			});
+			return log ? mapLogRecord(log) : null;
+		},
+
 		async deleteExpiredLogs(now: Date): Promise<number> {
 			const result = await database.log.deleteMany({
 				where: {

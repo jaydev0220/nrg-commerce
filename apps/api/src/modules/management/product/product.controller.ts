@@ -26,6 +26,8 @@ type ProductManagementController = {
 	getProduct: RequestHandler;
 	updateProduct: RequestHandler;
 	deleteProduct: RequestHandler;
+	restoreProduct: RequestHandler;
+	bulkUpdateProducts: RequestHandler;
 };
 
 export function createProductManagementController(
@@ -109,6 +111,42 @@ export function createProductManagementController(
 				deleted: true,
 				mode
 			});
+		},
+
+		restoreProduct: async (request, response) => {
+			const authContext = requireAuthContext(response);
+			const params = getValidatedParams<ProductParams>(request);
+			const product = await dependencies.productService.restoreProduct(params.productId);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff restored a product.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'product',
+				entityId: product.id
+			});
+			response.status(200).json(product);
+		},
+
+		bulkUpdateProducts: async (request, response) => {
+			const authContext = requireAuthContext(response);
+			const body = getValidatedBody<Parameters<ProductService['bulkUpdateProducts']>[0]>(request);
+			const updatedCount = await dependencies.productService.bulkUpdateProducts(body);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff updated products in bulk.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'product',
+				metadata: { action: body.action, productCount: updatedCount }
+			});
+			response.status(200).json({ updatedCount });
 		}
 	};
 

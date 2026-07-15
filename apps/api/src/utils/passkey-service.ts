@@ -60,6 +60,10 @@ export function createPasskeyService(config: PasskeyServiceConfig) {
 				userName: staff.email,
 				userID: Buffer.from(staff.id),
 				userDisplayName: staff.name,
+				authenticatorSelection: {
+					residentKey: 'required',
+					userVerification: 'required'
+				},
 				excludeCredentials: credentials.map((credential) => ({
 					id: credential.credentialId,
 					transports: normalizeTransports(credential.transports)
@@ -82,10 +86,14 @@ export function createPasskeyService(config: PasskeyServiceConfig) {
 		): Promise<PublicKeyCredentialRequestOptionsJSON> {
 			return generateAuthenticationOptions({
 				rpID: config.rpId,
-				allowCredentials: credentials.map((credential) => ({
-					id: credential.credentialId,
-					transports: normalizeTransports(credential.transports)
-				})),
+				...(credentials.length > 0
+					? {
+							allowCredentials: credentials.map((credential) => ({
+								id: credential.credentialId,
+								transports: normalizeTransports(credential.transports)
+							}))
+						}
+					: {}),
 				userVerification: requireUserVerification
 			});
 		},
@@ -93,13 +101,15 @@ export function createPasskeyService(config: PasskeyServiceConfig) {
 		async finishAuthentication(
 			challenge: string,
 			credential: AuthenticationResponseJSON,
-			storedCredential: PasskeyCredentialRecord
+			storedCredential: PasskeyCredentialRecord,
+			requireUserVerification: boolean
 		) {
 			return verifyAuthenticationResponse({
 				response: credential,
 				expectedChallenge: challenge,
 				expectedOrigin: config.origin,
 				expectedRPID: config.rpId,
+				requireUserVerification,
 				credential: {
 					id: storedCredential.credentialId,
 					publicKey: normalizeBinary(storedCredential.publicKey),

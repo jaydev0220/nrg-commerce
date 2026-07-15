@@ -55,7 +55,13 @@ test('createProduct allows uncategorized products', async () => {
 				throw new Error('not used');
 			},
 			softDeleteProduct: async () => undefined,
-			forceDeleteProduct: async () => undefined
+			restoreProduct: async () => createCatalogProductRecord(),
+			forceDeleteProduct: async () => undefined,
+			bulkUpdateProducts: async () => ({
+				updatedCount: 0,
+				missingProductIds: [],
+				invalidProductIds: []
+			})
 		}
 	});
 
@@ -85,7 +91,13 @@ test('createProduct rejects unknown categories', async () => {
 				throw new Error('not used');
 			},
 			softDeleteProduct: async () => undefined,
-			forceDeleteProduct: async () => undefined
+			restoreProduct: async () => createCatalogProductRecord(),
+			forceDeleteProduct: async () => undefined,
+			bulkUpdateProducts: async () => ({
+				updatedCount: 0,
+				missingProductIds: [],
+				invalidProductIds: []
+			})
 		}
 	});
 
@@ -133,7 +145,13 @@ test('updateProduct allows clearing the category assignment', async () => {
 				};
 			},
 			softDeleteProduct: async () => undefined,
-			forceDeleteProduct: async () => undefined
+			restoreProduct: async () => createCatalogProductRecord(),
+			forceDeleteProduct: async () => undefined,
+			bulkUpdateProducts: async () => ({
+				updatedCount: 0,
+				missingProductIds: [],
+				invalidProductIds: []
+			})
 		}
 	});
 
@@ -184,7 +202,13 @@ test('deleteProduct rejects force deletion when variants are still assigned', as
 				throw new Error('not used');
 			},
 			softDeleteProduct: async () => undefined,
-			forceDeleteProduct: async () => undefined
+			restoreProduct: async () => createCatalogProductRecord(),
+			forceDeleteProduct: async () => undefined,
+			bulkUpdateProducts: async () => ({
+				updatedCount: 0,
+				missingProductIds: [],
+				invalidProductIds: []
+			})
 		}
 	});
 
@@ -221,7 +245,13 @@ test('createProduct rejects duplicate product slugs', async () => {
 				throw new Error('not used');
 			},
 			softDeleteProduct: async () => undefined,
-			forceDeleteProduct: async () => undefined
+			restoreProduct: async () => createCatalogProductRecord(),
+			forceDeleteProduct: async () => undefined,
+			bulkUpdateProducts: async () => ({
+				updatedCount: 0,
+				missingProductIds: [],
+				invalidProductIds: []
+			})
 		}
 	});
 
@@ -235,4 +265,37 @@ test('createProduct rejects duplicate product slugs', async () => {
 			}),
 		(error: unknown) => error instanceof AppError && error.code === 'PRODUCT_SLUG_CONFLICT'
 	);
+});
+
+test('restoreProduct restores an archived product', async () => {
+	let restored = false;
+	const productService = createProductService({
+		repository: {
+			listProducts: async () => ({ data: [], total: 0 }),
+			findProductById: async () => ({ ...createCatalogProductRecord(), deletedAt: new Date() }),
+			findProductBySlug: async () => null,
+			findCategoryById: async () => null,
+			productSlugExists: async () => false,
+			createProduct: async () => {
+				throw new Error('not used');
+			},
+			updateProduct: async () => {
+				throw new Error('not used');
+			},
+			softDeleteProduct: async () => undefined,
+			restoreProduct: async () => {
+				restored = true;
+				return createCatalogProductRecord();
+			},
+			forceDeleteProduct: async () => undefined,
+			bulkUpdateProducts: async () => ({
+				updatedCount: 0,
+				missingProductIds: [],
+				invalidProductIds: []
+			})
+		}
+	});
+
+	await productService.restoreProduct('product-1');
+	assert.equal(restored, true);
 });

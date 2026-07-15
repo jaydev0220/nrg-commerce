@@ -28,6 +28,8 @@ type ReplaceRefreshTokenInput = {
 	newTokenHash: string;
 	newExpiresAt: Date;
 	usedAt: Date;
+	sessionExpiresAt: Date;
+	sessionLastSeenAt: Date;
 };
 
 function normalizeBinary(value: Uint8Array): Uint8Array<ArrayBuffer> {
@@ -52,7 +54,6 @@ function mapAuthStaffRecord(staff: {
 	name: string;
 	status: 'active' | 'inactive' | 'suspended';
 	passwordHash: string | null;
-	mfaRequired: boolean;
 	preferredMfaMethod: 'authenticator' | 'passkey' | null;
 	lastLoginAt: Date | null;
 	roles: Array<{
@@ -72,7 +73,6 @@ function mapAuthStaffRecord(staff: {
 		name: staff.name,
 		status: staff.status,
 		passwordHash: staff.passwordHash,
-		mfaRequired: staff.mfaRequired,
 		preferredMfaMethod: staff.preferredMfaMethod,
 		lastLoginAt: staff.lastLoginAt,
 		roles: staff.roles.map(({ role }) => ({
@@ -293,28 +293,42 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 				expiresAt: token.expiresAt,
 				consumedAt: token.consumedAt,
 				revokedAt: token.revokedAt,
+				session: mapSessionRecord(token.session),
 				staff
 			};
 		},
 
-		async replaceRefreshToken(input: ReplaceRefreshTokenInput): Promise<void> {
-			const currentToken = await database.refreshToken.findUniqueOrThrow({
-				where: {
-					tokenHash: input.currentTokenHash
-				}
-			});
+		async replaceRefreshToken(input: ReplaceRefreshTokenInput): Promise<boolean> {
+			return database.$transaction(async (transaction) => {
+				const currentToken = await transaction.refreshToken.findUnique({
+					where: { tokenHash: input.currentTokenHash }
+				});
 
-			await database.$transaction([
-				database.refreshToken.update({
+				if (!currentToken) return false;
+
+				const claimedToken = await transaction.refreshToken.updateMany({
 					where: {
-						id: currentToken.id
+						id: currentToken.id,
+						consumedAt: null,
+						revokedAt: null,
+						expiresAt: { gt: input.usedAt }
 					},
 					data: {
 						lastUsedAt: input.usedAt,
 						consumedAt: input.usedAt
 					}
-				}),
-				database.refreshToken.create({
+				});
+
+				if (claimedToken.count !== 1) return false;
+
+				await transaction.authSession.update({
+					where: { id: currentToken.sessionId },
+					data: {
+						lastSeenAt: input.sessionLastSeenAt,
+						expiresAt: input.sessionExpiresAt
+					}
+				});
+				await transaction.refreshToken.create({
 					data: {
 						id: input.newTokenId,
 						sessionId: currentToken.sessionId,
@@ -323,8 +337,10 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 						previousTokenId: currentToken.id,
 						expiresAt: input.newExpiresAt
 					}
-				})
-			]);
+				});
+
+				return true;
+			});
 		},
 
 		async revokeSession(sessionId: string): Promise<void> {
@@ -409,14 +425,13 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 
 		async updateMfaPreference(
 			staffId: string,
-			preferences: { mfaRequired: boolean; preferredMfaMethod: 'authenticator' | 'passkey' | null }
+			preferences: { preferredMfaMethod: 'authenticator' | 'passkey' | null }
 		): Promise<void> {
 			await database.staff.update({
 				where: {
 					id: staffId
 				},
 				data: {
-					mfaRequired: preferences.mfaRequired,
 					preferredMfaMethod: preferences.preferredMfaMethod
 				}
 			});
@@ -547,7 +562,56 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 				}
 			});
 
+			return credential && !credential.deletedAt ? mapPasskeyRecord(credential) : null;
+		},
+
+		async findPasskeyCredentialById(
+			staffId: string,
+			passkeyId: string
+		): Promise<PasskeyCredentialRecord | null> {
+			const credential = await database.passkeyCredential.findFirst({
+				where: {
+					id: passkeyId,
+					staffId,
+					deletedAt: null
+				}
+			});
+
 			return credential ? mapPasskeyRecord(credential) : null;
+		},
+
+		async updatePasskeyCredentialNickname(
+			staffId: string,
+			passkeyId: string,
+			nickname: string
+		): Promise<PasskeyCredentialRecord | null> {
+			const result = await database.passkeyCredential.updateMany({
+				where: {
+					id: passkeyId,
+					staffId,
+					deletedAt: null
+				},
+				data: { nickname }
+			});
+
+			if (result.count === 0) return null;
+			return this.findPasskeyCredentialById(staffId, passkeyId);
+		},
+
+		async deletePasskeyCredential(staffId: string, passkeyId: string): Promise<boolean> {
+			const result = await database.passkeyCredential.updateMany({
+				where: {
+					id: passkeyId,
+					staffId,
+					deletedAt: null
+				},
+				data: {
+					deletedAt: new Date(),
+					updatedAt: new Date()
+				}
+			});
+
+			return result.count > 0;
 		},
 
 		async updatePasswordHash(staffId: string, passwordHash: string): Promise<void> {

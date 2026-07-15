@@ -42,6 +42,8 @@ export function createStaffManagementRouter(dependencies: StaffRouterDependencie
 		controller.createStaff
 	);
 
+	router.get('/roles', requirePermission('staff.read'), controller.listRoles);
+
 	router.get(
 		'/:staffId',
 		requirePermission('staff.read'),
@@ -61,6 +63,28 @@ export function createStaffManagementRouter(dependencies: StaffRouterDependencie
 		requirePermission('staff.delete'),
 		validateRequest({ params: staffParamsSchema, query: staffDeleteQuerySchema }),
 		controller.deleteStaff
+	);
+
+	router.post(
+		'/:staffId/restore',
+		requirePermission('staff.update'),
+		validateRequest({ params: staffParamsSchema }),
+		controller.restoreStaff
+	);
+
+	router.post(
+		'/:staffId/mfa/reset',
+		requirePermission('staff.update'),
+		validateRequest({ params: staffParamsSchema }),
+		controller.resetMfa
+	);
+
+	router.post(
+		'/:staffId/password/reset',
+		requirePermission('staff.update'),
+		requireRole('admin'),
+		validateRequest({ params: staffParamsSchema }),
+		controller.resetPassword
 	);
 
 	router.patch(

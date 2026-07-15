@@ -1,7 +1,13 @@
 import { basename, extname } from 'node:path';
 
-import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+	DeleteObjectCommand,
+	HeadObjectCommand,
+	PutObjectCommand,
+	S3Client
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { productImageContentTypeValues, productImageMaxFileSize } from '@packages/schemas';
 
 import { AppError } from '../errors/app-error.js';
 
@@ -16,7 +22,10 @@ type R2ObjectStorageConfig = {
 };
 
 type S3ClientLike = {
-	send(command: HeadObjectCommand): Promise<{ ContentType?: string } | undefined>;
+	send(
+		command: HeadObjectCommand
+	): Promise<{ ContentType?: string; ContentLength?: number } | undefined>;
+	send(command: DeleteObjectCommand): Promise<unknown>;
 };
 
 type SignUrl = (
@@ -37,6 +46,7 @@ type ObjectStorageDependencies = {
 type ImageUploadRequest = {
 	fileName: string;
 	contentType: string;
+	fileSize: number;
 };
 
 type UploadedImageAsset = {
@@ -81,16 +91,16 @@ export function createR2ObjectStorage(
 	config: R2ObjectStorageConfig,
 	dependencies: ObjectStorageDependencies = {}
 ) {
-	const s3Client =
+	const s3Client: S3ClientLike =
 		dependencies.s3Client ??
-		new S3Client({
+		(new S3Client({
 			region: 'auto',
 			endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
 			credentials: {
 				accessKeyId: config.accessKeyId,
 				secretAccessKey: config.secretAccessKey
 			}
-		});
+		}) as unknown as S3ClientLike);
 	const signUrl =
 		dependencies.signUrl ??
 		((client, command, options) => getSignedUrl(client as S3Client, command, options));
@@ -106,7 +116,8 @@ export function createR2ObjectStorage(
 				new PutObjectCommand({
 					Bucket: config.bucketName,
 					Key: assetKey,
-					ContentType: input.contentType
+					ContentType: input.contentType,
+					ContentLength: input.fileSize
 				}),
 				{
 					expiresIn: config.uploadUrlTtlSeconds
@@ -147,12 +158,29 @@ export function createR2ObjectStorage(
 					})
 				);
 				const contentType = object?.ContentType ?? null;
+				const contentLength = object?.ContentLength ?? null;
 
-				if (!contentType || !contentType.toLowerCase().startsWith('image/')) {
+				if (
+					!contentType ||
+					!productImageContentTypeValues.includes(
+						contentType as (typeof productImageContentTypeValues)[number]
+					)
+				) {
 					throw new AppError(
 						422,
 						'INVALID_IMAGE_ASSET',
 						'The uploaded asset is not a valid image object.'
+					);
+				}
+				if (
+					contentLength === null ||
+					contentLength <= 0 ||
+					contentLength > productImageMaxFileSize
+				) {
+					throw new AppError(
+						422,
+						'IMAGE_ASSET_TOO_LARGE',
+						'The uploaded image exceeds the maximum allowed file size.'
 					);
 				}
 
@@ -175,6 +203,19 @@ export function createR2ObjectStorage(
 				}
 
 				throw error;
+			}
+		},
+
+		async deleteImageAsset(assetKey: string): Promise<void> {
+			try {
+				await s3Client.send(
+					new DeleteObjectCommand({
+						Bucket: config.bucketName,
+						Key: assetKey
+					})
+				);
+			} catch (error) {
+				if (!isNotFoundError(error)) throw error;
 			}
 		}
 	};

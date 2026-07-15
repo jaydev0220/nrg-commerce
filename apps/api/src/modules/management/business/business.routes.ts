@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
 	businessCreateSchema,
+	businessBulkLabelUpdateSchema,
 	businessListQuerySchema,
 	businessUpdateSchema,
 	uuidSchema,
@@ -11,10 +12,13 @@ import { requirePermission } from '../../../middlewares/authorize.js';
 import { validateRequest } from '../../../middlewares/validate-request.js';
 import type { LogService } from '../log/log.service.js';
 import { createBusinessManagementController } from './business.controller.js';
+import { createBusinessLabelRouter } from './label.routes.js';
+import type { BusinessLabelService } from './label.service.js';
 import type { BusinessService } from './business.service.js';
 
 type BusinessRouterDependencies = {
 	businessService: BusinessService;
+	labelService?: BusinessLabelService;
 	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
@@ -25,6 +29,15 @@ const businessParamsSchema = z.object({
 export function createBusinessManagementRouter(dependencies: BusinessRouterDependencies): Router {
 	const controller = createBusinessManagementController(dependencies);
 	const router = Router();
+	if (dependencies.labelService) {
+		router.use(
+			'/labels',
+			createBusinessLabelRouter({
+				labelService: dependencies.labelService,
+				logService: dependencies.logService
+			})
+		);
+	}
 
 	router.get(
 		'/',
@@ -38,6 +51,13 @@ export function createBusinessManagementRouter(dependencies: BusinessRouterDepen
 		requirePermission('business.write'),
 		validateRequest({ body: businessCreateSchema }),
 		controller.createBusiness
+	);
+
+	router.patch(
+		'/bulk-label',
+		requirePermission('business.write'),
+		validateRequest({ body: businessBulkLabelUpdateSchema }),
+		controller.bulkUpdateLabel
 	);
 
 	router.get(

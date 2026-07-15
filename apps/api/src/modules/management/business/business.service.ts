@@ -10,6 +10,8 @@ type BusinessServiceDependencies = {
 		| 'updateBusiness'
 		| 'softDeleteBusiness'
 		| 'restoreBusiness'
+		| 'bulkUpdateLabel'
+		| 'activeLabelExists'
 	>;
 };
 
@@ -35,7 +37,14 @@ export function createBusinessService(dependencies: BusinessServiceDependencies)
 			return ensureBusiness(await dependencies.repository.findById(businessId));
 		},
 
-		createBusiness(input: Parameters<BusinessRepository['createBusiness']>[0]) {
+		async createBusiness(input: Parameters<BusinessRepository['createBusiness']>[0]) {
+			if (input.labelId && !(await dependencies.repository.activeLabelExists(input.labelId))) {
+				throw new AppError(
+					404,
+					'BUSINESS_LABEL_NOT_FOUND',
+					'The selected business label could not be found.'
+				);
+			}
 			return dependencies.repository.createBusiness(input);
 		},
 
@@ -44,6 +53,13 @@ export function createBusinessService(dependencies: BusinessServiceDependencies)
 			input: Parameters<BusinessRepository['updateBusiness']>[1]
 		) {
 			ensureBusiness(await dependencies.repository.findById(businessId));
+			if (input.labelId && !(await dependencies.repository.activeLabelExists(input.labelId))) {
+				throw new AppError(
+					404,
+					'BUSINESS_LABEL_NOT_FOUND',
+					'The selected business label could not be found.'
+				);
+			}
 			return dependencies.repository.updateBusiness(businessId, input);
 		},
 
@@ -56,6 +72,25 @@ export function createBusinessService(dependencies: BusinessServiceDependencies)
 		async restoreBusiness(businessId: string) {
 			ensureBusiness(await dependencies.repository.findById(businessId));
 			return dependencies.repository.restoreBusiness(businessId);
+		},
+
+		async bulkUpdateLabel(input: { businessIds: string[]; labelId: string | null }) {
+			const result = await dependencies.repository.bulkUpdateLabel(input);
+			if (result.missingBusinessIds.length > 0) {
+				throw new AppError(
+					409,
+					'BUSINESS_BULK_UPDATE_CONFLICT',
+					'One or more selected businesses are unavailable for label updates.'
+				);
+			}
+			if (!result.labelExists) {
+				throw new AppError(
+					404,
+					'BUSINESS_LABEL_NOT_FOUND',
+					'The selected business label could not be found.'
+				);
+			}
+			return result.updatedCount;
 		}
 	};
 }

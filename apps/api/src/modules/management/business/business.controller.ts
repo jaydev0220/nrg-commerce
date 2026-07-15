@@ -77,6 +77,24 @@ export function createBusinessManagementController(dependencies: BusinessControl
 			response.status(200).json(business);
 		}) satisfies RequestHandler,
 
+		bulkUpdateLabel: (async (request, response) => {
+			const authContext = requireAuthContext(response);
+			const body = getValidatedBody<Parameters<BusinessService['bulkUpdateLabel']>[0]>(request);
+			const updatedCount = await dependencies.businessService.bulkUpdateLabel(body);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff updated business labels in bulk.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'business',
+				metadata: { businessCount: updatedCount, labelId: body.labelId }
+			});
+			response.status(200).json({ updatedCount });
+		}) satisfies RequestHandler,
+
 		deleteBusiness: (async (request, response) => {
 			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<BusinessParams>(request);

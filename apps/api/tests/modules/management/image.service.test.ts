@@ -33,7 +33,8 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 				assetKey?: string;
 				altText: string;
 				type: 'thumbnail' | 'gallery';
-				position: number;
+				focusX?: number | null;
+				focusY?: number | null;
 		  }
 		| undefined;
 
@@ -41,8 +42,33 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 		repository: {
 			findSkuById: async () => createCatalogSkuRecord(),
 			listImages: async () => ({ data: [], total: 0 }),
-			findImageById: async () => null,
-			createImage: async (_skuId, input) => {
+			findImageById: async () => ({
+				id: 'image-1',
+				skuId: 'sku-1',
+				imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
+				assetKey: 'products/skus/sku-1/image.png',
+				altText: 'Thumbnail',
+				type: 'thumbnail',
+				position: 0,
+				focusX: 0.5,
+				focusY: 0.5,
+				deletedAt: null,
+				createdAt: new Date(),
+				updatedAt: new Date()
+			}),
+			createImageUpload: async (input) => ({
+				id: 'upload-1',
+				assetKey: input.assetKey,
+				expiresAt: input.expiresAt
+			}),
+			findImageUpload: async () => ({
+				id: 'upload-1',
+				skuId: 'sku-1',
+				assetKey: 'products/skus/sku-1/image.png',
+				expiresAt: new Date(Date.now() + 60_000),
+				consumedAt: null
+			}),
+			consumeImageUpload: async (_skuId, _uploadId, input) => {
 				createdImageInput = input;
 
 				return {
@@ -52,14 +78,36 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 					assetKey: input.assetKey ?? null,
 					altText: input.altText,
 					type: input.type,
-					position: input.position,
+					position: 0,
+					focusX: input.focusX ?? null,
+					focusY: input.focusY ?? null,
 					deletedAt: null,
 					createdAt: new Date(),
 					updatedAt: new Date()
 				};
 			},
 			softDeleteImage: async () => undefined,
-			forceDeleteImage: async () => undefined
+			forceDeleteImage: async () => undefined,
+			restoreImage: async () => {
+				throw new Error('not used');
+			},
+			listExpiredImages: async () => [],
+			listExpiredImageUploads: async () => [],
+			deleteImageUpload: async () => undefined,
+			updateImageFocus: async (imageId, input) => ({
+				id: imageId,
+				skuId: 'sku-1',
+				imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
+				assetKey: 'products/skus/sku-1/image.png',
+				altText: 'Thumbnail',
+				type: 'thumbnail',
+				position: 0,
+				focusX: input.focusX,
+				focusY: input.focusY,
+				deletedAt: null,
+				createdAt: new Date(),
+				updatedAt: new Date()
+			})
 		},
 		objectStorage: {
 			createImageUploadTarget: async () => {
@@ -69,15 +117,15 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 				assetKey: 'products/skus/sku-1/image.png',
 				imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
 				contentType: 'image/png'
-			})
+			}),
+			deleteImageAsset: async () => undefined
 		}
 	});
 
 	const image = await imageService.createImage('sku-1', {
-		assetKey: 'products/skus/sku-1/image.png',
+		uploadId: 'upload-1',
 		altText: 'Front image',
-		type: 'gallery',
-		position: 1
+		type: 'gallery'
 	});
 
 	assert.deepEqual(createdImageInput, {
@@ -85,9 +133,18 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 		assetKey: 'products/skus/sku-1/image.png',
 		altText: 'Front image',
 		type: 'gallery',
-		position: 1
+		focusX: undefined,
+		focusY: undefined
 	});
 	assert.equal(image.imageUrl, 'https://assets.example.com/products/skus/sku-1/image.png');
+	const focusedImage = await imageService.updateImageFocus('sku-1', 'image-1', {
+		focusX: 0.2,
+		focusY: 0.8
+	});
+	assert.deepEqual(
+		{ focusX: focusedImage.focusX, focusY: focusedImage.focusY },
+		{ focusX: 0.2, focusY: 0.8 }
+	);
 });
 
 test('createImageUploadTarget rejects unknown skus before generating upload URLs', async () => {
@@ -96,11 +153,24 @@ test('createImageUploadTarget rejects unknown skus before generating upload URLs
 			findSkuById: async () => null,
 			listImages: async () => ({ data: [], total: 0 }),
 			findImageById: async () => null,
-			createImage: async () => {
+			createImageUpload: async (input) => ({
+				id: 'upload-1',
+				assetKey: input.assetKey,
+				expiresAt: input.expiresAt
+			}),
+			findImageUpload: async () => null,
+			consumeImageUpload: async () => null,
+			softDeleteImage: async () => undefined,
+			forceDeleteImage: async () => undefined,
+			restoreImage: async () => {
 				throw new Error('not used');
 			},
-			softDeleteImage: async () => undefined,
-			forceDeleteImage: async () => undefined
+			listExpiredImages: async () => [],
+			listExpiredImageUploads: async () => [],
+			deleteImageUpload: async () => undefined,
+			updateImageFocus: async () => {
+				throw new Error('not used');
+			}
 		},
 		objectStorage: {
 			createImageUploadTarget: async () => {
@@ -108,7 +178,8 @@ test('createImageUploadTarget rejects unknown skus before generating upload URLs
 			},
 			assertImageAssetExists: async () => {
 				throw new Error('not used');
-			}
+			},
+			deleteImageAsset: async () => undefined
 		}
 	});
 
@@ -116,8 +187,142 @@ test('createImageUploadTarget rejects unknown skus before generating upload URLs
 		() =>
 			imageService.createImageUploadTarget('missing-sku', {
 				fileName: 'front.png',
-				contentType: 'image/png'
+				contentType: 'image/png',
+				fileSize: 1024
 			}),
 		(error: unknown) => error instanceof AppError && error.code === 'SKU_NOT_FOUND'
 	);
+});
+
+test('deleteImage soft deletes normally and removes the asset on force delete', async () => {
+	const deletedAt = new Date('2026-07-01T00:00:00.000Z');
+	const imageRecord = {
+		id: 'image-1',
+		skuId: 'sku-1',
+		imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
+		assetKey: 'products/skus/sku-1/image.png',
+		altText: 'Front image',
+		type: 'gallery' as const,
+		position: 0,
+		focusX: null,
+		focusY: null,
+		deletedAt: null,
+		createdAt: new Date(),
+		updatedAt: new Date()
+	};
+	let softDeletedId: string | undefined;
+	let forceDeletedId: string | undefined;
+	let deletedAssetKey: string | undefined;
+	const imageService = createImageService({
+		repository: {
+			findSkuById: async () => createCatalogSkuRecord(),
+			listImages: async () => ({ data: [], total: 0 }),
+			findImageById: async (_skuId, _imageId, includeDeleted = false) =>
+				includeDeleted ? { ...imageRecord, deletedAt } : imageRecord,
+			createImageUpload: async () => ({
+				id: 'upload-1',
+				assetKey: 'products/skus/sku-1/image.png',
+				expiresAt: new Date()
+			}),
+			findImageUpload: async () => null,
+			consumeImageUpload: async () => null,
+			softDeleteImage: async (imageId) => {
+				softDeletedId = imageId;
+			},
+			forceDeleteImage: async (imageId) => {
+				forceDeletedId = imageId;
+			},
+			restoreImage: async () => imageRecord,
+			listExpiredImages: async () => [],
+			listExpiredImageUploads: async () => [],
+			deleteImageUpload: async () => undefined,
+			updateImageFocus: async () => {
+				throw new Error('not used');
+			}
+		},
+		objectStorage: {
+			createImageUploadTarget: async () => {
+				throw new Error('not used');
+			},
+			assertImageAssetExists: async () => {
+				throw new Error('not used');
+			},
+			deleteImageAsset: async (assetKey) => {
+				deletedAssetKey = assetKey;
+			}
+		}
+	});
+
+	assert.deepEqual(
+		await imageService.deleteImage('sku-1', 'image-1', { force: false, deleteAsset: false }),
+		{ mode: 'soft', assetDeleted: false }
+	);
+	assert.equal(softDeletedId, 'image-1');
+
+	assert.deepEqual(
+		await imageService.deleteImage('sku-1', 'image-1', { force: true, deleteAsset: false }),
+		{ mode: 'force', assetDeleted: true }
+	);
+	assert.equal(forceDeletedId, 'image-1');
+	assert.equal(deletedAssetKey, imageRecord.assetKey);
+});
+
+test('pruneExpiredAssets deletes expired objects and their database records', async () => {
+	const deletedAssetKeys: string[] = [];
+	const deletedImageIds: string[] = [];
+	const deletedUploadIds: string[] = [];
+	const imageService = createImageService({
+		repository: {
+			findSkuById: async () => createCatalogSkuRecord(),
+			listImages: async () => ({ data: [], total: 0 }),
+			findImageById: async () => null,
+			createImageUpload: async () => ({
+				id: 'upload-1',
+				assetKey: 'products/skus/sku-1/image.png',
+				expiresAt: new Date()
+			}),
+			findImageUpload: async () => null,
+			consumeImageUpload: async () => null,
+			softDeleteImage: async () => undefined,
+			forceDeleteImage: async (imageId) => {
+				deletedImageIds.push(imageId);
+			},
+			restoreImage: async () => {
+				throw new Error('not used');
+			},
+			listExpiredImages: async () => [
+				{ id: 'image-1', skuId: 'sku-1', assetKey: 'products/skus/sku-1/old.png' }
+			],
+			listExpiredImageUploads: async () => [
+				{ id: 'upload-1', assetKey: 'products/skus/sku-1/pending.png' }
+			],
+			deleteImageUpload: async (uploadId) => {
+				deletedUploadIds.push(uploadId);
+			},
+			updateImageFocus: async () => {
+				throw new Error('not used');
+			}
+		},
+		objectStorage: {
+			createImageUploadTarget: async () => {
+				throw new Error('not used');
+			},
+			assertImageAssetExists: async () => {
+				throw new Error('not used');
+			},
+			deleteImageAsset: async (assetKey) => {
+				deletedAssetKeys.push(assetKey);
+			}
+		}
+	});
+
+	const result = await imageService.pruneExpiredAssets(new Date('2026-07-31T00:00:00.000Z'));
+
+	assert.deepEqual(result, { images: 1, uploads: 1 });
+	assert.deepEqual(deletedImageIds, ['image-1']);
+	assert.deepEqual(deletedUploadIds, ['upload-1']);
+	assert.deepEqual(deletedAssetKeys, [
+		'products/skus/sku-1/old.png',
+		'products/skus/sku-1/pending.png'
+	]);
 });

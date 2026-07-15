@@ -22,7 +22,6 @@ const authContext: AuthenticatedStaffContext = {
 		name: 'Admin',
 		status: 'active',
 		passwordHash: null,
-		mfaRequired: true,
 		preferredMfaMethod: 'authenticator',
 		lastLoginAt: null,
 		roles: [],
@@ -56,6 +55,7 @@ function createAppWithBusinesses(
 		| 'updateBusiness'
 		| 'deleteBusiness'
 		| 'restoreBusiness'
+		| 'bulkUpdateLabel'
 	>,
 	logService: Pick<LogService, 'recordAuditLog'>,
 	permissions = authContext.permissions
@@ -97,7 +97,8 @@ test('management business route lists paginated business records', async () => {
 			getBusiness: async () => createBusinessRecord(),
 			updateBusiness: async () => createBusinessRecord(),
 			deleteBusiness: async () => 'soft',
-			restoreBusiness: async () => createBusinessRecord()
+			restoreBusiness: async () => createBusinessRecord(),
+			bulkUpdateLabel: async () => 1
 		},
 		{
 			recordAuditLog: async () => createBusinessAuditRecord()
@@ -132,7 +133,8 @@ test('management business route creates a business and records an audit log', as
 			getBusiness: async () => createBusinessRecord(),
 			updateBusiness: async () => createBusinessRecord(),
 			deleteBusiness: async () => 'soft',
-			restoreBusiness: async () => createBusinessRecord()
+			restoreBusiness: async () => createBusinessRecord(),
+			bulkUpdateLabel: async () => 1
 		},
 		{
 			recordAuditLog: async (input) => {
@@ -167,7 +169,8 @@ test('management business route requires write permission for restore', async ()
 			getBusiness: async () => createBusinessRecord(),
 			updateBusiness: async () => createBusinessRecord(),
 			deleteBusiness: async () => 'soft',
-			restoreBusiness: async () => createBusinessRecord()
+			restoreBusiness: async () => createBusinessRecord(),
+			bulkUpdateLabel: async () => 1
 		},
 		{
 			recordAuditLog: async () => createBusinessAuditRecord()
@@ -183,6 +186,49 @@ test('management business route requires write permission for restore', async ()
 
 	assert.equal(response.status, 403);
 	assert.equal(payload.error.code, 'FORBIDDEN');
+});
+
+test('management business route applies a bulk label update and records one audit log', async () => {
+	let receivedInput: { businessIds: string[]; labelId: string | null } | undefined;
+	let auditInput: Parameters<Pick<LogService, 'recordAuditLog'>['recordAuditLog']>[0] | undefined;
+	const app = createAppWithBusinesses(
+		{
+			listBusinesses: async () => ({ data: [], total: 0 }),
+			createBusiness: async () => createBusinessRecord(),
+			getBusiness: async () => createBusinessRecord(),
+			updateBusiness: async () => createBusinessRecord(),
+			deleteBusiness: async () => 'soft',
+			restoreBusiness: async () => createBusinessRecord(),
+			bulkUpdateLabel: async (input) => {
+				receivedInput = input;
+				return 2;
+			}
+		},
+		{
+			recordAuditLog: async (input) => {
+				auditInput = input;
+				return createBusinessAuditRecord();
+			}
+		}
+	);
+
+	const response = await requestApp(app, {
+		method: 'PATCH',
+		path: '/api/management/businesses/bulk-label',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			businessIds: ['0189076c-4f2a-7fe1-b9fd-2d68df455301', '0189076c-4f2a-7fe1-b9fd-2d68df455302'],
+			labelId: null
+		})
+	});
+
+	assert.equal(response.status, 200, response.text());
+	assert.deepEqual(receivedInput, {
+		businessIds: ['0189076c-4f2a-7fe1-b9fd-2d68df455301', '0189076c-4f2a-7fe1-b9fd-2d68df455302'],
+		labelId: null
+	});
+	assert.deepEqual(response.json(), { updatedCount: 2 });
+	assert.deepEqual(auditInput?.metadata, { businessCount: 2, labelId: null });
 });
 
 function createBusinessAuditRecord() {

@@ -17,8 +17,8 @@ test('createTokenService signs and verifies access tokens with the expected clai
 		sub: '0189076c-4f2a-7fe1-b9fd-2d68df455111',
 		sid: '0189076c-4f2a-7fe1-b9fd-2d68df455222',
 		jti: 'access-jti',
-		roles: ['admin'],
-		permissions: ['staff.read'],
+		roles: ['admin', 'catalog-manager'],
+		permissions: ['staff.read', 'product.image.update'],
 		mfa: ['authenticator'],
 		primaryFactor: 'password'
 	});
@@ -26,7 +26,8 @@ test('createTokenService signs and verifies access tokens with the expected clai
 	const claims = await tokenService.verifyAccessToken(accessToken);
 
 	assert.equal(claims.sub, '0189076c-4f2a-7fe1-b9fd-2d68df455111');
-	assert.deepEqual(claims.permissions, ['staff.read']);
+	assert.deepEqual(claims.permissions, ['staff.read', 'product.image.update']);
+	assert.deepEqual(claims.roles, ['admin', 'catalog-manager']);
 	assert.equal(claims.primaryFactor, 'password');
 });
 
@@ -50,7 +51,8 @@ test('createTokenService issues refresh and pending-auth tokens with separate cl
 	const pendingToken = await tokenService.issuePendingAuthToken({
 		staffId: '0189076c-4f2a-7fe1-b9fd-2d68df455111',
 		primaryFactor: 'password',
-		requiredMfaMethod: 'authenticator'
+		preferredMfaMethod: 'authenticator',
+		availableMfaMethods: ['authenticator', 'passkey']
 	});
 
 	const refreshClaims = await tokenService.verifyRefreshToken(refreshToken);
@@ -58,7 +60,8 @@ test('createTokenService issues refresh and pending-auth tokens with separate cl
 
 	assert.equal(refreshClaims.type, 'refresh');
 	assert.equal(pendingClaims.staffId, '0189076c-4f2a-7fe1-b9fd-2d68df455111');
-	assert.equal(pendingClaims.requiredMfaMethod, 'authenticator');
+	assert.equal(pendingClaims.preferredMfaMethod, 'authenticator');
+	assert.deepEqual(pendingClaims.availableMfaMethods, ['authenticator', 'passkey']);
 });
 
 test('createTokenService issues ceremony tokens for MFA setup flows', async () => {

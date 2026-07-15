@@ -1,14 +1,16 @@
-import type { Application, RequestHandler } from 'express';
+import type { Application, ErrorRequestHandler, RequestHandler } from 'express';
 
 import type { AppConfig } from '../config/app-config.js';
 import { AppError } from '../errors/app-error.js';
 import { errorHandler } from '../errors/error-handler.js';
 import { createHealthRouter, type HealthDependencies } from '../health/health.routes.js';
 import { requireVerifiedMfa } from '../middlewares/authorize.js';
+import { createCsrfProtectionMiddleware, createCsrfTokenHandler } from '../middlewares/csrf.js';
 import { createAuthRateLimiter } from '../middlewares/rate-limit.js';
 import { createAuthRouter } from '../modules/auth/auth.routes.js';
 import type { AuthService } from '../modules/auth/auth.service.js';
 import { createBusinessManagementRouter } from '../modules/management/business/business.routes.js';
+import type { BusinessLabelService } from '../modules/management/business/label.service.js';
 import type { BusinessService } from '../modules/management/business/business.service.js';
 import { createCatalogManagementRouter } from '../modules/management/management.routes.js';
 import type { CategoryService } from '../modules/management/category/category.service.js';
@@ -25,9 +27,11 @@ import { createStaffManagementRouter } from '../modules/management/staff/staff.r
 import type { StaffService } from '../modules/management/staff/staff.service.js';
 import { createStorefrontCatalogRouter } from '../modules/storefront/storefront.routes.js';
 import type { StorefrontCatalogService } from '../modules/storefront/storefront.service.js';
+import { createAuthCookieManager } from '../utils/auth-cookies.js';
 
 type RouteDependencies = {
 	config: AppConfig;
+	errorHandler?: ErrorRequestHandler;
 	health?: HealthDependencies;
 	authService: AuthService;
 	authenticate: RequestHandler;
@@ -35,6 +39,7 @@ type RouteDependencies = {
 	logService: LogService;
 	dashboardService: DashboardService;
 	businessService: BusinessService;
+	labelService?: BusinessLabelService;
 	orderService: OrderService;
 	productService: ProductService;
 	categoryService: CategoryService;
@@ -43,26 +48,55 @@ type RouteDependencies = {
 	storefrontService: StorefrontCatalogService;
 };
 
+const disableCaching: RequestHandler = (_request, response, next) => {
+	response.set('cache-control', 'no-store');
+	next();
+};
+
 export function initializeRoutes(app: Application, dependencies: RouteDependencies): void {
+	const cookieOptions = {
+		secure: dependencies.config.cookieSecure,
+		sameSite: dependencies.config.cookieSameSite,
+		accessMaxAgeSeconds: dependencies.config.accessTokenTtlSeconds,
+		refreshMaxAgeSeconds: dependencies.config.refreshTokenTtlSeconds,
+		flowMaxAgeSeconds: dependencies.config.pendingTokenTtlSeconds
+	};
+	const authCookies = createAuthCookieManager(cookieOptions);
+	const csrfOptions = {
+		allowedOrigins: dependencies.config.corsOrigins,
+		cookieSecure: dependencies.config.cookieSecure,
+		cookieSameSite: dependencies.config.cookieSameSite,
+		cookieMaxAgeSeconds: dependencies.config.refreshTokenTtlSeconds
+	};
+	const csrfProtection = createCsrfProtectionMiddleware(csrfOptions);
 	const authRouterDependencies: Parameters<typeof createAuthRouter>[0] = {
 		authService: dependencies.authService,
 		logService: dependencies.logService,
 		authRateLimiter: createAuthRateLimiter(dependencies.config),
-		authenticate: dependencies.authenticate
+		authenticate: dependencies.authenticate,
+		authCookies,
+		csrfTokenHandler: createCsrfTokenHandler(csrfOptions)
 	};
 
 	app.use('/health', createHealthRouter(dependencies.health ?? { isReady: async () => true }));
-	app.use('/api/auth', createAuthRouter(authRouterDependencies));
+	app.use('/api/auth', disableCaching, csrfProtection, createAuthRouter(authRouterDependencies));
 	app.use(
 		'/api/storefront/products',
 		createStorefrontCatalogRouter({ storefrontService: dependencies.storefrontService })
 	);
 
-	app.use('/api/management', dependencies.authenticate, requireVerifiedMfa());
+	app.use(
+		'/api/management',
+		disableCaching,
+		csrfProtection,
+		dependencies.authenticate,
+		requireVerifiedMfa()
+	);
 	app.use(
 		'/api/management/businesses',
 		createBusinessManagementRouter({
 			businessService: dependencies.businessService,
+			labelService: dependencies.labelService,
 			logService: dependencies.logService
 		})
 	);
@@ -104,5 +138,5 @@ export function initializeRoutes(app: Application, dependencies: RouteDependenci
 			new AppError(404, 'ROUTE_NOT_FOUND', `Route ${request.method} ${request.path} was not found.`)
 		);
 	});
-	app.use(errorHandler);
+	app.use(dependencies.errorHandler ?? errorHandler);
 }

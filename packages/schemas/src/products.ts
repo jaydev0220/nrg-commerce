@@ -15,6 +15,17 @@ export const productImageTypeValues = ['thumbnail', 'gallery'] as const;
 
 export const productImageTypeSchema = z.enum(productImageTypeValues);
 
+export const productImageContentTypeValues = [
+	'image/jpeg',
+	'image/png',
+	'image/webp',
+	'image/avif'
+] as const;
+
+export const productImageContentTypeSchema = z.enum(productImageContentTypeValues);
+export const productImageMaxFileSize = 10 * 1024 * 1024;
+const productImageFocusCoordinateSchema = z.number().min(0).max(1);
+
 const parsedAttributeQuerySchema = z.string().transform((value, context) => {
 	try {
 		return attributeMapSchema.parse(JSON.parse(value));
@@ -63,6 +74,8 @@ export const productImageSchema = z.object({
 	altText: z.string().min(1),
 	type: productImageTypeSchema,
 	position: z.number().int().min(0),
+	focusX: productImageFocusCoordinateSchema.nullable(),
+	focusY: productImageFocusCoordinateSchema.nullable(),
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
 	updatedAt: dateSchema
@@ -96,7 +109,9 @@ export const managementProductListQuerySchema = paginationQuerySchema.extend({
 	sort: z.enum(['name', 'createdAt', 'updatedAt']).default('createdAt'),
 	order: sortOrderSchema.default('desc'),
 	includeSkus: booleanLikeSchema.default(false),
-	includeImages: booleanLikeSchema.default(false)
+	includeImages: booleanLikeSchema.default(false),
+	includeDeleted: booleanLikeSchema.default(false),
+	archived: booleanLikeSchema.optional()
 });
 
 export const productSkuCreateSchema = z.object({
@@ -136,6 +151,11 @@ export const productUpdateSchema = nonEmptyUpdate(
 		published: booleanLikeSchema.optional()
 	})
 );
+
+export const productBulkUpdateSchema = z.object({
+	productIds: z.array(uuidSchema).min(1).max(100),
+	action: z.enum(['archive', 'restore', 'publish', 'unpublish'])
+});
 
 export const productDeleteQuerySchema = z.object({
 	force: booleanLikeSchema.default(false)
@@ -196,25 +216,38 @@ export const productCategoryDetailQuerySchema = z.object({
 
 export const managementProductImageListQuerySchema = paginationQuerySchema.extend({
 	type: productImageTypeSchema.optional(),
+	state: z.enum(['active', 'deleted']).default('active'),
 	sort: z.enum(['position', 'createdAt', 'updatedAt']).default('position'),
 	order: sortOrderSchema.default('asc')
 });
 
-const imageContentTypeSchema = z
-	.string()
-	.trim()
-	.regex(/^image\/[a-z0-9.+-]+$/i, 'Expected an image/* content type.');
-
 export const productImageUploadRequestSchema = z.object({
 	fileName: z.string().trim().min(1),
-	contentType: imageContentTypeSchema
+	contentType: productImageContentTypeSchema,
+	fileSize: z.coerce.number().int().positive().max(productImageMaxFileSize)
 });
 
-export const productImageCreateSchema = z.object({
-	assetKey: z.string().trim().min(1),
-	altText: z.string().trim().min(1),
-	type: productImageTypeSchema.default('gallery'),
-	position: z.coerce.number().int().min(0).default(0)
+export const productImageCreateSchema = z
+	.object({
+		uploadId: uuidSchema,
+		altText: z.string().trim().min(1),
+		type: productImageTypeSchema.default('gallery'),
+		focusX: productImageFocusCoordinateSchema.nullish(),
+		focusY: productImageFocusCoordinateSchema.nullish()
+	})
+	.superRefine((input, context) => {
+		if ((input.focusX === undefined) !== (input.focusY === undefined)) {
+			context.addIssue({
+				code: 'custom',
+				path: ['focusX'],
+				message: 'focusX and focusY must be provided together.'
+			});
+		}
+	});
+
+export const productImageFocusUpdateSchema = z.object({
+	focusX: productImageFocusCoordinateSchema,
+	focusY: productImageFocusCoordinateSchema
 });
 
 export const productImageDeleteQuerySchema = z.object({

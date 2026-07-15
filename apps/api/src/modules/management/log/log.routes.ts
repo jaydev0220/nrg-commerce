@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { managementLogListQuerySchema } from '@packages/schemas';
+import { managementLogListQuerySchema, uuidSchema, z } from '@packages/schemas';
 
 import { requirePermission } from '../../../middlewares/authorize.js';
 import { validateRequest } from '../../../middlewares/validate-request.js';
@@ -7,7 +7,7 @@ import { createLogManagementController } from './log.controller.js';
 import type { LogService } from './log.service.js';
 
 type LogManagementRouterDependencies = {
-	logService: Pick<LogService, 'listLogs'>;
+	logService: Pick<LogService, 'listLogs' | 'getLog'>;
 };
 
 export function createLogManagementRouter(dependencies: LogManagementRouterDependencies): Router {
@@ -19,6 +19,13 @@ export function createLogManagementRouter(dependencies: LogManagementRouterDepen
 		requirePermission('log.read'),
 		validateRequest({ query: managementLogListQuerySchema }),
 		controller.listLogs
+	);
+
+	router.get(
+		'/:logId',
+		requirePermission('log.read'),
+		validateRequest({ params: z.object({ logId: uuidSchema }) }),
+		controller.getLog
 	);
 
 	return router;

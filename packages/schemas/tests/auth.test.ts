@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
 	accessTokenClaimsSchema,
+	mfaPreferenceSchema,
 	passkeyAuthenticationVerificationSchema,
 	passwordLoginSchema,
 	refreshTokenRequestSchema,
@@ -20,8 +21,8 @@ test('accessTokenClaimsSchema accepts the expected JWT claims shape', () => {
 		sid: 'ca7641b9-6856-42b6-99f0-f75f1a4d9e79',
 		jti: 'refresh-family-1',
 		type: 'access',
-		roles: ['admin', 'sales-manager'],
-		permissions: ['staff.read', 'log.read', 'business.read', 'order.write'],
+		roles: ['admin', 'catalog-manager', 'sales-manager'],
+		permissions: ['staff.read', 'log.read', 'business.read', 'order.write', 'product.image.update'],
 		mfa: ['passkey'],
 		primaryFactor: 'password',
 		exp: 1_800_000_000,
@@ -33,9 +34,10 @@ test('accessTokenClaimsSchema accepts the expected JWT claims shape', () => {
 		'staff.read',
 		'log.read',
 		'business.read',
-		'order.write'
+		'order.write',
+		'product.image.update'
 	]);
-	assert.deepEqual(parsedClaims.roles, ['admin', 'sales-manager']);
+	assert.deepEqual(parsedClaims.roles, ['admin', 'catalog-manager', 'sales-manager']);
 });
 
 test('refreshTokenClaimsSchema rejects access token payloads', () => {
@@ -86,41 +88,30 @@ test('passwordLoginSchema requires an email and a long enough password', () => {
 	assert.throws(() => passwordLoginSchema.parse({ email: 'admin@example.com', password: 'short' }));
 });
 
-test('refreshTokenRequestSchema requires a refresh token string', () => {
-	assert.equal(
-		refreshTokenRequestSchema.parse({ refreshToken: 'refresh-token-value' }).refreshToken,
-		'refresh-token-value'
-	);
-	assert.throws(() => refreshTokenRequestSchema.parse({ refreshToken: '' }));
+test('refreshTokenRequestSchema rejects browser-readable refresh tokens', () => {
+	assert.deepEqual(refreshTokenRequestSchema.parse({}), {});
+	assert.throws(() => refreshTokenRequestSchema.parse({ refreshToken: 'refresh-token-value' }));
 });
 
-test('passkey and TOTP ceremony schemas accept opaque tokens and validation codes', () => {
-	assert.equal(
-		passkeyAuthenticationVerificationSchema.parse({
-			ceremonyToken: 'opaque-token',
-			credential: { id: 'credential-id' }
-		}).ceremonyToken,
-		'opaque-token'
+test('passkey and TOTP schemas keep ceremony tokens out of request bodies', () => {
+	assert.deepEqual(
+		passkeyAuthenticationVerificationSchema.parse({ credential: { id: 'credential-id' } }),
+		{ credential: { id: 'credential-id' } }
 	);
-	assert.equal(
-		totpSetupConfirmationSchema.parse({
-			setupToken: 'setup-token',
-			code: '123456'
-		}).setupToken,
-		'setup-token'
-	);
-	assert.equal(
-		setupTokenRequestSchema.parse({
-			setupToken: 'setup-token'
-		}).setupToken,
-		'setup-token'
-	);
+	assert.deepEqual(totpSetupConfirmationSchema.parse({ code: '123456' }), { code: '123456' });
+	assert.deepEqual(setupTokenRequestSchema.parse({}), {});
+	assert.throws(() => setupTokenRequestSchema.parse({ setupToken: 'setup-token' }));
+});
+
+test('mfaPreferenceSchema requires a configured MFA method', () => {
+	assert.deepEqual(mfaPreferenceSchema.parse({ preferredMfaMethod: 'passkey' }), {
+		preferredMfaMethod: 'passkey'
+	});
+	assert.throws(() => mfaPreferenceSchema.parse({}));
 });
 
 test('staffPasswordUpdateSchema enforces the admin password update payload', () => {
-	assert.equal(
-		staffPasswordUpdateSchema.parse({ password: 'correct horse battery staple' }).password,
-		'correct horse battery staple'
-	);
+	const password = 'Correct-Horse-Battery-7!';
+	assert.equal(staffPasswordUpdateSchema.parse({ password }).password, password);
 	assert.throws(() => staffPasswordUpdateSchema.parse({ password: 'tiny' }));
 });

@@ -13,10 +13,13 @@ import { requestApp } from './helpers/http.js';
 function createTestConfig() {
 	return {
 		nodeEnv: 'test' as const,
+		logLevel: 'fatal' as const,
 		port: 0,
 		trustProxy: false,
 		corsOrigins: ['http://localhost:4173'],
 		bodyLimit: '64kb',
+		cookieSecure: false,
+		cookieSameSite: 'lax' as const,
 		accessTokenSecret: 'access-secret',
 		refreshTokenSecret: 'refresh-secret',
 		pendingTokenSecret: 'pending-secret',
@@ -25,6 +28,7 @@ function createTestConfig() {
 		refreshTokenTtlSeconds: 86_400,
 		pendingTokenTtlSeconds: 300,
 		sessionTtlSeconds: 86_400,
+		sessionAbsoluteTtlSeconds: 2_592_000,
 		totpIssuer: 'NRG Commerce',
 		webauthnRpId: 'localhost',
 		webauthnRpName: 'NRG Commerce',
@@ -56,7 +60,6 @@ function createManagementAuthContext(): AuthenticatedStaffContext {
 			name: 'Admin',
 			status: 'active',
 			passwordHash: null,
-			mfaRequired: true,
 			preferredMfaMethod: 'authenticator',
 			lastLoginAt: null,
 			roles: [],
@@ -102,6 +105,21 @@ test('management routes require authentication', async () => {
 
 	assert.equal(response.status, 401);
 	assert.equal(payload.error.code, 'AUTHENTICATION_REQUIRED');
+});
+
+test('auth and management responses are not stored by browser caches', async () => {
+	const app = createApp({
+		config: createTestConfig(),
+		health: {
+			isReady: async () => true
+		}
+	});
+
+	const authResponse = await requestApp(app, { path: '/api/auth/state' });
+	const managementResponse = await requestApp(app, { path: '/api/management/staff' });
+
+	assert.equal(authResponse.headers['cache-control'], 'no-store');
+	assert.equal(managementResponse.headers['cache-control'], 'no-store');
 });
 
 test('management routes require a verified MFA claim', async () => {
@@ -162,7 +180,12 @@ test('management upload noop route is not exposed', async () => {
 
 	const response = await requestApp(app, {
 		method: 'POST',
-		path: '/api/management/uploads/noop'
+		path: '/api/management/uploads/noop',
+		headers: {
+			origin: 'http://localhost:4173',
+			cookie: 'admin_csrf_token=test-token',
+			'x-csrf-token': 'test-token'
+		}
 	});
 	const payload = response.json<{ error: { code: string } }>();
 
@@ -186,6 +209,7 @@ test('management product image upload-url route returns a presigned upload targe
 			logService: {} as Parameters<typeof createCatalogManagementRouter>[0]['logService'],
 			imageService: {
 				createImageUploadTarget: async () => ({
+					uploadId: 'upload-1',
 					method: 'PUT',
 					assetKey: 'products/skus/sku-1/image.png',
 					imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
@@ -204,7 +228,14 @@ test('management product image upload-url route returns a presigned upload targe
 				},
 				deleteImage: async () => {
 					throw new Error('not used');
-				}
+				},
+				updateImageFocus: async () => {
+					throw new Error('not used');
+				},
+				restoreImage: async () => {
+					throw new Error('not used');
+				},
+				pruneExpiredAssets: async () => ({ images: 0, uploads: 0 })
 			}
 		})
 	);
@@ -218,7 +249,8 @@ test('management product image upload-url route returns a presigned upload targe
 		},
 		body: JSON.stringify({
 			fileName: 'front.png',
-			contentType: 'image/png'
+			contentType: 'image/png',
+			fileSize: 1024
 		})
 	});
 	const payload = response.json<{
@@ -282,6 +314,12 @@ test('management product creation records an audit log', async () => {
 					throw new Error('not used');
 				},
 				deleteProduct: async () => {
+					throw new Error('not used');
+				},
+				restoreProduct: async () => {
+					throw new Error('not used');
+				},
+				bulkUpdateProducts: async () => {
 					throw new Error('not used');
 				}
 			},

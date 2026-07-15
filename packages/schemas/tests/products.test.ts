@@ -109,25 +109,53 @@ test('managementProductDetailQuerySchema parses nested include flags from query 
 	assert.equal(parsedQuery.includeImages, true);
 });
 
-test('productImageCreateSchema stores uploaded asset references instead of raw image URLs', () => {
+test('productImageCreateSchema accepts a pending upload reference', () => {
 	const parsedImage = productImageCreateSchema.parse({
-		assetKey: 'products/skus/93f99825-2962-4a10-b453-daa375ff1c43/0189076c-4f2a-7fe1-b9fd.png',
+		uploadId: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
 		altText: 'Front product image'
 	});
 
-	assert.equal(
-		parsedImage.assetKey,
-		'products/skus/93f99825-2962-4a10-b453-daa375ff1c43/0189076c-4f2a-7fe1-b9fd.png'
-	);
+	assert.equal(parsedImage.uploadId, '0189076c-4f2a-7fe1-b9fd-2d68df455401');
 	assert.equal(parsedImage.type, 'gallery');
-	assert.equal(parsedImage.position, 0);
+	assert.equal(parsedImage.focusX, undefined);
+	assert.equal(parsedImage.focusY, undefined);
 });
 
-test('productImageUploadRequestSchema rejects non-image content types', () => {
+test('productImageCreateSchema requires paired focus coordinates', () => {
+	assert.throws(() =>
+		productImageCreateSchema.parse({
+			uploadId: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
+			altText: 'Front product image',
+			type: 'thumbnail',
+			focusX: 0.25
+		})
+	);
+});
+
+test('productImageUploadRequestSchema accepts supported image metadata', () => {
+	assert.deepEqual(
+		productImageUploadRequestSchema.parse({
+			fileName: 'front.webp',
+			contentType: 'image/webp',
+			fileSize: 1024
+		}),
+		{ fileName: 'front.webp', contentType: 'image/webp', fileSize: 1024 }
+	);
+});
+
+test('productImageUploadRequestSchema rejects unsupported types and oversized files', () => {
 	assert.throws(() =>
 		productImageUploadRequestSchema.parse({
 			fileName: 'manual.pdf',
-			contentType: 'application/pdf'
+			contentType: 'application/pdf',
+			fileSize: 1024
+		})
+	);
+	assert.throws(() =>
+		productImageUploadRequestSchema.parse({
+			fileName: 'large.png',
+			contentType: 'image/png',
+			fileSize: 10 * 1024 * 1024 + 1
 		})
 	);
 });

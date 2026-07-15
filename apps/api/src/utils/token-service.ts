@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 
 import { accessTokenClaimsSchema, refreshTokenClaimsSchema } from '@packages/schemas';
+import type { MfaMethod } from '@packages/database';
 
 import type {
 	AccessTokenPayload,
@@ -102,11 +103,25 @@ export function createTokenService(config: TokenServiceConfig) {
 				throw new Error('Invalid pending token type.');
 			}
 
+			const availableMfaMethods: MfaMethod[] = Array.isArray(payload['availableMfaMethods'])
+				? payload['availableMfaMethods'].filter(
+						(method): method is 'authenticator' | 'passkey' =>
+							method === 'authenticator' || method === 'passkey'
+					)
+				: payload['requiredMfaMethod'] === 'passkey'
+					? ['passkey']
+					: ['authenticator'];
+			const preferredMfaMethod =
+				payload['preferredMfaMethod'] === 'passkey' && availableMfaMethods.includes('passkey')
+					? 'passkey'
+					: 'authenticator';
+
 			return {
 				type: 'pending_auth',
 				staffId: String(payload['staffId']),
 				primaryFactor: payload['primaryFactor'] === 'passkey' ? 'passkey' : 'password',
-				requiredMfaMethod: payload['requiredMfaMethod'] === 'passkey' ? 'passkey' : 'authenticator'
+				preferredMfaMethod,
+				availableMfaMethods
 			};
 		},
 

@@ -1,15 +1,16 @@
 import type { RequestHandler } from 'express';
 
-import { getValidatedQuery } from '../../../middlewares/validate-request.js';
+import { getValidatedParams, getValidatedQuery } from '../../../middlewares/validate-request.js';
 import { buildPaginatedResponse } from '../../../utils/pagination.js';
 import type { LogService } from './log.service.js';
 
 type LogManagementControllerDependencies = {
-	logService: Pick<LogService, 'listLogs'>;
+	logService: Pick<LogService, 'listLogs' | 'getLog'>;
 };
 
 type LogManagementController = {
 	listLogs: RequestHandler;
+	getLog: RequestHandler;
 };
 
 export function createLogManagementController(dependencies: LogManagementControllerDependencies) {
@@ -25,6 +26,10 @@ export function createLogManagementController(dependencies: LogManagementControl
 					total: result.total
 				})
 			);
+		},
+		getLog: async (request, response) => {
+			const params = getValidatedParams<{ logId: string }>(request);
+			response.status(200).json(await dependencies.logService.getLog(params.logId));
 		}
 	};
 

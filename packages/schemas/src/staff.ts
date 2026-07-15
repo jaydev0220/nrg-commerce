@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { mfaMethodSchema, roleSchema, staffStatusSchema } from './auth.js';
+import { mfaMethodSchema, roleSchema, staffStatusSchema, strongPasswordSchema } from './auth.js';
 import {
 	booleanLikeSchema,
 	dateSchema,
@@ -16,7 +16,6 @@ export const staffSchema = z.object({
 	name: z.string().min(1),
 	status: staffStatusSchema,
 	passwordHash: z.string().min(1).nullable(),
-	mfaRequired: z.boolean(),
 	preferredMfaMethod: z.preprocess((value) => value ?? null, mfaMethodSchema.nullable()),
 	lastLoginAt: dateSchema.nullable(),
 	deletedAt: dateSchema.nullable(),
@@ -29,6 +28,8 @@ export const staffListQuerySchema = paginationQuerySchema.extend({
 	search: z.string().trim().min(1).optional(),
 	status: staffStatusSchema.optional(),
 	roleId: uuidSchema.optional(),
+	includeDeleted: booleanLikeSchema.default(false),
+	archived: booleanLikeSchema.optional(),
 	sort: z.enum(['createdAt', 'updatedAt', 'name', 'email']).default('createdAt'),
 	order: sortOrderSchema.default('desc')
 });
@@ -53,5 +54,5 @@ export const staffDeleteQuerySchema = z.object({
 });
 
 export const staffPasswordUpdateSchema = z.object({
-	password: z.string().min(8)
+	password: strongPasswordSchema
 });

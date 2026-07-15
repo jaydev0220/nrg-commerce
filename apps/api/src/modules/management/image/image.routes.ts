@@ -4,6 +4,7 @@ import {
 	managementProductImageListQuerySchema,
 	productImageCreateSchema,
 	productImageDeleteQuerySchema,
+	productImageFocusUpdateSchema,
 	productImageUploadRequestSchema,
 	uuidSchema
 } from '@packages/schemas';
@@ -62,11 +63,25 @@ export function createImageManagementRouter(
 		controller.getImage
 	);
 
+	router.patch(
+		'/skus/:skuId/images/:imageId/focus',
+		requirePermission('product.image.update'),
+		validateRequest({ params: imageParamsSchema, body: productImageFocusUpdateSchema }),
+		controller.updateImageFocus
+	);
+
 	router.delete(
 		'/skus/:skuId/images/:imageId',
 		requirePermission('product.image.delete'),
 		validateRequest({ params: imageParamsSchema, query: productImageDeleteQuerySchema }),
 		controller.deleteImage
+	);
+
+	router.post(
+		'/skus/:skuId/images/:imageId/restore',
+		requirePermission('product.image.delete'),
+		validateRequest({ params: imageParamsSchema }),
+		controller.restoreImage
 	);
 
 	return router;

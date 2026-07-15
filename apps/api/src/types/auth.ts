@@ -25,7 +25,6 @@ export type AuthStaffRecord = {
 	name: string;
 	status: StaffStatus;
 	passwordHash: string | null;
-	mfaRequired: boolean;
 	preferredMfaMethod: MfaMethod | null;
 	lastLoginAt: Date | null;
 	roles: AuthRoleRecord[];
@@ -77,6 +76,7 @@ export type RefreshTokenRecord = {
 	expiresAt: Date;
 	consumedAt: Date | null;
 	revokedAt: Date | null;
+	session: AuthSessionRecord;
 	staff: AuthStaffRecord;
 };
 
@@ -101,7 +101,8 @@ export type RefreshTokenPayload = {
 export type PendingAuthPayload = {
 	staffId: string;
 	primaryFactor: 'password' | 'passkey';
-	requiredMfaMethod: MfaMethod;
+	preferredMfaMethod: MfaMethod;
+	availableMfaMethods: MfaMethod[];
 };
 
 export type CeremonyTokenPurpose =
@@ -109,7 +110,17 @@ export type CeremonyTokenPurpose =
 	| 'totp_setup'
 	| 'passkey_registration'
 	| 'passkey_login'
-	| 'passkey_mfa';
+	| 'passkey_mfa'
+	| 'security_reauth';
+
+export type SecurityAction =
+	| 'add_totp'
+	| 'remove_totp'
+	| 'add_passkey'
+	| 'rename_passkey'
+	| 'remove_passkey';
+
+export type SecurityReauthMethod = 'password' | 'authenticator' | 'passkey';
 
 export type MfaSetupTokenPayload = {
 	purpose: 'mfa_setup';
@@ -136,7 +147,7 @@ export type PasskeyRegistrationTokenPayload = {
 
 export type PasskeyAuthenticationTokenPayload = {
 	purpose: 'passkey_login' | 'passkey_mfa';
-	staffId: string;
+	staffId?: string;
 	challenge: string;
 	primaryFactor: 'password' | 'passkey';
 };
@@ -162,6 +173,7 @@ export type AuthSuccessResult = {
 export type AuthMfaChallengeResult = {
 	status: 'mfa_required';
 	method: MfaMethod;
+	availableMethods: MfaMethod[];
 	pendingToken: string;
 };
 
