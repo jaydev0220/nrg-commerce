@@ -25,8 +25,53 @@ project-root/
 |   |-- admin/                                # Management page for staff
 |   |   |-- src/
 |   |   |   |-- lib/
+|   |   |   |   |-- api/
+|   |   |   |   |   |-- client.ts
+|   |   |   |   |   `-- admin-api.ts
+|   |   |   |   |-- components/
+|   |   |   |   |   |-- dashboard/
+|   |   |   |   |   |-- orders/
+|   |   |   |   |   |-- products/
+|   |   |   |   |   |-- businesses/
+|   |   |   |   |   |-- logs/
+|   |   |   |   |   |-- settings/
+|   |   |   |   |   `-- shared/
+|   |   |   |   |-- filter-navigation.ts
+|   |   |   |   |-- labels.ts
+|   |   |   |   |-- order-validation.ts
+|   |   |   |   `-- passkey.ts
 |   |   |   |-- routes/
+|   |   |   |   |-- login/
+|   |   |   |   |   |-- setup/
+|   |   |   |   |   |   `-- +page.svelte
+|   |   |   |   |   |-- verify/
+|   |   |   |   |   |   `-- +page.svelte
+|   |   |   |   |   `-- +page.svelte
+|   |   |   |   |-- orders/
+|   |   |   |   |   |-- +page.svelte
+|   |   |   |   |   `-- +page.ts
+|   |   |   |   |-- products/
+|   |   |   |   |   |-- [productId]/
+|   |   |   |   |   |   |-- +page.svelte
+|   |   |   |   |   |   `-- +page.ts
+|   |   |   |   |   |-- +page.svelte
+|   |   |   |   |   `-- +page.ts
+|   |   |   |   |-- businesses/
+|   |   |   |   |   |-- +page.svelte
+|   |   |   |   |   `-- +page.ts
+|   |   |   |   |-- staff/
+|   |   |   |   |   |-- +page.svelte
+|   |   |   |   |   `-- +page.ts
+|   |   |   |   |-- logs/
+|   |   |   |   |   |-- +page.svelte
+|   |   |   |   |   `-- +page.ts
+|   |   |   |   |-- settings/
+|   |   |   |   |   |-- +page.svelte
+|   |   |   |   |   `-- +page.ts
+|   |   |   |   |-- +page.svelte
 |   |   |   |   |-- +layout.svelte
+|   |   |   |   |-- +layout.ts
+|   |   |   |   |-- +page.ts
 |   |   |   |   `-- layout.css
 |   |   |   |-- app.html
 |   |   |   |-- app.d.ts
