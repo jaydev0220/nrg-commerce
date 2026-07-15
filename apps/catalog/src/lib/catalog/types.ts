@@ -16,6 +16,8 @@ export type CatalogImageRecord = {
 	altText: string;
 	type: 'thumbnail' | 'gallery';
 	position: number;
+	focusX?: number | null;
+	focusY?: number | null;
 	deletedAt: string | null;
 	createdAt: string;
 	updatedAt: string;

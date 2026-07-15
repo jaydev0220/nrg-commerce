@@ -12,6 +12,11 @@
 	};
 
 	let { view, categoryLabel, href }: Props = $props();
+
+	function imagePosition(): string {
+		const image = view.representativeImage;
+		return `${(image?.focusX ?? 0.5) * 100}% ${(image?.focusY ?? 0.5) * 100}%`;
+	}
 </script>
 
 <article
@@ -19,7 +24,7 @@
 >
 	<a
 		href={resolve(href as Pathname)}
-		class="relative block aspect-4/3 overflow-hidden bg-bg-sunken text-text-accent focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand"
+		class="relative block aspect-square overflow-hidden bg-bg-sunken text-text-accent focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand"
 	>
 		{#if view.representativeImage}
 			<img
@@ -27,6 +32,7 @@
 				alt={view.representativeImage.altText}
 				loading="lazy"
 				class="h-full w-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.03]"
+				style={`object-position: ${imagePosition()};`}
 			/>
 		{:else}
 			<span
