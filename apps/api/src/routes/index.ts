@@ -82,7 +82,10 @@ export function initializeRoutes(app: Application, dependencies: RouteDependenci
 	app.use('/api/auth', disableCaching, csrfProtection, createAuthRouter(authRouterDependencies));
 	app.use(
 		'/api/storefront/products',
-		createStorefrontCatalogRouter({ storefrontService: dependencies.storefrontService })
+		createStorefrontCatalogRouter({
+			storefrontService: dependencies.storefrontService,
+			cacheTtlSeconds: dependencies.config.storefrontCacheTtlSeconds
+		})
 	);
 
 	app.use(

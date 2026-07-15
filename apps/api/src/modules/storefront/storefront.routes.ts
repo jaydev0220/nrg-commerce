@@ -15,6 +15,7 @@ import type { StorefrontCatalogService } from './storefront.service.js';
 
 type StorefrontRouterDependencies = {
 	storefrontService: StorefrontCatalogService;
+	cacheTtlSeconds?: number;
 };
 
 const skuCodeParamsSchema = z.object({

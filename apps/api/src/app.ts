@@ -33,6 +33,7 @@ import { createSkuService } from './modules/management/sku/sku.service.js';
 import { createPrismaStaffRepository } from './modules/management/staff/staff.repository.js';
 import { createStaffService } from './modules/management/staff/staff.service.js';
 import { createPrismaStorefrontCatalogRepository } from './modules/storefront/storefront.repository.js';
+import { createCachedStorefrontCatalogService } from './modules/storefront/storefront.cached-service.js';
 import { createStorefrontCatalogService } from './modules/storefront/storefront.service.js';
 import { initializeRoutes } from './routes/index.js';
 import { createApiLogger } from './logging/logger.js';
@@ -138,9 +139,14 @@ export function createApp(dependencies: AppDependencies = {}) {
 		repository: managementCatalogRepository,
 		objectStorage
 	});
-	const storefrontService = createStorefrontCatalogService({
-		repository: storefrontCatalogRepository
-	});
+	const storefrontService = createCachedStorefrontCatalogService(
+		createStorefrontCatalogService({ repository: storefrontCatalogRepository }),
+		{
+			ttlMs: config.storefrontCacheTtlSeconds * 1000,
+			maxEntries: config.storefrontCacheMaxEntries,
+			logger
+		}
+	);
 	const authenticate = createAuthenticateMiddleware(authService);
 	const app = express();
 

@@ -6,6 +6,7 @@ import type { StorefrontCatalogService } from './storefront.service.js';
 
 type StorefrontControllerDependencies = {
 	storefrontService: StorefrontCatalogService;
+	cacheTtlSeconds?: number;
 };
 
 type ProductParams = {
@@ -29,11 +30,18 @@ type StorefrontCatalogController = {
 };
 
 export function createStorefrontCatalogController(dependencies: StorefrontControllerDependencies) {
+	const cacheTtlSeconds = dependencies.cacheTtlSeconds ?? 60;
+
+	function markCacheable(response: Parameters<RequestHandler>[1]) {
+		response.set('cache-control', `public, max-age=0, s-maxage=${cacheTtlSeconds}`);
+	}
+
 	const controller: StorefrontCatalogController = {
 		listProducts: async (request, response) => {
 			const query =
 				getValidatedQuery<Parameters<StorefrontCatalogService['listProducts']>[0]>(request);
 			const result = await dependencies.storefrontService.listProducts(query);
+			markCacheable(response);
 			response.status(200).json(
 				buildPaginatedResponse(result.data, {
 					page: query.page,
@@ -51,12 +59,14 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 				params.productSlug,
 				query
 			);
+			markCacheable(response);
 			response.status(200).json(product);
 		},
 
 		listSkus: async (request, response) => {
 			const query = getValidatedQuery<Parameters<StorefrontCatalogService['listSkus']>[0]>(request);
 			const result = await dependencies.storefrontService.listSkus(query);
+			markCacheable(response);
 			response.status(200).json(
 				buildPaginatedResponse(result.data, {
 					page: query.page,
@@ -71,6 +81,7 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 			const query =
 				getValidatedQuery<Parameters<StorefrontCatalogService['getSkuByCode']>[1]>(request);
 			const sku = await dependencies.storefrontService.getSkuByCode(params.skuCode, query);
+			markCacheable(response);
 			response.status(200).json(sku);
 		},
 
@@ -78,6 +89,7 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 			const query =
 				getValidatedQuery<Parameters<StorefrontCatalogService['listCategories']>[0]>(request);
 			const categories = await dependencies.storefrontService.listCategories(query);
+			markCacheable(response);
 			response.status(200).json({ data: categories });
 		},
 
@@ -89,6 +101,7 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 				params.categorySlug,
 				query
 			);
+			markCacheable(response);
 			response.status(200).json(category);
 		}
 	};
