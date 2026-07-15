@@ -136,10 +136,16 @@ export async function registerPasskey(optionsJson: unknown) {
 	return serializeRegistrationCredential(credential);
 }
 
-export async function authenticateWithPasskey(optionsJson: unknown) {
+export async function authenticateWithPasskey(
+	optionsJson: unknown,
+	mediation: CredentialMediationRequirement = 'optional',
+	signal?: AbortSignal
+) {
 	ensurePasskeySupport();
 	const credential = await navigator.credentials.get({
-		publicKey: toRequestOptions(optionsJson)
+		publicKey: toRequestOptions(optionsJson),
+		mediation,
+		signal
 	});
 
 	assertPublicKeyCredential(credential);

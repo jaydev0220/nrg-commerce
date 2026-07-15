@@ -1,383 +1,256 @@
 <script lang="ts">
-	import { CirclePlus, RotateCcw, Search, ShoppingCart, Trash2 } from '@lucide/svelte';
+	import { invalidateAll } from '$app/navigation';
+	import { Edit3, RotateCcw, Search, ShoppingCart } from '@lucide/svelte';
+	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 
-	import Badge from '$lib/components/Badge.svelte';
+	import {
+		AdminApiError,
+		createOrder,
+		formatDateTime,
+		updateOrder,
+		type OrderInput
+	} from '$lib/api/admin-api';
+	import OrderCreateDrawer from '$lib/components/orders/OrderCreateDrawer.svelte';
+	import OrderDetailDrawer from '$lib/components/orders/OrderDetailDrawer.svelte';
+	import Badge from '$lib/components/shared/Badge.svelte';
+	import Pagination from '$lib/components/shared/Pagination.svelte';
+	import { applyFilters, scheduleFilters } from '$lib/filter-navigation';
 	import { localizeAdminLabel } from '$lib/labels';
-	import type { ActionData, PageData } from './$types';
+	import { validateOrderCustomerContact } from '$lib/order-validation';
+	import type { PageData } from './$types';
 
-	type OrderFilter = 'all' | PageData['orders'][number]['status'];
+	let { data }: { data: PageData } = $props();
+	let formError = $state('');
+	let createOpen = $state(false);
+	let selected = $state<PageData['orders'][number] | null>(null);
+	let editBusinessId = $state('');
 
-	let { data, form }: { data: PageData; form: ActionData } = $props();
+	const permissions = $derived(
+		new Set(data.currentStaff?.roles.flatMap((role) => role.permissions) ?? [])
+	);
+	const canWrite = $derived(permissions.has('order.write'));
 
-	let search = $state('');
-	let status = $state<OrderFilter>('all');
-	let lineItemIndex = $state(2);
-	let lineItems = $state([{ id: 1 }, { id: 2 }]);
-
-	const filteredOrders = $derived.by(() => {
-		const query = search.trim().toLowerCase();
-
-		return data.orders.filter((order) => {
-			const matchesSearch =
-				!query ||
-				[
-					order.id,
-					order.businessName,
-					order.customerName,
-					order.customerEmail ?? '',
-					...order.items.map((item) => item.skuCode),
-					...order.items.map((item) => item.productName)
-				]
-					.join(' ')
-					.toLowerCase()
-					.includes(query);
-			const matchesStatus = status === 'all' || order.status === status;
-
-			return matchesSearch && matchesStatus;
-		});
-	});
-
-	function resetFilters() {
-		search = '';
-		status = 'all';
+	function openCreate() {
+		formError = '';
+		createOpen = true;
 	}
 
-	function addLineItem() {
-		lineItemIndex += 1;
-		lineItems = [...lineItems, { id: lineItemIndex }];
+	function openEdit(order: PageData['orders'][number]) {
+		formError = '';
+		editBusinessId = order.businessId ?? '';
+		selected = order;
 	}
 
-	function removeLineItem(lineItemId: number) {
-		if (lineItems.length === 1) {
-			return;
+	function tone(status: string): 'success' | 'warning' | 'danger' | 'neutral' {
+		return status === 'completed'
+			? 'success'
+			: status === 'cancelled' || status === 'refunded'
+				? 'danger'
+				: status === 'processing'
+					? 'warning'
+					: 'neutral';
+	}
+
+	function optional(value: FormDataEntryValue | null): string | null {
+		const normalized = String(value ?? '').trim();
+		return normalized || null;
+	}
+
+	function apiMessage(error: unknown, fallback: string): string {
+		return error instanceof AdminApiError || error instanceof Error ? error.message : fallback;
+	}
+
+	async function submitCreate(input: OrderInput, requestKey: string) {
+		try {
+			await createOrder(input, requestKey);
+			createOpen = false;
+			await invalidateAll();
+		} catch (error) {
+			throw new Error(apiMessage(error, '無法建立訂單。'), { cause: error });
 		}
-
-		lineItems = lineItems.filter((lineItem) => lineItem.id !== lineItemId);
 	}
 
-	function levelTone(orderStatus: string): 'accent' | 'neutral' | 'warning' | 'danger' | 'success' {
-		if (orderStatus === 'completed') return 'success';
-		if (orderStatus === 'cancelled' || orderStatus === 'refunded') return 'danger';
-		if (orderStatus === 'processing') return 'warning';
-		if (orderStatus === 'confirmed') return 'accent';
-		return 'neutral';
+	async function submitUpdate(event: SubmitEvent) {
+		event.preventDefault();
+		if (!selected) return;
+		formError = '';
+		const values = new FormData(event.currentTarget as HTMLFormElement);
+		try {
+			const businessId = optional(values.get('businessId'));
+			const customerName = optional(values.get('customerName'));
+			const customerPhone = optional(values.get('customerPhone'));
+			const contactError = validateOrderCustomerContact({
+				businessId,
+				customerName,
+				customerPhone
+			});
+			if (contactError) throw new Error(contactError);
+			await updateOrder(selected.id, {
+				status: String(values.get('status')) as PageData['orders'][number]['status'],
+				businessId,
+				customerName,
+				customerEmail: optional(values.get('customerEmail')),
+				customerPhone,
+				customerAddress: optional(values.get('customerAddress'))
+			});
+			selected = null;
+			await invalidateAll();
+		} catch (error) {
+			formError = apiMessage(error, '無法更新訂單。');
+		}
 	}
 </script>
 
-<svelte:head>
-	<title>訂單 | 管理後台</title>
-</svelte:head>
+<svelte:head><title>訂單 | 管理後台</title></svelte:head>
 
 <div class="space-y-5">
-	<div class="flex flex-col gap-3 sm:flex-wrap sm:flex-row sm:items-center sm:justify-between">
-		<h2 class="text-xl font-semibold tracking-normal text-text-heading">訂單管理</h2>
-	</div>
-
-	<section
-		class="grid gap-3 sm:grid-cols-3"
-		aria-label="訂單摘要"
-	>
-		{#each data.summary as item (item.label)}
-			<article class="rounded-lg border border-border bg-bg-surface p-4 shadow-xs">
-				<span class="text-sm font-medium text-text-muted">{item.label}</span>
-				<strong class="mt-2 block text-2xl text-text-heading">{item.value}</strong>
-			</article>
-		{/each}
-	</section>
-
-	<section class="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,24rem)]">
-		<article class="rounded-lg border border-border bg-bg-surface shadow-xs">
-			<div class="flex flex-col gap-3 border-b border-border p-4 2xl:flex-row 2xl:items-center">
-				<h2 class="text-lg font-semibold tracking-normal text-text-heading">訂單列表</h2>
-				<div class="flex min-w-0 flex-1 flex-wrap gap-2">
-					<label class="relative block min-w-[16rem] flex-1 basis-[18rem]">
-						<Search
-							class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted"
-						/>
-						<input
-							bind:value={search}
-							type="search"
-							class="h-10 w-full rounded-md border border-border bg-bg-surface pl-9 pr-3 text-sm text-text-body"
-							placeholder="搜尋訂單、企業或品項"
-						/>
-					</label>
-
-					<label class="min-w-44 flex-1 basis-44 sm:flex-none sm:w-44">
-						<select
-							bind:value={status}
-							class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm text-text-body"
-						>
-							<option value="all">全部狀態</option>
-							{#each data.statusOptions as option (option.value)}
-								<option value={option.value}>{option.label}</option>
-							{/each}
-						</select>
-					</label>
-
-					<button
-						type="button"
-						class="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-bg-surface px-3 text-sm font-semibold text-text-body hover:bg-bg-sunken"
-						onclick={resetFilters}
-					>
-						<RotateCcw class="size-4" />
-						重設
-					</button>
-				</div>
-			</div>
-
-			<div class="grid gap-3 p-4">
-				{#each filteredOrders as order (order.id)}
-					<article class="rounded-lg border border-border bg-bg-surface p-4">
-						<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-							<div class="min-w-0">
-								<div class="flex flex-wrap items-center gap-2">
-									<strong class="text-text-heading">#{order.id.slice(0, 8)}</strong>
-									<Badge tone={levelTone(order.status)}>
-										{localizeAdminLabel(order.status)}
-									</Badge>
-								</div>
-								<div class="mt-2 grid gap-2 text-sm text-text-muted sm:grid-cols-2">
-									<span>{order.businessName}</span>
-									<span>{order.customerName}</span>
-									<span>{order.customerEmail ?? '未填寫電子郵件'}</span>
-									<span>{order.createdAt}</span>
-								</div>
-								<ul class="mt-3 space-y-2 text-sm text-text-body">
-									{#each order.items as item (item.id)}
-										<li class="rounded-md border border-border bg-bg-sunken px-3 py-2">
-											<div class="flex flex-wrap items-center justify-between gap-2">
-												<span class="font-medium">{item.productName}</span>
-												<span class="text-text-muted">
-													{item.skuCode} · {item.quantity} 件 · {item.lineTotal}
-												</span>
-											</div>
-										</li>
-									{/each}
-								</ul>
-							</div>
-
-							<div class="min-w-0 rounded-lg border border-border bg-bg-sunken p-3 lg:w-64">
-								<div class="mb-2 text-sm font-medium text-text-heading">更新狀態</div>
-								<form
-									method="POST"
-									action="?/updateStatus"
-									class="flex flex-wrap gap-2"
-								>
-									<input
-										type="hidden"
-										name="orderId"
-										value={order.id}
-									/>
-									<select
-										name="status"
-										class="h-10 min-w-0 flex-1 rounded-md border border-border bg-bg-surface px-3 text-sm text-text-body"
-									>
-										{#each data.statusOptions as option (option.value)}
-											<option
-												value={option.value}
-												selected={option.value === order.status}
-											>
-												{option.label}
-											</option>
-										{/each}
-									</select>
-									<button
-										type="submit"
-										class="inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-brand px-4 text-sm font-semibold text-text-on-accent hover:bg-brand-hover"
-									>
-										更新
-									</button>
-								</form>
-								<div class="mt-3 text-sm text-text-muted">
-									總計 {order.totalAmount} · {order.itemCount} 件
-								</div>
-							</div>
-						</div>
-					</article>
-				{/each}
-			</div>
-
-			<div class="border-t border-border px-4 py-3 text-sm text-text-muted">
-				顯示 {filteredOrders.length} / {data.orders.length} 筆訂單
-			</div>
-		</article>
-
-		<section class="rounded-lg border border-border bg-bg-surface p-4 shadow-xs">
-			<div class="mb-4 flex items-center gap-2">
-				<ShoppingCart class="size-5 text-brand" />
-				<h2 class="text-lg font-semibold tracking-normal text-text-heading">建立訂單</h2>
-			</div>
-
-			<form
-				method="POST"
-				action="?/create"
-				class="space-y-4"
+	<header class="flex flex-wrap items-center justify-between gap-3">
+		<h1 class="text-xl font-semibold text-text-heading">訂單管理</h1>
+		{#if canWrite}
+			<button
+				type="button"
+				class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md bg-brand px-4 text-sm font-semibold text-text-on-accent hover:bg-brand-hover"
+				onclick={openCreate}
 			>
-				<label class="block">
-					<span class="mb-1 block text-sm font-medium text-text-heading">企業客戶</span>
-					<select
-						name="businessId"
-						class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm text-text-body"
+				<ShoppingCart class="size-4" />建立訂單
+			</button>
+		{/if}
+	</header>
+	{#if formError}<p
+			class="rounded-md border border-danger/30 bg-danger-bg p-3 text-sm text-danger"
+			role="alert"
+		>
+			{formError}
+		</p>{/if}
+
+	<section class="rounded-lg border border-border bg-bg-surface shadow-xs">
+		<form
+			class="flex flex-wrap items-center gap-2 border-b border-border p-4"
+			onsubmit={(event) => event.preventDefault()}
+			oninput={(event) => scheduleFilters('/orders', event.currentTarget as HTMLFormElement)}
+			onchange={(event) => applyFilters('/orders', event.currentTarget as HTMLFormElement)}
+		>
+			<label class="relative min-w-0 flex-[1_1_16rem]">
+				<span class="sr-only">搜尋訂單</span>
+				<Search class="pointer-events-none absolute left-3 top-3 size-4 text-text-muted" />
+				<input
+					name="search"
+					value={page.url.searchParams.get('search') ?? ''}
+					placeholder="搜尋訂單或客戶"
+					class="h-10 w-full rounded-md border border-border bg-bg-surface pl-9 pr-3 text-sm"
+				/>
+			</label>
+			<label class="min-w-32 flex-1">
+				<span class="sr-only">訂單狀態</span>
+				<select
+					name="status"
+					class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm"
+				>
+					<option
+						value=""
+						selected={!page.url.searchParams.has('status')}
 					>
-						{#each data.businessOptions as option (option.value)}
-							<option value={option.value}>{option.label}</option>
-						{/each}
-					</select>
-				</label>
-
-				<div class="grid gap-3 sm:grid-cols-2">
-					<label class="block">
-						<span class="mb-1 block text-sm font-medium text-text-heading">顧客名稱</span>
-						<input
-							name="customerName"
-							class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm text-text-body"
-						/>
-					</label>
-					<label class="block">
-						<span class="mb-1 block text-sm font-medium text-text-heading">電子郵件</span>
-						<input
-							name="customerEmail"
-							type="email"
-							class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm text-text-body"
-						/>
-					</label>
-					<label class="block">
-						<span class="mb-1 block text-sm font-medium text-text-heading">電話</span>
-						<input
-							name="customerPhone"
-							class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm text-text-body"
-						/>
-					</label>
-					<label class="block sm:col-span-2">
-						<span class="mb-1 block text-sm font-medium text-text-heading">地址</span>
-						<textarea
-							name="customerAddress"
-							rows="2"
-							class="w-full rounded-md border border-border bg-bg-surface px-3 py-2 text-sm text-text-body"></textarea>
-					</label>
-				</div>
-
-				<div class="space-y-3">
-					<div class="flex items-center justify-between gap-3">
-						<h3 class="text-sm font-semibold text-text-heading">訂單項目</h3>
-						<button
-							type="button"
-							class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border px-3 text-sm font-semibold text-text-body hover:bg-bg-sunken"
-							onclick={addLineItem}
+						全部狀態
+					</option>
+					{#each data.statusOptions as option (option.value)}<option
+							value={option.value}
+							selected={page.url.searchParams.get('status') === option.value}
 						>
-							<CirclePlus class="size-4" />
-							新增項目
-						</button>
-					</div>
-
-					{#each lineItems as lineItem, index (lineItem.id)}
-						<div class="rounded-lg border border-border bg-bg-sunken p-3">
-							<div class="mb-3 flex items-center justify-between gap-3">
-								<strong class="text-sm text-text-heading">項目 {index + 1}</strong>
+							{option.label}
+						</option>{/each}
+				</select>
+			</label>
+			<label class="min-w-40 flex-1">
+				<span class="sr-only">企業</span>
+				<select
+					name="businessId"
+					class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm"
+				>
+					<option
+						value=""
+						selected={!page.url.searchParams.has('businessId')}
+					>
+						全部客戶
+					</option>
+					{#each data.businessOptions.filter((option) => option.value) as option (option.value)}<option
+							value={option.value}
+							selected={page.url.searchParams.get('businessId') === option.value}
+						>
+							{option.label}
+						</option>{/each}
+				</select>
+			</label>
+			<a
+				href={resolve('/orders')}
+				class="inline-grid size-10 shrink-0 cursor-pointer place-items-center rounded-md border border-border"
+				aria-label="重設篩選"
+				title="重設篩選"
+			>
+				<RotateCcw class="size-4" />
+			</a>
+		</form>
+		<div class="overflow-x-auto">
+			<table class="min-w-[980px] w-full text-left text-sm">
+				<thead class="border-b border-border bg-bg-sunken text-xs text-text-muted">
+					<tr>
+						<th class="px-4 py-3">訂單</th>
+						<th class="px-4 py-3">狀態</th>
+						<th class="px-4 py-3">品項</th>
+						<th class="px-4 py-3">金額</th>
+						<th class="px-4 py-3">建立時間</th>
+						<th class="px-4 py-3 text-right">操作</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-border">
+					{#each data.orders as order (order.id)}
+						<tr>
+							<td class="px-4 py-4">
+								<strong class="text-text-heading">#{order.id.slice(0, 8)}</strong>
+								<p class="mt-1 text-xs text-text-muted">{order.businessName}</p>
+							</td>
+							<td class="px-4 py-4">
+								<Badge tone={tone(order.status)}>{localizeAdminLabel(order.status)}</Badge>
+							</td>
+							<td class="px-4 py-4">{order.itemCount}</td>
+							<td class="px-4 py-4 font-semibold text-text-heading">
+								NT$ {order.totalAmount.toLocaleString('zh-TW')}
+							</td>
+							<td class="whitespace-nowrap px-4 py-4 text-text-muted">
+								{formatDateTime(order.createdAt)}
+							</td>
+							<td class="px-4 py-4 text-right">
 								<button
 									type="button"
-									class="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-2 text-sm font-semibold text-text-body hover:bg-bg-surface disabled:opacity-50"
-									onclick={() => removeLineItem(lineItem.id)}
-									disabled={lineItems.length === 1}
+									class="inline-grid size-9 cursor-pointer place-items-center rounded-md border border-border"
+									aria-label="編輯訂單"
+									title="編輯訂單"
+									onclick={() => openEdit(order)}
 								>
-									<Trash2 class="size-4" />
+									<Edit3 class="size-4" />
 								</button>
-							</div>
-
-							<div class="grid gap-3">
-								<label class="block">
-									<span class="mb-1 block text-sm font-medium text-text-heading">SKU ID</span>
-									<input
-										name="itemProductSkuId"
-										class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm text-text-body"
-									/>
-								</label>
-								<div class="grid gap-3 sm:grid-cols-2">
-									<label class="block">
-										<span class="mb-1 block text-sm font-medium text-text-heading">SKU 代碼</span>
-										<input
-											name="itemSkuCode"
-											required={index === 0}
-											class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm text-text-body"
-										/>
-									</label>
-									<label class="block">
-										<span class="mb-1 block text-sm font-medium text-text-heading">品項名稱</span>
-										<input
-											name="itemProductName"
-											required={index === 0}
-											class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm text-text-body"
-										/>
-									</label>
-									<label class="block">
-										<span class="mb-1 block text-sm font-medium text-text-heading">單價</span>
-										<input
-											name="itemUnitPrice"
-											type="number"
-											step="0.01"
-											min="0"
-											required={index === 0}
-											class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm text-text-body"
-										/>
-									</label>
-									<label class="block">
-										<span class="mb-1 block text-sm font-medium text-text-heading">數量</span>
-										<input
-											name="itemQuantity"
-											type="number"
-											step="1"
-											min="1"
-											value="1"
-											required={index === 0}
-											class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm text-text-body"
-										/>
-									</label>
-								</div>
-								<label class="block">
-									<span class="mb-1 block text-sm font-medium text-text-heading">屬性 JSON</span>
-									<textarea
-										name="itemAttributes"
-										rows="2"
-										class="w-full rounded-md border border-border bg-bg-surface px-3 py-2 text-sm text-text-body"
-										placeholder="例如 color=black 的 JSON 物件"></textarea>
-								</label>
-							</div>
-						</div>
+							</td>
+						</tr>
 					{/each}
-				</div>
-
-				{#if form?.createError}
-					<p class="rounded-md border border-danger/20 bg-danger-bg px-3 py-2 text-sm text-danger">
-						{form.createError}
-					</p>
-				{/if}
-				{#if form?.createSuccess}
-					<p
-						class="rounded-md border border-success/20 bg-success-bg px-3 py-2 text-sm text-success"
-					>
-						{form.createSuccess}
-					</p>
-				{/if}
-				{#if form?.statusError}
-					<p class="rounded-md border border-danger/20 bg-danger-bg px-3 py-2 text-sm text-danger">
-						{form.statusError}
-					</p>
-				{/if}
-				{#if form?.statusSuccess}
-					<p
-						class="rounded-md border border-success/20 bg-success-bg px-3 py-2 text-sm text-success"
-					>
-						{form.statusSuccess}
-					</p>
-				{/if}
-
-				<button
-					type="submit"
-					class="inline-flex h-10 w-full items-center justify-center rounded-md bg-brand px-4 text-sm font-semibold text-text-on-accent hover:bg-brand-hover"
-				>
-					建立訂單
-				</button>
-			</form>
-		</section>
+				</tbody>
+			</table>
+		</div>
+		<Pagination pagination={data.pagination} />
 	</section>
 </div>
+
+<OrderCreateDrawer
+	open={createOpen}
+	businesses={data.businesses}
+	businessOptions={data.businessOptions}
+	onclose={() => (createOpen = false)}
+	oncreate={submitCreate}
+/>
+<OrderDetailDrawer
+	order={selected}
+	businessOptions={data.businessOptions}
+	statusOptions={data.statusOptions}
+	bind:businessId={editBusinessId}
+	onclose={() => (selected = null)}
+	onsave={submitUpdate}
+/>

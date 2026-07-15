@@ -1,172 +1,167 @@
 <script lang="ts">
 	import { Eye, RotateCcw, Search } from '@lucide/svelte';
+	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 
-	import Badge from '$lib/components/Badge.svelte';
+	import { AdminApiError, loadLogDetail } from '$lib/api/admin-api';
+	import LogDetailDrawer from '$lib/components/logs/LogDetailDrawer.svelte';
+	import Badge from '$lib/components/shared/Badge.svelte';
+	import Pagination from '$lib/components/shared/Pagination.svelte';
+	import { applyFilters, scheduleFilters } from '$lib/filter-navigation';
 	import { localizeAdminLabel } from '$lib/labels';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+	let detail = $state<Awaited<ReturnType<typeof loadLogDetail>> | null>(null);
+	let formError = $state('');
 
-	let search = $state('');
-	let level = $state('all');
-	let kind = $state('all');
-
-	const filteredLogs = $derived.by(() => {
-		const query = search.trim().toLowerCase();
-
-		return data.logs.filter((log) => {
-			const matchesSearch = !query || log.message.toLowerCase().includes(query);
-			const matchesLevel = level === 'all' || log.level === level;
-			const matchesKind = kind === 'all' || log.kind === kind;
-
-			return matchesSearch && matchesLevel && matchesKind;
-		});
-	});
-
-	function resetFilters() {
-		search = '';
-		level = 'all';
-		kind = 'all';
+	function levelTone(level: string): 'accent' | 'neutral' | 'warning' | 'danger' {
+		return level === 'error' || level === 'fatal'
+			? 'danger'
+			: level === 'warn'
+				? 'warning'
+				: level === 'info'
+					? 'accent'
+					: 'neutral';
 	}
 
-	function levelTone(logLevel: string): 'accent' | 'neutral' | 'warning' | 'danger' {
-		if (logLevel === 'error' || logLevel === 'fatal') return 'danger';
-		if (logLevel === 'warn') return 'warning';
-		if (logLevel === 'info') return 'accent';
-		return 'neutral';
+	async function inspectLog(logId: string) {
+		formError = '';
+		try {
+			detail = await loadLogDetail(logId);
+		} catch (error) {
+			formError = error instanceof AdminApiError ? error.message : '無法載入日誌內容。';
+		}
 	}
 </script>
 
-<svelte:head>
-	<title>日誌 | 管理後台</title>
-</svelte:head>
+<svelte:head><title>日誌 | 管理後台</title></svelte:head>
 
 <div class="space-y-5">
-	<section
-		class="rounded-lg border border-border bg-bg-surface shadow-xs"
-		aria-labelledby="logs-list"
-	>
-		<div class="flex flex-col gap-3 border-b border-border p-4 2xl:flex-row 2xl:items-center">
-			<h2
-				id="logs-list"
-				class="text-lg font-semibold tracking-normal text-text-heading"
+	<h1 class="text-xl font-semibold text-text-heading">日誌紀錄</h1>
+	{#if formError}
+		<p
+			class="rounded-md border border-danger/30 bg-danger-bg p-3 text-sm text-danger"
+			role="alert"
+		>
+			{formError}
+		</p>
+	{/if}
+	<section class="rounded-lg border border-border bg-bg-surface shadow-xs">
+		<form
+			class="flex flex-wrap items-center gap-2 border-b border-border p-4"
+			onsubmit={(event) => event.preventDefault()}
+			oninput={(event) => scheduleFilters('/logs', event.currentTarget as HTMLFormElement)}
+			onchange={(event) => applyFilters('/logs', event.currentTarget as HTMLFormElement)}
+		>
+			<label class="relative min-w-0 flex-[1_1_16rem]">
+				<span class="sr-only">請求識別碼</span>
+				<Search class="pointer-events-none absolute left-3 top-3 size-4 text-text-muted" />
+				<input
+					name="requestId"
+					value={page.url.searchParams.get('requestId') ?? ''}
+					placeholder="搜尋請求識別碼"
+					class="h-10 w-full rounded-md border border-border bg-bg-surface pl-9 pr-3 text-sm"
+				/>
+			</label>
+			<label class="min-w-32 flex-1">
+				<span class="sr-only">日誌層級</span>
+				<select
+					name="level"
+					class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm"
+				>
+					<option
+						value=""
+						selected={!page.url.searchParams.has('level')}
+					>
+						全部層級
+					</option>
+					{#each data.levelOptions as option (option.value)}
+						<option
+							value={option.value}
+							selected={page.url.searchParams.get('level') === option.value}
+						>
+							{option.label}
+						</option>
+					{/each}
+				</select>
+			</label>
+			<label class="min-w-32 flex-1">
+				<span class="sr-only">日誌類型</span>
+				<select
+					name="kind"
+					class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm"
+				>
+					<option
+						value=""
+						selected={!page.url.searchParams.has('kind')}
+					>
+						全部類型
+					</option>
+					{#each data.kindOptions as option (option.value)}
+						<option
+							value={option.value}
+							selected={page.url.searchParams.get('kind') === option.value}
+						>
+							{option.label}
+						</option>
+					{/each}
+				</select>
+			</label>
+			<a
+				href={resolve('/logs')}
+				class="inline-grid size-10 shrink-0 cursor-pointer place-items-center rounded-md border border-border"
+				aria-label="重設篩選"
+				title="重設篩選"
 			>
-				日誌紀錄
-			</h2>
-			<div class="flex min-w-0 flex-1 flex-wrap gap-2">
-				<label class="relative block min-w-[16rem] flex-1 basis-[18rem]">
-					<Search
-						class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted"
-					/>
-					<input
-						bind:value={search}
-						type="search"
-						placeholder="搜尋事件"
-						class="h-10 w-full rounded-md border border-border bg-bg-surface pl-9 pr-3 text-sm"
-					/>
-				</label>
-
-				<label class="min-w-40 flex-1 basis-40 sm:flex-none sm:w-40">
-					<select
-						bind:value={level}
-						class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm"
-					>
-						<option value="all">全部等級</option>
-						{#each data.levelOptions as option (option.value)}
-							<option value={option.value}>{option.label}</option>
-						{/each}
-					</select>
-				</label>
-
-				<label class="min-w-40 flex-1 basis-40 sm:flex-none sm:w-40">
-					<select
-						bind:value={kind}
-						class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm"
-					>
-						<option value="all">全部種類</option>
-						{#each data.kindOptions as option (option.value)}
-							<option value={option.value}>{option.label}</option>
-						{/each}
-					</select>
-				</label>
-
-				<button
-					type="button"
-					class="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-bg-surface px-3 text-sm font-semibold text-text-body hover:bg-bg-sunken"
-					onclick={resetFilters}
-				>
-					<RotateCcw class="size-4" />
-					重設
-				</button>
-			</div>
-		</div>
-
-		<div class="hidden xl:block">
-			<table class="w-full text-left text-sm">
-				<thead
-					class="border-b border-border bg-bg-sunken text-xs uppercase tracking-caps text-text-muted"
-				>
+				<RotateCcw class="size-4" />
+			</a>
+		</form>
+		<div class="overflow-x-auto">
+			<table class="min-w-[900px] w-full text-left text-sm">
+				<thead class="border-b border-border bg-bg-sunken text-xs text-text-muted">
 					<tr>
 						<th class="px-4 py-3">時間</th>
-						<th class="px-4 py-3">等級</th>
-						<th class="px-4 py-3">事件</th>
-						<th class="px-4 py-3">種類</th>
+						<th class="px-4 py-3">層級</th>
+						<th class="px-4 py-3">訊息</th>
+						<th class="px-4 py-3">類型</th>
 						<th class="px-4 py-3 text-right">操作</th>
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-border">
-					{#each filteredLogs as log (log.id)}
+					{#each data.logs as log (log.id)}
 						<tr>
-							<td class="px-4 py-4 text-text-muted">{log.time}</td>
+							<td class="whitespace-nowrap px-4 py-4 text-text-muted">{log.time}</td>
 							<td class="px-4 py-4">
 								<Badge tone={levelTone(log.level)}>{localizeAdminLabel(log.level)}</Badge>
 							</td>
-							<td class="px-4 py-4 font-medium text-text-heading">{log.message}</td>
+							<td class="max-w-md px-4 py-4 font-medium text-text-heading">
+								<span class="block truncate">{log.message}</span>
+							</td>
 							<td class="px-4 py-4 text-text-muted">{localizeAdminLabel(log.kind)}</td>
-							<td class="px-4 py-4">
-								<div class="flex justify-end">
-									<button
-										type="button"
-										disabled
-										class="inline-grid size-9 place-items-center rounded-md border border-border text-text-muted opacity-55"
-										aria-label={`查看 ${log.message}`}
-									>
-										<Eye class="size-4" />
-									</button>
-								</div>
+							<td class="px-4 py-4 text-right">
+								<button
+									type="button"
+									class="inline-grid size-9 cursor-pointer place-items-center rounded-md border border-border"
+									aria-label="檢視日誌詳細資料"
+									title="檢視詳細資料"
+									onclick={() => void inspectLog(log.id)}
+								>
+									<Eye class="size-4" />
+								</button>
 							</td>
 						</tr>
 					{/each}
 				</tbody>
 			</table>
 		</div>
-
-		<div class="grid gap-3 p-4 xl:hidden">
-			{#each filteredLogs as log (log.id)}
-				<article class="rounded-lg border border-border bg-bg-surface p-4">
-					<div class="flex items-start justify-between gap-3">
-						<div class="flex min-w-0 flex-wrap items-center gap-2">
-							<Badge tone={levelTone(log.level)}>{localizeAdminLabel(log.level)}</Badge>
-							<strong class="min-w-0 text-text-heading">{log.message}</strong>
-						</div>
-						<button
-							type="button"
-							disabled
-							class="inline-grid size-9 shrink-0 place-items-center rounded-md border border-border text-text-muted opacity-55"
-							aria-label={`查看 ${log.message}`}
-						>
-							<Eye class="size-4" />
-						</button>
-					</div>
-					<div class="mt-3 text-sm text-text-muted">
-						{log.time} · {localizeAdminLabel(log.kind)}
-					</div>
-				</article>
-			{/each}
-		</div>
-
-		<div class="border-t border-border px-4 py-3 text-sm text-text-muted">
-			顯示 {filteredLogs.length} / {data.logs.length} 筆日誌
-		</div>
+		<Pagination pagination={data.pagination} />
 	</section>
 </div>
+
+{#if detail}
+	<LogDetailDrawer
+		{detail}
+		onclose={() => (detail = null)}
+	/>
+{/if}

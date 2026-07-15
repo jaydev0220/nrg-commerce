@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import type { Snippet } from 'svelte';
 
-	import AdminShell from '$lib/components/AdminShell.svelte';
+	import AdminShell from '$lib/components/shared/AdminShell.svelte';
 	import type { LayoutData } from './$types';
 	import './layout.css';
 
