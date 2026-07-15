@@ -17,6 +17,7 @@ export const permissionKeys = [
 	'product.category.delete',
 	'product.image.read',
 	'product.image.create',
+	'product.image.update',
 	'product.image.delete',
 	'log.read',
 	'staff.read',
@@ -125,6 +126,11 @@ export const permissionDefinitions = [
 		description: 'Create product images in management workflows.'
 	},
 	{
+		key: 'product.image.update',
+		name: 'Update product images',
+		description: 'Update product image focus points in management workflows.'
+	},
+	{
 		key: 'product.image.delete',
 		name: 'Delete product images',
 		description: 'Delete product images in management workflows.'
@@ -193,6 +199,7 @@ export const roleDefinitions = [
 			'product.category.delete',
 			'product.image.read',
 			'product.image.create',
+			'product.image.update',
 			'product.image.delete'
 		]
 	},
