@@ -198,7 +198,13 @@ export function createApp(dependencies: AppDependencies = {}) {
 	initializeRoutes(app, {
 		config,
 		errorHandler: createErrorHandler(() => undefined, requestLogger.recordError),
-		health: dependencies.health,
+		health: dependencies.health ?? {
+			isReady: async () => {
+				await database.$queryRaw`SELECT 1`;
+				return true;
+			},
+			logger
+		},
 		authService,
 		authenticate,
 		staffService,
