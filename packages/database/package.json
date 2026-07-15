@@ -12,10 +12,11 @@
 		"check": "prisma validate && tsc --noEmit --project tsconfig.json",
 		"format": "prettier --ignore-path ../../.prettierignore --write . && prisma format",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
-		"test": "prisma generate && tsc --project tsconfig.json && node --test build/tests/**/*.test.js",
+		"test": "prisma generate && node --import tsx --test \"tests/**/*.test.ts\"",
 		"db:generate": "prisma generate",
 		"db:migrate": "prisma migrate dev",
 		"db:deploy": "prisma migrate deploy",
+		"db:reset": "prisma migrate reset",
 		"db:seed": "tsx prisma/seed.ts",
 		"db:studio": "prisma studio"
 	},

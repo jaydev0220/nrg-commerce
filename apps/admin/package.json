@@ -30,6 +30,7 @@
 		"@sveltejs/vite-plugin-svelte": "catalog:svelte",
 		"@tailwindcss/vite": "catalog:svelte",
 		"@types/node": "catalog:",
+		"@types/qrcode": "catalog:",
 		"@vitest/browser-playwright": "catalog:test",
 		"eslint": "catalog:lint",
 		"eslint-config-prettier": "catalog:lint",
@@ -47,5 +48,8 @@
 		"vite": "catalog:svelte",
 		"vitest": "catalog:test",
 		"vitest-browser-svelte": "catalog:test"
+	},
+	"dependencies": {
+		"qrcode": "catalog:"
 	}
 }

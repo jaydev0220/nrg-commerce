@@ -19,12 +19,14 @@
 		"@packages/schemas": "workspace:*",
 		"@simplewebauthn/server": "catalog:express",
 		"argon2": "catalog:express",
+		"cookie": "catalog:express",
 		"cors": "catalog:express",
 		"express": "catalog:express",
 		"express-rate-limit": "catalog:express",
 		"helmet": "catalog:express",
 		"jose": "catalog:express",
-		"otplib": "catalog:express"
+		"otplib": "catalog:express",
+		"pino": "catalog:express"
 	},
 	"devDependencies": {
 		"@eslint/js": "catalog:lint",

@@ -12,7 +12,7 @@
 		"check": "tsc --noEmit --project tsconfig.json",
 		"format": "prettier --ignore-path ../../.prettierignore --write .",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
-		"test": "tsc --project tsconfig.json && node --test build/tests/**/*.test.js"
+		"test": "node --import tsx --test \"tests/**/*.test.ts\""
 	},
 	"dependencies": {
 		"svead": "catalog:svelte"
@@ -27,6 +27,7 @@
 		"eslint-config-prettier": "catalog:lint",
 		"globals": "catalog:lint",
 		"prettier": "catalog:lint",
+		"tsx": "catalog:",
 		"typescript": "catalog:",
 		"typescript-eslint": "catalog:lint"
 	}
