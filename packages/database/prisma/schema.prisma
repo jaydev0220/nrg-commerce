@@ -262,6 +262,7 @@ model ProductImage {
   position  Int              @default(0)
   focusX    Float?
   focusY    Float?
+  zoom      Float?
   deletedAt DateTime?        @db.Timestamptz(6)
   createdAt DateTime         @default(now()) @db.Timestamptz(6)
   updatedAt DateTime         @updatedAt @db.Timestamptz(6)

@@ -131,6 +131,7 @@ function mapImageRecord(image: {
 	position: number;
 	focusX: number | null;
 	focusY: number | null;
+	zoom: number | null;
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -145,6 +146,7 @@ function mapImageRecord(image: {
 		position: image.position,
 		focusX: image.focusX,
 		focusY: image.focusY,
+		zoom: image.zoom,
 		deletedAt: image.deletedAt,
 		createdAt: image.createdAt,
 		updatedAt: image.updatedAt
@@ -181,6 +183,7 @@ function mapSkuRecordFromProduct(
 			position: number;
 			focusX: number | null;
 			focusY: number | null;
+			zoom: number | null;
 			deletedAt: Date | null;
 			createdAt: Date;
 			updatedAt: Date;
@@ -237,6 +240,7 @@ function mapSkuRecord(sku: {
 		position: number;
 		focusX: number | null;
 		focusY: number | null;
+		zoom: number | null;
 		deletedAt: Date | null;
 		createdAt: Date;
 		updatedAt: Date;
@@ -277,6 +281,7 @@ function mapProductRecord(product: {
 			position: number;
 			focusX: number | null;
 			focusY: number | null;
+			zoom: number | null;
 			deletedAt: Date | null;
 			createdAt: Date;
 			updatedAt: Date;
@@ -1296,6 +1301,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				type: 'thumbnail' | 'gallery';
 				focusX?: number | null;
 				focusY?: number | null;
+				zoom?: number | null;
 			}
 		): Promise<CatalogImageRecord | null> {
 			const now = new Date();
@@ -1315,7 +1321,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				if (input.type === 'thumbnail') {
 					await transaction.productImage.updateMany({
 						where: { skuId, type: 'thumbnail', deletedAt: null },
-						data: { type: 'gallery', focusX: null, focusY: null }
+						data: { type: 'gallery', focusX: null, focusY: null, zoom: null }
 					});
 				}
 
@@ -1334,7 +1340,8 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 						type: input.type,
 						position: (lastImage?.position ?? -1) + 1,
 						focusX: input.type === 'thumbnail' ? (input.focusX ?? 0.5) : null,
-						focusY: input.type === 'thumbnail' ? (input.focusY ?? 0.5) : null
+						focusY: input.type === 'thumbnail' ? (input.focusY ?? 0.5) : null,
+						zoom: input.type === 'thumbnail' ? (input.zoom ?? 1) : null
 					}
 				});
 				return mapImageRecord(image);
@@ -1377,6 +1384,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				type: 'thumbnail' | 'gallery';
 				focusX?: number | null;
 				focusY?: number | null;
+				zoom?: number | null;
 			}
 		): Promise<CatalogImageRecord> {
 			const image = await database.productImage.create({
@@ -1388,16 +1396,17 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					type: input.type,
 					position: 0,
 					focusX: input.type === 'thumbnail' ? (input.focusX ?? 0.5) : null,
-					focusY: input.type === 'thumbnail' ? (input.focusY ?? 0.5) : null
+					focusY: input.type === 'thumbnail' ? (input.focusY ?? 0.5) : null,
+					zoom: input.type === 'thumbnail' ? (input.zoom ?? 1) : null
 				}
 			});
 
 			return mapImageRecord(image);
 		},
 
-		async updateImageFocus(
+		async updateImageCrop(
 			imageId: string,
-			input: { focusX: number; focusY: number }
+			input: { focusX: number; focusY: number; zoom: number }
 		): Promise<CatalogImageRecord> {
 			const image = await database.productImage.update({
 				where: { id: imageId },

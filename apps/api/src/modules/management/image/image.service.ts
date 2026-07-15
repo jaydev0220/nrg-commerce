@@ -13,7 +13,7 @@ type ImageServiceDependencies = {
 		| 'createImageUpload'
 		| 'findImageUpload'
 		| 'consumeImageUpload'
-		| 'updateImageFocus'
+		| 'updateImageCrop'
 		| 'softDeleteImage'
 		| 'forceDeleteImage'
 		| 'restoreImage'
@@ -75,6 +75,7 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 				type: 'thumbnail' | 'gallery';
 				focusX?: number | null;
 				focusY?: number | null;
+				zoom?: number | null;
 			}
 		): Promise<CatalogImageRecord> {
 			await ensureSkuExists(skuId);
@@ -95,7 +96,8 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 				altText: input.altText,
 				type: input.type,
 				focusX: input.focusX,
-				focusY: input.focusY
+				focusY: input.focusY,
+				zoom: input.zoom
 			});
 			if (!image) {
 				throw new AppError(
@@ -176,21 +178,21 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 			return dependencies.repository.restoreImage(image.id);
 		},
 
-		async updateImageFocus(
+		async updateImageCrop(
 			skuId: string,
 			imageId: string,
-			input: { focusX: number; focusY: number }
+			input: { focusX: number; focusY: number; zoom: number }
 		): Promise<CatalogImageRecord> {
 			await ensureSkuExists(skuId);
 			const image = ensureImage(await dependencies.repository.findImageById(skuId, imageId));
 			if (image.type !== 'thumbnail') {
 				throw new AppError(
 					409,
-					'IMAGE_FOCUS_NOT_SUPPORTED',
-					'Only thumbnail images support a focus point.'
+					'IMAGE_CROP_NOT_SUPPORTED',
+					'Only thumbnail images support crop positioning.'
 				);
 			}
-			return dependencies.repository.updateImageFocus(image.id, input);
+			return dependencies.repository.updateImageCrop(image.id, input);
 		},
 
 		async pruneExpiredAssets(now = new Date()): Promise<{ images: number; uploads: number }> {

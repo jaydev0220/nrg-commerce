@@ -35,6 +35,7 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 				type: 'thumbnail' | 'gallery';
 				focusX?: number | null;
 				focusY?: number | null;
+				zoom?: number | null;
 		  }
 		| undefined;
 
@@ -52,6 +53,7 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 				position: 0,
 				focusX: 0.5,
 				focusY: 0.5,
+				zoom: 1,
 				deletedAt: null,
 				createdAt: new Date(),
 				updatedAt: new Date()
@@ -81,6 +83,7 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 					position: 0,
 					focusX: input.focusX ?? null,
 					focusY: input.focusY ?? null,
+					zoom: input.zoom ?? null,
 					deletedAt: null,
 					createdAt: new Date(),
 					updatedAt: new Date()
@@ -94,7 +97,7 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 			listExpiredImages: async () => [],
 			listExpiredImageUploads: async () => [],
 			deleteImageUpload: async () => undefined,
-			updateImageFocus: async (imageId, input) => ({
+			updateImageCrop: async (imageId, input) => ({
 				id: imageId,
 				skuId: 'sku-1',
 				imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
@@ -104,6 +107,7 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 				position: 0,
 				focusX: input.focusX,
 				focusY: input.focusY,
+				zoom: input.zoom,
 				deletedAt: null,
 				createdAt: new Date(),
 				updatedAt: new Date()
@@ -134,17 +138,20 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 		altText: 'Front image',
 		type: 'gallery',
 		focusX: undefined,
-		focusY: undefined
+		focusY: undefined,
+		zoom: undefined
 	});
 	assert.equal(image.imageUrl, 'https://assets.example.com/products/skus/sku-1/image.png');
-	const focusedImage = await imageService.updateImageFocus('sku-1', 'image-1', {
+	const focusedImage = await imageService.updateImageCrop('sku-1', 'image-1', {
 		focusX: 0.2,
-		focusY: 0.8
+		focusY: 0.8,
+		zoom: 1.5
 	});
 	assert.deepEqual(
 		{ focusX: focusedImage.focusX, focusY: focusedImage.focusY },
 		{ focusX: 0.2, focusY: 0.8 }
 	);
+	assert.equal(focusedImage.zoom, 1.5);
 });
 
 test('createImageUploadTarget rejects unknown skus before generating upload URLs', async () => {
@@ -168,7 +175,7 @@ test('createImageUploadTarget rejects unknown skus before generating upload URLs
 			listExpiredImages: async () => [],
 			listExpiredImageUploads: async () => [],
 			deleteImageUpload: async () => undefined,
-			updateImageFocus: async () => {
+			updateImageCrop: async () => {
 				throw new Error('not used');
 			}
 		},
@@ -206,6 +213,7 @@ test('deleteImage soft deletes normally and removes the asset on force delete', 
 		position: 0,
 		focusX: null,
 		focusY: null,
+		zoom: null,
 		deletedAt: null,
 		createdAt: new Date(),
 		updatedAt: new Date()
@@ -236,7 +244,7 @@ test('deleteImage soft deletes normally and removes the asset on force delete', 
 			listExpiredImages: async () => [],
 			listExpiredImageUploads: async () => [],
 			deleteImageUpload: async () => undefined,
-			updateImageFocus: async () => {
+			updateImageCrop: async () => {
 				throw new Error('not used');
 			}
 		},
@@ -299,7 +307,7 @@ test('pruneExpiredAssets deletes expired objects and their database records', as
 			deleteImageUpload: async (uploadId) => {
 				deletedUploadIds.push(uploadId);
 			},
-			updateImageFocus: async () => {
+			updateImageCrop: async () => {
 				throw new Error('not used');
 			}
 		},

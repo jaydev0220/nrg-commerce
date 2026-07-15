@@ -229,7 +229,7 @@ test('management product image upload-url route returns a presigned upload targe
 				deleteImage: async () => {
 					throw new Error('not used');
 				},
-				updateImageFocus: async () => {
+				updateImageCrop: async () => {
 					throw new Error('not used');
 				},
 				restoreImage: async () => {

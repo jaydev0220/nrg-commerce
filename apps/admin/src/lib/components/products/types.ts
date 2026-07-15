@@ -47,6 +47,7 @@ export type ProductImageUploadInput = {
 	type: 'thumbnail' | 'gallery';
 	focusX: number | null;
 	focusY: number | null;
+	zoom: number | null;
 };
 
 export type ProductAttributeRow = {

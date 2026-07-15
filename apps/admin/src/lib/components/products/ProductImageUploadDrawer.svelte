@@ -29,6 +29,7 @@
 	let altText = $state('');
 	let focusX = $state(0.5);
 	let focusY = $state(0.5);
+	let zoom = $state(1);
 	let errorMessage = $state('');
 	let busy = $state(false);
 	let dragging = $state(false);
@@ -57,6 +58,7 @@
 		altText = '';
 		focusX = 0.5;
 		focusY = 0.5;
+		zoom = 1;
 		errorMessage = '';
 		busy = false;
 		dragging = false;
@@ -84,6 +86,7 @@
 		previewUrl = URL.createObjectURL(file);
 		focusX = 0.5;
 		focusY = 0.5;
+		zoom = 1;
 		try {
 			imageDimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
 				const image = new Image();
@@ -126,7 +129,8 @@
 				altText: altText.trim(),
 				type,
 				focusX: type === 'thumbnail' ? focusX : null,
-				focusY: type === 'thumbnail' ? focusY : null
+				focusY: type === 'thumbnail' ? focusY : null,
+				zoom: type === 'thumbnail' ? zoom : null
 			});
 			busy = false;
 			close();
@@ -200,6 +204,7 @@
 							onchange={(focus) => {
 								focusX = focus.focusX;
 								focusY = focus.focusY;
+								zoom = focus.zoom;
 							}}
 						/>
 					</div>

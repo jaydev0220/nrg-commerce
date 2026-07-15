@@ -10,7 +10,7 @@
 		deleteProductSku,
 		registerProductImage,
 		restoreProductImage,
-		updateProductImageFocus,
+		updateProductImageCrop,
 		updateProduct,
 		updateProductSku
 	} from '$lib/api/admin-api';
@@ -63,17 +63,18 @@
 			altText: input.altText,
 			type: input.type,
 			focusX: input.type === 'thumbnail' ? input.focusX : null,
-			focusY: input.type === 'thumbnail' ? input.focusY : null
+			focusY: input.type === 'thumbnail' ? input.focusY : null,
+			zoom: input.type === 'thumbnail' ? input.zoom : null
 		});
 		await invalidateAll();
 	}
 
-	async function updateImageFocus(
+	async function updateImageCrop(
 		skuId: string,
 		imageId: string,
-		input: { focusX: number; focusY: number }
+		input: { focusX: number; focusY: number; zoom: number }
 	) {
-		await updateProductImageFocus(skuId, imageId, input);
+		await updateProductImageCrop(skuId, imageId, input);
 		await invalidateAll();
 	}
 
@@ -121,7 +122,7 @@
 		onupdateSku={updateSku}
 		ondeleteSku={deleteSku}
 		onuploadImage={uploadImage}
-		onupdateImageFocus={updateImageFocus}
+		onupdateImageCrop={updateImageCrop}
 		ondeleteImage={deleteImage}
 		onrestoreImage={restoreImage}
 		onforceDeleteImage={forceDeleteImage}

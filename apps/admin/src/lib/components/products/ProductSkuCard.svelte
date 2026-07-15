@@ -10,7 +10,7 @@
 		onedit,
 		ondelete,
 		onupload,
-		onupdateImageFocus,
+		onupdateImageCrop,
 		ondeleteImage,
 		onrestoreImage,
 		onforceDeleteImage
@@ -20,9 +20,9 @@
 		onedit: () => void;
 		ondelete: () => void;
 		onupload: () => void;
-		onupdateImageFocus: (
+		onupdateImageCrop: (
 			imageId: string,
-			input: { focusX: number; focusY: number }
+			input: { focusX: number; focusY: number; zoom: number }
 		) => Promise<void> | void;
 		ondeleteImage: (imageId: string) => Promise<void> | void;
 		onrestoreImage: (imageId: string) => Promise<void> | void;
@@ -66,7 +66,7 @@
 	<ProductImageGrid
 		images={sku.images}
 		{deletedImages}
-		onupdateFocus={onupdateImageFocus}
+		onupdateCrop={onupdateImageCrop}
 		ondelete={ondeleteImage}
 		onrestore={onrestoreImage}
 		onforceDelete={onforceDeleteImage}

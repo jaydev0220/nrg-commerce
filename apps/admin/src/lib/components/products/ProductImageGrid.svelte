@@ -7,16 +7,16 @@
 	let {
 		images,
 		deletedImages,
-		onupdateFocus,
+		onupdateCrop,
 		ondelete,
 		onrestore,
 		onforceDelete
 	}: {
 		images: ManagedProductImage[];
 		deletedImages: ManagedProductImage[];
-		onupdateFocus: (
+		onupdateCrop: (
 			imageId: string,
-			input: { focusX: number; focusY: number }
+			input: { focusX: number; focusY: number; zoom: number }
 		) => Promise<void> | void;
 		ondelete: (imageId: string) => Promise<void> | void;
 		onrestore: (imageId: string) => Promise<void> | void;
@@ -25,17 +25,24 @@
 
 	const activeImages = $derived(images.filter((image) => !image.deletedAt));
 	let editingImage = $state<ManagedProductImage | null>(null);
-	let draftFocus = $state({ focusX: 0.5, focusY: 0.5 });
+	let draftCrop = $state({ focusX: 0.5, focusY: 0.5, zoom: 1 });
 	let saving = $state(false);
 	let message = $state('');
 
-	function imagePosition(image: ManagedProductImage): string {
-		return `${(image.focusX ?? 0.5) * 100}% ${(image.focusY ?? 0.5) * 100}%`;
+	function imageStyle(image: ManagedProductImage): string {
+		const focusX = image.focusX ?? 0.5;
+		const focusY = image.focusY ?? 0.5;
+		const zoom = image.zoom ?? 1;
+		return `object-position: ${focusX * 100}% ${focusY * 100}%; transform: scale(${zoom}); transform-origin: ${focusX * 100}% ${focusY * 100}%;`;
 	}
 
 	function openFocusEditor(image: ManagedProductImage) {
 		editingImage = image;
-		draftFocus = { focusX: image.focusX ?? 0.5, focusY: image.focusY ?? 0.5 };
+		draftCrop = {
+			focusX: image.focusX ?? 0.5,
+			focusY: image.focusY ?? 0.5,
+			zoom: image.zoom ?? 1
+		};
 		message = '';
 	}
 
@@ -45,15 +52,15 @@
 		message = '';
 	}
 
-	async function saveFocus() {
+	async function saveCrop() {
 		if (!editingImage) return;
 		saving = true;
 		message = '';
 		try {
-			await onupdateFocus(editingImage.id, draftFocus);
+			await onupdateCrop(editingImage.id, draftCrop);
 			editingImage = null;
 		} catch (error) {
-			message = error instanceof Error ? error.message : '無法更新縮圖焦點。';
+			message = error instanceof Error ? error.message : '無法更新縮圖裁切。';
 		} finally {
 			saving = false;
 		}
@@ -75,7 +82,7 @@
 						src={image.imageUrl}
 						alt={image.altText}
 						class="h-full w-full object-cover"
-						style={`object-position: ${imagePosition(image)};`}
+						style={imageStyle(image)}
 					/>
 					{#if image.type === 'thumbnail'}
 						<span
@@ -99,7 +106,7 @@
 								class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border px-2 text-xs text-text-body hover:bg-bg-sunken"
 								aria-label="調整縮圖焦點"
 								onclick={() => openFocusEditor(image)}
-								title="調整縮圖焦點"
+								title="調整縮圖裁切"
 							>
 								<Pencil class="size-3.5" />調整焦點
 							</button>
@@ -130,7 +137,7 @@
 						src={image.imageUrl}
 						alt={image.altText}
 						class="aspect-square w-full object-cover opacity-60"
-						style={`object-position: ${imagePosition(image)};`}
+						style={imageStyle(image)}
 					/>
 					<div class="flex items-center justify-between gap-2 p-2">
 						<span
@@ -178,9 +185,10 @@
 				<ProductImageFocusPicker
 					imageUrl={editingImage.imageUrl}
 					altText={editingImage.altText}
-					initialFocusX={draftFocus.focusX}
-					initialFocusY={draftFocus.focusY}
-					onchange={(focus) => (draftFocus = focus)}
+					initialFocusX={draftCrop.focusX}
+					initialFocusY={draftCrop.focusY}
+					initialZoom={draftCrop.zoom}
+					onchange={(crop) => (draftCrop = crop)}
 				/>
 			{/key}
 			{#if message}
@@ -195,9 +203,9 @@
 				type="button"
 				disabled={saving}
 				class="inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-brand px-4 text-sm font-semibold text-text-on-accent hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-55"
-				onclick={() => void saveFocus()}
+				onclick={() => void saveCrop()}
 			>
-				{saving ? '儲存中...' : '儲存焦點'}
+				{saving ? '儲存中...' : '儲存裁切'}
 			</button>
 		</div>
 	{/if}

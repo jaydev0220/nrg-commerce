@@ -17,6 +17,14 @@
 		const image = view.representativeImage;
 		return `${(image?.focusX ?? 0.5) * 100}% ${(image?.focusY ?? 0.5) * 100}%`;
 	}
+
+	function imageStyle(): string {
+		const image = view.representativeImage;
+		const focusX = image?.focusX ?? 0.5;
+		const focusY = image?.focusY ?? 0.5;
+		const zoom = image?.zoom ?? 1;
+		return `object-position: ${imagePosition()}; transform: scale(${zoom}); transform-origin: ${focusX * 100}% ${focusY * 100}%;`;
+	}
 </script>
 
 <article
@@ -31,8 +39,8 @@
 				src={view.representativeImage.imageUrl}
 				alt={view.representativeImage.altText}
 				loading="lazy"
-				class="h-full w-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.03]"
-				style={`object-position: ${imagePosition()};`}
+				class="h-full w-full object-cover"
+				style={imageStyle()}
 			/>
 		{:else}
 			<span

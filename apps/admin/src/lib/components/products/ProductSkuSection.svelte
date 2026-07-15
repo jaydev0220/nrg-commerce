@@ -18,7 +18,7 @@
 		onupdateSku,
 		ondeleteSku,
 		onuploadImage,
-		onupdateImageFocus,
+		onupdateImageCrop,
 		ondeleteImage,
 		onrestoreImage,
 		onforceDeleteImage
@@ -29,10 +29,10 @@
 		onupdateSku: (skuId: string, input: ProductSkuInput) => Promise<void>;
 		ondeleteSku: (skuId: string) => Promise<void>;
 		onuploadImage: (input: ProductImageUploadInput) => Promise<void>;
-		onupdateImageFocus: (
+		onupdateImageCrop: (
 			skuId: string,
 			imageId: string,
-			input: { focusX: number; focusY: number }
+			input: { focusX: number; focusY: number; zoom: number }
 		) => Promise<void>;
 		ondeleteImage: (skuId: string, imageId: string) => Promise<void>;
 		onrestoreImage: (skuId: string, imageId: string) => Promise<void>;
@@ -151,7 +151,7 @@
 				onedit={() => openSku(sku)}
 				ondelete={() => void removeSku(sku.id)}
 				onupload={() => (imageSkuId = sku.id)}
-				onupdateImageFocus={(imageId, input) => onupdateImageFocus(sku.id, imageId, input)}
+				onupdateImageCrop={(imageId, input) => onupdateImageCrop(sku.id, imageId, input)}
 				ondeleteImage={(imageId) => deleteImage(sku.id, imageId)}
 				onrestoreImage={(imageId) => restoreImage(sku.id, imageId)}
 				onforceDeleteImage={(imageId) => forceDeleteImage(sku.id, imageId)}

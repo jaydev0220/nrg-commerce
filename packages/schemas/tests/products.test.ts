@@ -7,6 +7,7 @@ import {
 	productCreateSchema,
 	managementSkuDetailQuerySchema,
 	productImageCreateSchema,
+	productImageCropUpdateSchema,
 	productImageTypeSchema,
 	productImageUploadRequestSchema,
 	productCategoryUpdateSchema,
@@ -119,9 +120,10 @@ test('productImageCreateSchema accepts a pending upload reference', () => {
 	assert.equal(parsedImage.type, 'gallery');
 	assert.equal(parsedImage.focusX, undefined);
 	assert.equal(parsedImage.focusY, undefined);
+	assert.equal(parsedImage.zoom, undefined);
 });
 
-test('productImageCreateSchema requires paired focus coordinates', () => {
+test('productImageCreateSchema requires all crop fields together', () => {
 	assert.throws(() =>
 		productImageCreateSchema.parse({
 			uploadId: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
@@ -164,6 +166,16 @@ test('storefront product query schemas parse include flags from query strings', 
 	const listQuery = storefrontProductListQuerySchema.parse({
 		includeSkus: 'true',
 		includeImages: 'true'
+	});
+
+	test('productImageCropUpdateSchema validates the persisted crop range', () => {
+		assert.deepEqual(
+			productImageCropUpdateSchema.parse({ focusX: 0.25, focusY: 0.75, zoom: 1.5 }),
+			{ focusX: 0.25, focusY: 0.75, zoom: 1.5 }
+		);
+		assert.throws(() =>
+			productImageCropUpdateSchema.parse({ focusX: 0.25, focusY: 0.75, zoom: 3.1 })
+		);
 	});
 	const detailQuery = storefrontProductDetailQuerySchema.parse({
 		includeSkus: 'true',

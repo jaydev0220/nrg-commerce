@@ -18,6 +18,7 @@ export type CatalogImageRecord = {
 	position: number;
 	focusX?: number | null;
 	focusY?: number | null;
+	zoom?: number | null;
 	deletedAt: string | null;
 	createdAt: string;
 	updatedAt: string;

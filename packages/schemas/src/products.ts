@@ -25,6 +25,7 @@ export const productImageContentTypeValues = [
 export const productImageContentTypeSchema = z.enum(productImageContentTypeValues);
 export const productImageMaxFileSize = 10 * 1024 * 1024;
 const productImageFocusCoordinateSchema = z.number().min(0).max(1);
+const productImageZoomSchema = z.number().min(1).max(3);
 
 const parsedAttributeQuerySchema = z.string().transform((value, context) => {
 	try {
@@ -76,6 +77,7 @@ export const productImageSchema = z.object({
 	position: z.number().int().min(0),
 	focusX: productImageFocusCoordinateSchema.nullable(),
 	focusY: productImageFocusCoordinateSchema.nullable(),
+	zoom: productImageZoomSchema.nullable(),
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
 	updatedAt: dateSchema
@@ -233,21 +235,26 @@ export const productImageCreateSchema = z
 		altText: z.string().trim().min(1),
 		type: productImageTypeSchema.default('gallery'),
 		focusX: productImageFocusCoordinateSchema.nullish(),
-		focusY: productImageFocusCoordinateSchema.nullish()
+		focusY: productImageFocusCoordinateSchema.nullish(),
+		zoom: productImageZoomSchema.nullish()
 	})
 	.superRefine((input, context) => {
-		if ((input.focusX === undefined) !== (input.focusY === undefined)) {
+		const cropFieldCount = [input.focusX, input.focusY, input.zoom].filter(
+			(value) => value !== undefined && value !== null
+		).length;
+		if (cropFieldCount !== 0 && cropFieldCount !== 3) {
 			context.addIssue({
 				code: 'custom',
 				path: ['focusX'],
-				message: 'focusX and focusY must be provided together.'
+				message: 'focusX, focusY, and zoom must be provided together.'
 			});
 		}
 	});
 
-export const productImageFocusUpdateSchema = z.object({
+export const productImageCropUpdateSchema = z.object({
 	focusX: productImageFocusCoordinateSchema,
-	focusY: productImageFocusCoordinateSchema
+	focusY: productImageFocusCoordinateSchema,
+	zoom: productImageZoomSchema
 });
 
 export const productImageDeleteQuerySchema = z.object({

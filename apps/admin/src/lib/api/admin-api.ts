@@ -100,6 +100,7 @@ export type ManagedProductImage = {
 	position: number;
 	focusX: number | null;
 	focusY: number | null;
+	zoom: number | null;
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -636,6 +637,7 @@ export function registerProductImage(
 		type: 'thumbnail' | 'gallery';
 		focusX?: number | null;
 		focusY?: number | null;
+		zoom?: number | null;
 	}
 ) {
 	return json<ManagedProductImage>(
@@ -644,13 +646,13 @@ export function registerProductImage(
 	);
 }
 
-export function updateProductImageFocus(
+export function updateProductImageCrop(
 	skuId: string,
 	imageId: string,
-	input: { focusX: number; focusY: number }
+	input: { focusX: number; focusY: number; zoom: number }
 ) {
 	return json<ManagedProductImage>(
-		`/api/management/products/skus/${skuId}/images/${imageId}/focus`,
+		`/api/management/products/skus/${skuId}/images/${imageId}/crop`,
 		body('PATCH', input)
 	);
 }
