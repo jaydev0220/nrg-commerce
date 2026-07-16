@@ -95,18 +95,6 @@
 				</p>
 			</div>
 		</div>
-		<p
-			class="mt-4 border-t border-border-accent pt-4 text-xs leading-relaxed text-text-muted"
-			aria-live="polite"
-		>
-			{m.catalog_available_configuration()} ·
-			{#each model.selectedAttributeEntries as entry, index (entry.key)}
-				{#if index > 0}
-					·
-				{/if}
-				{entry.label}: {entry.valueLabel}
-			{/each}
-		</p>
 		<a
 			href={resolve(inquiryHref as Pathname)}
 			class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand px-4 py-3 text-sm font-semibold text-text-on-accent transition-[color,background-color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
