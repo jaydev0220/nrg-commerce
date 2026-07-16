@@ -11,6 +11,8 @@ import {
 	productImageTypeSchema,
 	productImageUploadRequestSchema,
 	productCategoryUpdateSchema,
+	productCategoryDeleteQuerySchema,
+	productCategoryReorderSchema,
 	productSkuCreateSchema,
 	productUpdateSchema,
 	storefrontProductDetailQuerySchema,
@@ -90,6 +92,37 @@ test('storefrontSkuListQuerySchema parses attribute filters from JSON strings', 
 
 test('productCategoryUpdateSchema requires at least one field', () => {
 	assert.throws(() => productCategoryUpdateSchema.parse({}));
+});
+
+test('productCategoryReorderSchema requires unique sibling ids', () => {
+	const parsed = productCategoryReorderSchema.parse({
+		parentId: null,
+		categoryIds: ['93f99825-2962-4a10-b453-daa375ff1c43']
+	});
+	assert.equal(parsed.parentId, null);
+	assert.throws(() =>
+		productCategoryReorderSchema.parse({
+			parentId: null,
+			categoryIds: ['93f99825-2962-4a10-b453-daa375ff1c43', '93f99825-2962-4a10-b453-daa375ff1c43']
+		})
+	);
+});
+
+test('productCategoryDeleteQuerySchema validates reassignment input', () => {
+	assert.equal(
+		productCategoryDeleteQuerySchema.parse({
+			productDisposition: 'reassign',
+			reassignToCategoryId: '93f99825-2962-4a10-b453-daa375ff1c43'
+		}).childDisposition,
+		'reject'
+	);
+	assert.throws(() => productCategoryDeleteQuerySchema.parse({ productDisposition: 'reassign' }));
+	assert.throws(() =>
+		productCategoryDeleteQuerySchema.parse({
+			productDisposition: 'uncategorize',
+			reassignToCategoryId: '93f99825-2962-4a10-b453-daa375ff1c43'
+		})
+	);
 });
 
 test('productImageTypeSchema rejects removed image types', () => {

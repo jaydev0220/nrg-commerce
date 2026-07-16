@@ -5,6 +5,7 @@ import {
 	productCategoryCreateSchema,
 	productCategoryDeleteQuerySchema,
 	productCategoryDetailQuerySchema,
+	productCategoryReorderSchema,
 	productCategoryUpdateSchema,
 	uuidSchema
 } from '@packages/schemas';
@@ -42,6 +43,13 @@ export function createCategoryManagementRouter(
 		requirePermission('product.category.create'),
 		validateRequest({ body: productCategoryCreateSchema }),
 		controller.createCategory
+	);
+
+	router.put(
+		'/categories/reorder',
+		requirePermission('product.category.update'),
+		validateRequest({ body: productCategoryReorderSchema }),
+		controller.reorderCategories
 	);
 
 	router.get(

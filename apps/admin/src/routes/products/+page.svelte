@@ -12,6 +12,7 @@
 	import ProductBulkActions from '$lib/components/products/ProductBulkActions.svelte';
 	import ProductCreateDrawer from '$lib/components/products/ProductCreateDrawer.svelte';
 	import ProductFilters from '$lib/components/products/ProductFilters.svelte';
+	import ProductSectionTabs from '$lib/components/products/ProductSectionTabs.svelte';
 	import ProductTable from '$lib/components/products/ProductTable.svelte';
 	import Pagination from '$lib/components/shared/Pagination.svelte';
 	import type { ProductBulkAction, ProductCreateInput } from '$lib/components/products/types';
@@ -105,6 +106,7 @@
 <svelte:head><title>商品 | 管理後台</title></svelte:head>
 
 <div class="space-y-5">
+	<ProductSectionTabs active="products" />
 	<header class="flex flex-wrap items-center justify-between gap-3">
 		<h1 class="text-xl font-semibold text-text-heading">商品管理</h1>
 		{#if canCreate}

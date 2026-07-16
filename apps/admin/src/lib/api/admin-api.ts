@@ -88,6 +88,20 @@ export type ManagedCategory = {
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
+	productCount?: number;
+};
+
+export type CategoryDeleteInput = {
+	productDisposition: 'reject' | 'uncategorize' | 'reassign';
+	childDisposition: 'reject' | 'promote';
+	reassignToCategoryId?: string;
+};
+
+export type CategoryDeleteResult = {
+	deleted: true;
+	mode: 'soft';
+	productDisposition: 'none' | 'uncategorize' | 'reassign';
+	childDisposition: 'none' | 'promote';
 };
 
 export type ManagedProductImage = {
@@ -549,6 +563,69 @@ export async function loadProductPageData(searchParams = new URLSearchParams()) 
 		loadPaginatedData<ManagedProduct>('/api/management/products', searchParams)
 	]);
 	return { categories, products: products.data, pagination: products.pagination };
+}
+
+export async function loadCategoryPageData() {
+	const categories = await collectPaginatedData<ManagedCategory>(
+		'/api/management/products/categories'
+	);
+	return { categories };
+}
+
+export function loadCategoryDetail(categoryId: string) {
+	return json<ManagedCategory & { children?: ManagedCategory[] }>(
+		`/api/management/products/categories/${categoryId}?includeChildren=true&includeProductCount=true`
+	);
+}
+
+export function createCategory(input: {
+	name: string;
+	nameEn?: string;
+	slug: string;
+	parentId?: string;
+	description?: string;
+	descriptionEn?: string;
+	position: number;
+}) {
+	return json<ManagedCategory>('/api/management/products/categories', body('POST', input));
+}
+
+export function updateCategory(
+	categoryId: string,
+	input: {
+		name?: string;
+		nameEn?: string | null;
+		slug?: string;
+		parentId?: string | null;
+		description?: string | null;
+		descriptionEn?: string | null;
+		position?: number;
+	}
+) {
+	return json<ManagedCategory>(
+		`/api/management/products/categories/${categoryId}`,
+		body('PATCH', input)
+	);
+}
+
+export function reorderCategories(input: { parentId: string | null; categoryIds: string[] }) {
+	return json<{ reordered: true }>(
+		'/api/management/products/categories/reorder',
+		body('PUT', input)
+	);
+}
+
+export function deleteCategory(categoryId: string, input: CategoryDeleteInput) {
+	const params = new URLSearchParams({
+		productDisposition: input.productDisposition,
+		childDisposition: input.childDisposition
+	});
+	if (input.reassignToCategoryId) {
+		params.set('reassignToCategoryId', input.reassignToCategoryId);
+	}
+	return json<CategoryDeleteResult>(`/api/management/products/categories/${categoryId}?${params}`, {
+		method: 'DELETE'
+	});
 }
 
 export async function loadProductEditorData(productId: string) {

@@ -24,6 +24,7 @@ type CategoryManagementController = {
 	createCategory: RequestHandler;
 	getCategory: RequestHandler;
 	updateCategory: RequestHandler;
+	reorderCategories: RequestHandler;
 	deleteCategory: RequestHandler;
 };
 
@@ -90,11 +91,29 @@ export function createCategoryManagementController(
 			response.status(200).json(category);
 		},
 
+		reorderCategories: async (request, response) => {
+			const authContext = requireAuthContext(response);
+			const body = getValidatedBody<Parameters<CategoryService['reorderCategories']>[0]>(request);
+			await dependencies.categoryService.reorderCategories(body);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff reordered product categories.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'product_category',
+				metadata: { parentId: body.parentId, categoryIds: body.categoryIds }
+			});
+			response.status(200).json({ reordered: true });
+		},
+
 		deleteCategory: async (request, response) => {
 			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<CategoryParams>(request);
 			const query = getValidatedQuery<Parameters<CategoryService['deleteCategory']>[1]>(request);
-			const mode = await dependencies.categoryService.deleteCategory(params.categoryId, query);
+			const result = await dependencies.categoryService.deleteCategory(params.categoryId, query);
 			const requestContext = getRequestContext(request, response);
 			await dependencies.logService.recordAuditLog({
 				message: 'Staff deleted a product category.',
@@ -105,11 +124,11 @@ export function createCategoryManagementController(
 				statusCode: 200,
 				entityType: 'product_category',
 				entityId: params.categoryId,
-				metadata: { mode }
+				metadata: result
 			});
 			response.status(200).json({
 				deleted: true,
-				mode
+				...result
 			});
 		}
 	};

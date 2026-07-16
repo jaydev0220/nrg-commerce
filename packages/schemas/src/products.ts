@@ -206,10 +206,44 @@ export const productCategoryUpdateSchema = nonEmptyUpdate(
 	})
 );
 
-export const productCategoryDeleteQuerySchema = z.object({
-	force: booleanLikeSchema.default(false),
-	reassignToCategoryId: uuidSchema.optional()
-});
+export const productCategoryReorderSchema = z
+	.object({
+		parentId: uuidSchema.nullable(),
+		categoryIds: z.array(uuidSchema).max(1000)
+	})
+	.superRefine((input, context) => {
+		if (new Set(input.categoryIds).size !== input.categoryIds.length) {
+			context.addIssue({
+				code: 'custom',
+				path: ['categoryIds'],
+				message: 'categoryIds must not contain duplicates.'
+			});
+		}
+	});
+
+export const productCategoryDeleteQuerySchema = z
+	.object({
+		productDisposition: z.enum(['reject', 'uncategorize', 'reassign']).default('reject'),
+		childDisposition: z.enum(['reject', 'promote']).default('reject'),
+		reassignToCategoryId: uuidSchema.optional()
+	})
+	.superRefine((input, context) => {
+		if (input.productDisposition === 'reassign' && !input.reassignToCategoryId) {
+			context.addIssue({
+				code: 'custom',
+				path: ['reassignToCategoryId'],
+				message: 'reassignToCategoryId is required when productDisposition is reassign.'
+			});
+		}
+
+		if (input.productDisposition !== 'reassign' && input.reassignToCategoryId) {
+			context.addIssue({
+				code: 'custom',
+				path: ['reassignToCategoryId'],
+				message: 'reassignToCategoryId is only allowed when productDisposition is reassign.'
+			});
+		}
+	});
 
 export const productCategoryDetailQuerySchema = z.object({
 	includeChildren: booleanLikeSchema.default(false),

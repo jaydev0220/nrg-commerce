@@ -31,13 +31,11 @@ type CategoryServiceDependencies = {
 		| 'findCategoryById'
 		| 'createCategory'
 		| 'updateCategory'
-		| 'reassignSkusToCategory'
-		| 'softDeleteCategory'
-		| 'forceDeleteCategory'
+		| 'reorderCategorySiblings'
+		| 'deleteCategory'
 		| 'slugExists'
 		| 'hasCircularParent'
 		| 'countAssignedSkus'
-		| 'hasChildCategories'
 	>;
 };
 
@@ -174,56 +172,96 @@ export function createCategoryService(dependencies: CategoryServiceDependencies)
 			return dependencies.repository.updateCategory(categoryId, input);
 		},
 
+		async reorderCategories(input: {
+			parentId: string | null;
+			categoryIds: string[];
+		}): Promise<void> {
+			const reordered = await dependencies.repository.reorderCategorySiblings(input);
+			if (!reordered) {
+				throw new AppError(
+					409,
+					'CATEGORY_REORDER_CONFLICT',
+					'The category list changed before the reorder could be saved.'
+				);
+			}
+		},
+
 		async deleteCategory(
 			categoryId: string,
 			input: {
-				force: boolean;
+				productDisposition: 'reject' | 'uncategorize' | 'reassign';
+				childDisposition: 'reject' | 'promote';
 				reassignToCategoryId?: string;
 			}
-		): Promise<'soft' | 'force'> {
+		): Promise<{
+			mode: 'soft';
+			productDisposition: 'none' | 'uncategorize' | 'reassign';
+			childDisposition: 'none' | 'promote';
+		}> {
 			ensureCategory(await dependencies.repository.findCategoryById(categoryId));
+			const assignedSkuCount = await dependencies.repository.countAssignedSkus(categoryId);
+			const productDisposition =
+				assignedSkuCount === 0
+					? 'none'
+					: input.productDisposition === 'uncategorize'
+						? 'uncategorize'
+						: input.productDisposition === 'reassign'
+							? 'reassign'
+							: 'none';
 
-			if (await dependencies.repository.hasChildCategories(categoryId)) {
+			if (productDisposition === 'none' && assignedSkuCount > 0) {
 				throw new AppError(
 					409,
-					'CATEGORY_HAS_CHILDREN',
-					'The category cannot be deleted while child categories are assigned to it.'
+					'CATEGORY_HAS_PRODUCTS',
+					'Products assigned to this category must be reassigned or uncategorized before deletion.'
 				);
 			}
 
-			const assignedSkuCount = await dependencies.repository.countAssignedSkus(categoryId);
-
-			if (assignedSkuCount > 0) {
-				if (!input.reassignToCategoryId) {
-					throw new AppError(
-						409,
-						'CATEGORY_HAS_SKUS',
-						'Assigned SKUs must be reassigned before deleting this category.'
-					);
-				}
-
-				if (input.reassignToCategoryId === categoryId) {
+			if (productDisposition === 'reassign') {
+				if (!input.reassignToCategoryId || input.reassignToCategoryId === categoryId) {
 					throw new AppError(
 						409,
 						'CATEGORY_REASSIGN_CONFLICT',
 						'The reassignment category must be different from the deleted category.'
 					);
 				}
-
 				ensureCategory(await dependencies.repository.findCategoryById(input.reassignToCategoryId));
-				await dependencies.repository.reassignSkusToCategory(
-					categoryId,
-					input.reassignToCategoryId
+			}
+
+			const childDisposition = input.childDisposition === 'promote' ? 'promote' : 'none';
+			const result = await dependencies.repository.deleteCategory(categoryId, {
+				productDisposition,
+				childDisposition,
+				reassignToCategoryId: input.reassignToCategoryId
+			});
+
+			if (result === 'not_found') {
+				throw new AppError(
+					404,
+					'CATEGORY_NOT_FOUND',
+					'The requested product category could not be found.'
+				);
+			}
+			if (result === 'has_children') {
+				throw new AppError(
+					409,
+					'CATEGORY_HAS_CHILDREN',
+					'The category cannot be deleted while child categories are assigned to it.'
+				);
+			}
+			if (result === 'has_products') {
+				throw new AppError(
+					409,
+					'CATEGORY_HAS_PRODUCTS',
+					'Products assigned to this category must be reassigned or uncategorized before deletion.'
 				);
 			}
 
-			if (input.force) {
-				await dependencies.repository.forceDeleteCategory(categoryId);
-				return 'force';
-			}
-
-			await dependencies.repository.softDeleteCategory(categoryId);
-			return 'soft';
+			return {
+				mode: 'soft',
+				productDisposition,
+				childDisposition
+			};
 		}
 	};
 }

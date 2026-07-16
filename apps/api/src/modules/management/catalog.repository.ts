@@ -80,6 +80,19 @@ type ListCategoriesOptions = {
 	paginate?: boolean;
 };
 
+type CategoryReorderInput = {
+	parentId: string | null;
+	categoryIds: string[];
+};
+
+type CategoryDeletionInput = {
+	productDisposition: 'none' | 'uncategorize' | 'reassign';
+	childDisposition: 'none' | 'promote';
+	reassignToCategoryId?: string;
+};
+
+type CategoryDeletionStatus = 'deleted' | 'not_found' | 'has_children' | 'has_products';
+
 type ListProductsOptions = {
 	paginate?: boolean;
 	includeSkus: boolean;
@@ -803,34 +816,118 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			return mapCategoryRecord(category);
 		},
 
-		async reassignSkusToCategory(categoryId: string, targetCategoryId: string): Promise<void> {
-			await database.product.updateMany({
-				where: {
-					categoryId,
-					deletedAt: null
-				},
-				data: {
-					categoryId: targetCategoryId
+		async reorderCategorySiblings(input: CategoryReorderInput): Promise<boolean> {
+			return database.$transaction(async (transaction) => {
+				const siblings = await transaction.productCategory.findMany({
+					where: {
+						parentId: input.parentId,
+						deletedAt: null
+					},
+					select: { id: true }
+				});
+
+				const siblingIds = new Set(siblings.map((category) => category.id));
+				if (
+					siblingIds.size !== input.categoryIds.length ||
+					input.categoryIds.some((categoryId) => !siblingIds.has(categoryId))
+				) {
+					return false;
 				}
+
+				await Promise.all(
+					input.categoryIds.map((categoryId, position) =>
+						transaction.productCategory.update({
+							where: { id: categoryId },
+							data: { position }
+						})
+					)
+				);
+
+				return true;
 			});
 		},
 
-		async softDeleteCategory(categoryId: string): Promise<void> {
-			await database.productCategory.update({
-				where: {
-					id: categoryId
-				},
-				data: {
-					deletedAt: new Date()
-				}
-			});
-		},
+		async deleteCategory(
+			categoryId: string,
+			input: CategoryDeletionInput
+		): Promise<CategoryDeletionStatus> {
+			return database.$transaction(async (transaction) => {
+				const category = await transaction.productCategory.findFirst({
+					where: { id: categoryId, deletedAt: null },
+					select: { parentId: true, position: true }
+				});
+				if (!category) return 'not_found';
 
-		async forceDeleteCategory(categoryId: string): Promise<void> {
-			await database.productCategory.delete({
-				where: {
-					id: categoryId
+				const [children, productCount, siblings] = await Promise.all([
+					transaction.productCategory.findMany({
+						where: { parentId: categoryId, deletedAt: null },
+						orderBy: [{ position: 'asc' }, { name: 'asc' }],
+						select: { id: true }
+					}),
+					transaction.product.count({
+						where: { categoryId, deletedAt: null }
+					}),
+					transaction.productCategory.findMany({
+						where: {
+							parentId: category.parentId,
+							deletedAt: null,
+							id: { not: categoryId }
+						},
+						orderBy: [{ position: 'asc' }, { name: 'asc' }],
+						select: { id: true }
+					})
+				]);
+
+				if (input.childDisposition === 'none' && children.length > 0) {
+					return 'has_children';
 				}
+				if (input.productDisposition === 'none' && productCount > 0) {
+					return 'has_products';
+				}
+
+				if (input.productDisposition === 'uncategorize') {
+					await transaction.product.updateMany({
+						where: { categoryId, deletedAt: null },
+						data: { categoryId: null }
+					});
+				} else if (input.productDisposition === 'reassign' && input.reassignToCategoryId) {
+					await transaction.product.updateMany({
+						where: { categoryId, deletedAt: null },
+						data: { categoryId: input.reassignToCategoryId }
+					});
+				}
+
+				const orderedSiblingIds = siblings.map((sibling) => sibling.id);
+				const insertionPosition = Math.min(category.position, orderedSiblingIds.length);
+				if (input.childDisposition === 'promote') {
+					orderedSiblingIds.splice(insertionPosition, 0, ...children.map((child) => child.id));
+					await Promise.all(
+						children.map((child, index) =>
+							transaction.productCategory.update({
+								where: { id: child.id },
+								data: {
+									parentId: category.parentId,
+									position: insertionPosition + index
+								}
+							})
+						)
+					);
+				}
+
+				await Promise.all(
+					orderedSiblingIds.map((siblingId, position) =>
+						transaction.productCategory.update({
+							where: { id: siblingId },
+							data: { position }
+						})
+					)
+				);
+				await transaction.productCategory.update({
+					where: { id: categoryId },
+					data: { deletedAt: new Date() }
+				});
+
+				return 'deleted';
 			});
 		},
 
@@ -914,17 +1011,6 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				accumulator[entry.categoryId] = entry.total;
 				return accumulator;
 			}, {});
-		},
-
-		async hasChildCategories(categoryId: string): Promise<boolean> {
-			const count = await database.productCategory.count({
-				where: {
-					parentId: categoryId,
-					deletedAt: null
-				}
-			});
-
-			return count > 0;
 		},
 
 		async listSkus(
