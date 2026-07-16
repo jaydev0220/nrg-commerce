@@ -60,8 +60,8 @@
 			{m.catalog_view_product()}
 		</span>
 	</a>
-	<div class="flex min-h-67.5 flex-col p-5">
-		<div class="mb-3 flex items-start justify-between gap-3">
+	<div class="flex min-h-12 flex-col p-5">
+		<div class="mb-1 flex items-start justify-between gap-3">
 			{#if categoryLabel}
 				<p class="text-xs font-medium text-text-accent">{categoryLabel}</p>
 			{:else}
@@ -85,7 +85,7 @@
 		{#if view.description}
 			<p class="mt-2 line-clamp-2 text-sm text-text-muted">{view.description}</p>
 		{/if}
-		<div class="mt-auto flex justify-end pt-6">
+		<div class="flex justify-end pt-3">
 			<a
 				href={resolve(href as Pathname)}
 				class="inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-xs font-semibold text-text-heading transition-[color,background-color,border-color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle hover:text-text-accent"
