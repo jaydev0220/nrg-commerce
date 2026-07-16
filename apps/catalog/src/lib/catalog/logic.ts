@@ -59,6 +59,18 @@ function getSortedImages(sku: CatalogSkuRecord): CatalogImageRecord[] {
 	return [...sku.images].sort(compareImages);
 }
 
+export function getProductGalleryImages(product: CatalogProductRecord): CatalogImageRecord[] {
+	return product.skus.flatMap((sku) => getSortedImages(sku));
+}
+
+export function getFirstImageForSku(
+	product: CatalogProductRecord,
+	skuId: string
+): CatalogImageRecord | null {
+	const sku = product.skus.find((entry) => entry.id === skuId);
+	return sku ? (getSortedImages(sku)[0] ?? null) : null;
+}
+
 function getRepresentativeImage(product: CatalogProductRecord): CatalogImageRecord | null {
 	for (const sku of product.skus) {
 		const [image] = getSortedImages(sku);

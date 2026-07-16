@@ -4,6 +4,8 @@ import {
 	createProductConfigurationModel,
 	deriveCatalogProductView,
 	filterCatalogProducts,
+	getFirstImageForSku,
+	getProductGalleryImages,
 	resolveCategorySlugScope
 } from '$lib/catalog/logic.js';
 import type { CatalogCategoryNode, CatalogProductRecord } from '$lib/catalog/types.js';
@@ -223,6 +225,37 @@ test('deriveCatalogProductView computes representative price and image fallback'
 	expect(view.maximumPrice).toBe(989);
 	expect(view.skuCount).toBe(2);
 	expect(view.representativeImage?.imageUrl).toBe('https://assets.example.com/sku-1/front.png');
+});
+
+test('getProductGalleryImages keeps images from every SKU in stable order', () => {
+	const source = createProducts()[0]!;
+	const product = {
+		...source,
+		skus: source.skus.map((sku, index) =>
+			index === 0
+				? sku
+				: {
+						...sku,
+						images: [
+							{
+								id: 'image-2',
+								skuId: sku.id,
+								imageUrl: 'https://assets.example.com/sku-2/front.png',
+								assetKey: 'products/skus/sku-2/front.png',
+								altText: 'SKU 2 front image',
+								type: 'thumbnail' as const,
+								position: 0,
+								deletedAt: null,
+								createdAt: '2026-01-02T00:00:00.000Z',
+								updatedAt: '2026-01-02T00:00:00.000Z'
+							}
+						]
+					}
+		)
+	};
+
+	expect(getProductGalleryImages(product).map((image) => image.id)).toEqual(['image-1', 'image-2']);
+	expect(getFirstImageForSku(product, 'sku-2')?.id).toBe('image-2');
 });
 
 test('createProductConfigurationModel localizes option labels and resolves invalid combinations', () => {

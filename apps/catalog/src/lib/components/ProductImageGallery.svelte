@@ -1,5 +1,8 @@
 <script lang="ts">
+	import { Maximize2 } from '@lucide/svelte';
+
 	import type { CatalogImageRecord } from '$lib/catalog/types.js';
+	import ProductImageLightbox from './ProductImageLightbox.svelte';
 
 	type Props = {
 		productName: string;
@@ -7,21 +10,55 @@
 		selectedIndex: number;
 		onSelectImage: (index: number) => void;
 		galleryLabel: string;
+		openLabel: string;
+		closeLabel: string;
+		previousLabel: string;
+		nextLabel: string;
 	};
 
-	let { productName, images, selectedIndex, onSelectImage, galleryLabel }: Props = $props();
+	let {
+		productName,
+		images,
+		selectedIndex,
+		onSelectImage,
+		galleryLabel,
+		openLabel,
+		closeLabel,
+		previousLabel,
+		nextLabel
+	}: Props = $props();
+
+	let lightboxOpen = $state(false);
+	let currentIndex = $derived(Math.min(selectedIndex, Math.max(images.length - 1, 0)));
+
+	function openLightbox() {
+		if (images.length > 0) lightboxOpen = true;
+	}
 </script>
 
 <section aria-label={galleryLabel}>
 	<div
 		class="group relative aspect-4/3 overflow-hidden rounded-lg border border-border bg-bg-sunken text-text-accent shadow-xs transition-[border-color,box-shadow,transform] duration-base ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:shadow-sm"
 	>
-		{#if images[selectedIndex]}
-			<img
-				src={images[selectedIndex]?.imageUrl}
-				alt={images[selectedIndex]?.altText}
-				class="h-full w-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.03]"
-			/>
+		{#if images[currentIndex]}
+			<button
+				type="button"
+				class="relative block h-full w-full cursor-zoom-in text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset"
+				aria-label={openLabel}
+				onclick={openLightbox}
+			>
+				<img
+					src={images[currentIndex]?.imageUrl}
+					alt={images[currentIndex]?.altText}
+					class="h-full w-full object-contain"
+				/>
+				<span
+					class="pointer-events-none absolute right-3 top-3 inline-grid size-9 place-items-center rounded-md border border-border bg-bg-surface/90 text-text-heading shadow-sm"
+					aria-hidden="true"
+				>
+					<Maximize2 class="size-4" />
+				</span>
+			</button>
 		{:else}
 			<span
 				class="absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,var(--color-bg-surface),transparent_68%)]"
@@ -44,8 +81,9 @@
 			{#each images as image, index (image.id)}
 				<button
 					type="button"
-					class={`relative aspect-4/3 overflow-hidden rounded-md border bg-bg-sunken transition-[border-color,transform,opacity] duration-base ease-ui hover:-translate-y-0.5 ${selectedIndex === index ? 'border-2 border-brand' : 'border-border opacity-65 hover:border-border-accent hover:opacity-100'}`}
+					class={`relative aspect-4/3 overflow-hidden rounded-md border bg-bg-sunken transition-[border-color,transform,opacity] duration-base ease-ui hover:-translate-y-0.5 ${currentIndex === index ? 'border-2 border-brand' : 'border-border opacity-65 hover:border-border-accent hover:opacity-100'}`}
 					aria-label={image.altText}
+					aria-current={currentIndex === index ? 'true' : undefined}
 					onclick={() => onSelectImage(index)}
 				>
 					<img
@@ -58,3 +96,16 @@
 		</div>
 	{/if}
 </section>
+
+<ProductImageLightbox
+	open={lightboxOpen}
+	{productName}
+	{images}
+	selectedIndex={currentIndex}
+	{galleryLabel}
+	{closeLabel}
+	{previousLabel}
+	{nextLabel}
+	onclose={() => (lightboxOpen = false)}
+	onselect={onSelectImage}
+/>

@@ -6,7 +6,11 @@
 	import * as m from '$lib/paraglide/messages';
 
 	import type { PageProps } from './$types';
-	import { createProductConfigurationModel } from '$lib/catalog/logic.js';
+	import {
+		createProductConfigurationModel,
+		getFirstImageForSku,
+		getProductGalleryImages
+	} from '$lib/catalog/logic.js';
 	import { buildInquiryQueryString, localeFromPathname } from '$lib/catalog/query.js';
 	import { localizeValue } from '$lib/catalog/ui.js';
 	import { localizeHref } from '$lib/paraglide/runtime';
@@ -27,17 +31,17 @@
 	let localizedCategoryName = $derived(
 		data.category ? localizeValue(locale, data.category.name, data.category.nameEn) : null
 	);
-	let activeImages = $derived(
-		model.activeSku.images.length > 0
-			? model.activeSku.images
-			: data.product.skus
-					.flatMap((sku: (typeof data.product.skus)[number]) => sku.images)
-					.slice(0, 1)
-	);
-	let selectedImageIndex = $state(0);
-	let currentImageIndex = $derived(
-		Math.min(selectedImageIndex, Math.max(activeImages.length - 1, 0))
-	);
+	let galleryImages = $derived(getProductGalleryImages(data.product));
+	let selectedImageId = $state<string | null>(null);
+	let currentImageIndex = $derived.by(() => {
+		if (galleryImages.length === 0) return 0;
+		const preferredImageId =
+			selectedImageId ?? getFirstImageForSku(data.product, model.activeSku.id)?.id;
+		const selectedIndex = preferredImageId
+			? galleryImages.findIndex((image) => image.id === preferredImageId)
+			: -1;
+		return selectedIndex >= 0 ? selectedIndex : 0;
+	});
 	let catalogHref = $derived(localizeHref('/', { locale }) as Pathname);
 	let inquiryHref = $derived.by(() => {
 		const queryString = buildInquiryQueryString({ skuCode: model.activeSku.skuCode });
@@ -46,11 +50,16 @@
 	});
 
 	function updateSelection(key: string, value: string) {
-		requestedSelection = {
+		const nextSelection = {
 			...model.selectedAttributes,
 			[key]: value
 		};
-		selectedImageIndex = 0;
+		const nextModel = createProductConfigurationModel(data.product, locale, nextSelection);
+		requestedSelection = nextSelection;
+		selectedImageId =
+			getFirstImageForSku(data.product, nextModel.activeSku.id)?.id ??
+			getProductGalleryImages(data.product)[0]?.id ??
+			null;
 	}
 </script>
 
@@ -76,10 +85,14 @@
 		>
 			<ProductImageGallery
 				productName={localizedName}
-				images={activeImages}
+				images={galleryImages}
 				selectedIndex={currentImageIndex}
-				onSelectImage={(index) => (selectedImageIndex = index)}
+				onSelectImage={(index) => (selectedImageId = galleryImages[index]?.id ?? null)}
 				galleryLabel={m.catalog_gallery_title()}
+				openLabel={m.catalog_gallery_open()}
+				closeLabel={m.catalog_gallery_close()}
+				previousLabel={m.catalog_gallery_previous()}
+				nextLabel={m.catalog_gallery_next()}
 			/>
 
 			<ProductConfigurator
