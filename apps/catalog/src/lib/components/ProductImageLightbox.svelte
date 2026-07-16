@@ -32,8 +32,10 @@
 
 	const minimumScale = 1;
 	const maximumScale = 4;
+	const gestureThreshold = 6;
 	let dialogElement = $state<HTMLDialogElement>();
 	let viewportElement = $state<HTMLButtonElement>();
+	let imageElement = $state<HTMLImageElement>();
 	let closeButton = $state<HTMLButtonElement>();
 	let scale = $state(minimumScale);
 	let offsetX = $state(0);
@@ -42,12 +44,26 @@
 	let dragStart = $state<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
 	let pinchStart = $state<{ distance: number; scale: number } | null>(null);
 	let previousFocus = $state<HTMLElement | null>(null);
+	let pointerStart: { x: number; y: number } | null = null;
+	let suppressClick = false;
 	let lastImageKey = '';
 	let lastOpen = false;
 
 	const selectedImage = $derived(images[selectedIndex]);
 	const hasPrevious = $derived(selectedIndex > 0);
 	const hasNext = $derived(selectedIndex < images.length - 1);
+
+	$effect(() => {
+		if (!open) return;
+
+		const root = document.documentElement;
+		const previousOverflow = root.style.overflow;
+		root.style.overflow = 'hidden';
+
+		return () => {
+			root.style.overflow = previousOverflow;
+		};
+	});
 
 	$effect(() => {
 		if (!open || !dialogElement) {
@@ -86,13 +102,17 @@
 		pointers.clear();
 		dragStart = null;
 		pinchStart = null;
+		pointerStart = null;
+		suppressClick = false;
 	}
 
 	function clampOffset(nextX: number, nextY: number) {
 		const width = viewportElement?.clientWidth ?? 0;
 		const height = viewportElement?.clientHeight ?? 0;
-		const maxX = (width * (scale - 1)) / 2;
-		const maxY = (height * (scale - 1)) / 2;
+		const imageWidth = imageElement?.clientWidth || width;
+		const imageHeight = imageElement?.clientHeight || height;
+		const maxX = Math.max(0, (imageWidth * scale - width) / 2);
+		const maxY = Math.max(0, (imageHeight * scale - height) / 2);
 		offsetX = clamp(nextX, -maxX, maxX);
 		offsetY = clamp(nextY, -maxY, maxY);
 	}
@@ -113,12 +133,22 @@
 		updateScale(scale * (event.deltaY < 0 ? 1.12 : 0.88));
 	}
 
+	function handleResize() {
+		clampOffset(offsetX, offsetY);
+	}
+
 	function handlePointerDown(event: PointerEvent) {
-		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+		const target = event.currentTarget as HTMLElement;
+		if (pointers.size === 0) suppressClick = false;
+		target.setPointerCapture(event.pointerId);
 		pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+		if (pointers.size === 1) {
+			pointerStart = { x: event.clientX, y: event.clientY };
+		}
 		if (pointers.size === 2) {
 			pinchStart = { distance: pointerDistance(), scale };
 			dragStart = null;
+			suppressClick = true;
 		} else if (scale > minimumScale) {
 			dragStart = { x: event.clientX, y: event.clientY, offsetX, offsetY };
 		}
@@ -126,6 +156,12 @@
 
 	function handlePointerMove(event: PointerEvent) {
 		if (!pointers.has(event.pointerId)) return;
+		if (
+			pointerStart &&
+			Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) >= gestureThreshold
+		) {
+			suppressClick = true;
+		}
 		pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 		if (pointers.size >= 2 && pinchStart) {
 			updateScale(pinchStart.scale * (pointerDistance() / Math.max(pinchStart.distance, 1)));
@@ -140,14 +176,29 @@
 	}
 
 	function handlePointerUp(event: PointerEvent) {
+		const target = event.currentTarget as HTMLElement;
+		if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
 		pointers.delete(event.pointerId);
 		if (pointers.size < 2) pinchStart = null;
 		if (pointers.size === 1 && scale > minimumScale) {
 			const [pointer] = [...pointers.values()];
-			if (pointer) dragStart = { x: pointer.x, y: pointer.y, offsetX, offsetY };
+			if (pointer) {
+				pointerStart = pointer;
+				dragStart = { x: pointer.x, y: pointer.y, offsetX, offsetY };
+			}
 		} else if (pointers.size === 0) {
 			dragStart = null;
+			pointerStart = null;
 		}
+	}
+
+	function handleViewportClick(event: MouseEvent) {
+		if (suppressClick) {
+			event.preventDefault();
+			suppressClick = false;
+			return;
+		}
+		if (event.target === event.currentTarget) onclose();
 	}
 
 	function selectImage(index: number) {
@@ -190,16 +241,19 @@
 	}
 </script>
 
+<svelte:window onresize={handleResize} />
+
 {#if open && selectedImage}
 	<dialog
 		bind:this={dialogElement}
-		class="m-0 h-dvh w-full max-w-none border-0 bg-black/90 p-0 text-white backdrop:bg-black/70"
+		class="fixed inset-0 m-0 box-border h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-black/90 p-0 text-white backdrop:bg-black/70"
+		style="max-height: none;"
 		aria-label={galleryLabel}
 		aria-modal="true"
 		onkeydown={handleKeydown}
 		{onclose}
 	>
-		<div class="relative grid h-dvh grid-rows-[auto_minmax(0,1fr)_auto]">
+		<div class="relative grid h-full grid-rows-[auto_minmax(0,1fr)_auto]">
 			<header class="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
 				<strong class="min-w-0 truncate text-sm font-semibold">{productName}</strong>
 				<button
@@ -218,7 +272,7 @@
 				bind:this={viewportElement}
 				class="relative min-h-0 w-full cursor-grab touch-none select-none overflow-hidden border-0 bg-transparent p-0 text-left active:cursor-grabbing"
 				aria-label={galleryLabel}
-				onclick={(event) => event.target === event.currentTarget && onclose()}
+				onclick={handleViewportClick}
 				onwheel={handleWheel}
 				onpointerdown={handlePointerDown}
 				onpointermove={handlePointerMove}
@@ -226,6 +280,7 @@
 				onpointercancel={handlePointerUp}
 			>
 				<img
+					bind:this={imageElement}
 					src={selectedImage.imageUrl}
 					alt={selectedImage.altText}
 					draggable="false"
