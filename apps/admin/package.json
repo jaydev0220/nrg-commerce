@@ -42,6 +42,7 @@
 		"prettier-plugin-tailwindcss": "catalog:lint",
 		"svelte": "catalog:svelte",
 		"svelte-check": "catalog:svelte",
+		"svelte-dnd-action": "0.9.70",
 		"tailwindcss": "catalog:svelte",
 		"typescript": "catalog:",
 		"typescript-eslint": "catalog:lint",
