@@ -9,12 +9,15 @@ export function parseCatalogQueryState(
 	const categorySlug = searchParams.get('category')?.trim() ?? null;
 	const rawSort = searchParams.get('sort') as CatalogSort | null;
 	const sort = sortOptions.find((option) => option === rawSort) ?? 'featured';
+	const rawPage = Number.parseInt(searchParams.get('page') ?? '', 10);
+	const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
 
 	return {
 		locale,
 		query,
 		categorySlug,
-		sort
+		sort,
+		page
 	};
 }
 
@@ -22,6 +25,7 @@ export function buildCatalogQueryString(state: {
 	query: string;
 	categorySlug: string | null;
 	sort: CatalogSort;
+	page?: number;
 }): string {
 	const params = new URLSearchParams();
 
@@ -35,6 +39,10 @@ export function buildCatalogQueryString(state: {
 
 	if (state.sort !== 'featured') {
 		params.set('sort', state.sort);
+	}
+
+	if (state.page && state.page > 1) {
+		params.set('page', String(state.page));
 	}
 
 	return params.toString();

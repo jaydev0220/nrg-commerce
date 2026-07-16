@@ -68,3 +68,34 @@ test('storefront errors do not advertise a public cache policy', async () => {
 	assert.equal(response.status, 404);
 	assert.equal(response.headers['cache-control'], undefined);
 });
+
+test('product list accepts minimum-price sorting and forwards pagination queries', async () => {
+	let receivedQuery: Record<string, unknown> | undefined;
+	const app = express();
+	app.use(
+		'/api/storefront/products',
+		createStorefrontCatalogRouter({
+			storefrontService: createStorefrontService({
+				listProducts: async (query) => {
+					receivedQuery = query;
+					return { data: [], total: 0 };
+				}
+			})
+		})
+	);
+	app.use(errorHandler);
+
+	const response = await requestApp(app, {
+		path: '/api/storefront/products/?page=2&limit=18&sort=minPrice&order=asc&includeSkus=true'
+	});
+
+	assert.equal(response.status, 200, response.text());
+	assert.deepEqual(receivedQuery, {
+		page: 2,
+		limit: 18,
+		includeSkus: true,
+		includeImages: false,
+		sort: 'minPrice',
+		order: 'asc'
+	});
+});

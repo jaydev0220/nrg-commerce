@@ -114,6 +114,7 @@ export type CatalogQueryState = {
 	query: string;
 	categorySlug: string | null;
 	sort: CatalogSort;
+	page: number;
 };
 
 export type InquiryQueryState = {

@@ -1,70 +1,110 @@
+import { env } from '$env/dynamic/public';
 import { error } from '@sveltejs/kit';
 
 import type {
 	CatalogCategoryRecord,
 	CatalogCategoryNode,
-	CatalogProductRecord
+	CatalogProductRecord,
+	PaginatedResponse
 } from '$lib/catalog/types.js';
-import {
-	getCatalogPreviewCategoryBySlug,
-	getCatalogPreviewIndexData,
-	getCatalogPreviewProductBySlug
-} from '$lib/server/catalog-preview-data.js';
 
-/*
+const apiRequestTimeoutMs = 5_000;
+
+export type CatalogIndexQuery = {
+	page: number;
+	limit: number;
+	search?: string;
+	categorySlug?: string;
+	sort: 'name' | 'createdAt' | 'minPrice';
+	order: 'asc' | 'desc';
+};
+
+export type CatalogIndexData = {
+	products: CatalogProductRecord[];
+	categories: CatalogCategoryNode[];
+	pagination: PaginatedResponse<CatalogProductRecord>['pagination'];
+};
+
 function resolveApiBaseUrl(): string {
-	const apiBaseUrl = env['PUBLIC_API_BASE_URL']?.trim();
+	const apiBaseUrl = env.PUBLIC_API_BASE_URL?.trim();
 
 	if (!apiBaseUrl) {
-		throw error(500, 'PUBLIC_API_BASE_URL is not configured.');
+		throw error(500, 'The catalog service is not configured.');
 	}
 
 	return apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
 }
 
-async function fetchJson<T>(fetcher: typeof fetch, path: string, searchParams?: URLSearchParams): Promise<T> {
+function createRequestUrl(path: string, searchParams?: URLSearchParams): string {
 	const url = new URL(path, resolveApiBaseUrl());
 	if (searchParams) {
 		url.search = searchParams.toString();
 	}
 
-	const response = await fetcher(url);
-	if (!response.ok) {
-		throw error(response.status, `Catalog API request failed for ${url.pathname}.`);
-	}
-
-	return (await response.json()) as T;
+	return url.toString();
 }
-*/
 
-export async function fetchCatalogIndexData(_fetcher: typeof fetch): Promise<{
-	products: CatalogProductRecord[];
-	categories: CatalogCategoryNode[];
-}> {
-	void _fetcher;
+async function fetchJson<T>(fetcher: typeof fetch, path: string, searchParams?: URLSearchParams) {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), apiRequestTimeoutMs);
+	const url = createRequestUrl(path, searchParams);
 
-	/*
+	try {
+		const response = await fetcher(url, { signal: controller.signal });
+		if (!response.ok) {
+			const status = response.status >= 400 && response.status <= 599 ? response.status : 502;
+			throw error(
+				status,
+				status >= 500
+					? 'The catalog service is temporarily unavailable.'
+					: 'The requested catalog resource could not be found.'
+			);
+		}
+
+		return (await response.json()) as T;
+	} catch (requestError) {
+		if (requestError && typeof requestError === 'object' && 'status' in requestError) {
+			throw requestError;
+		}
+
+		throw error(502, 'The catalog service is temporarily unavailable.');
+	} finally {
+		clearTimeout(timeout);
+	}
+}
+
+export async function fetchCatalogIndexData(
+	fetcher: typeof fetch,
+	query: CatalogIndexQuery
+): Promise<CatalogIndexData> {
 	const productsQuery = new URLSearchParams({
-		page: '1',
-		limit: '100',
+		page: String(query.page),
+		limit: String(query.limit),
 		includeSkus: 'true',
 		includeImages: 'true',
-		sort: 'createdAt',
-		order: 'desc'
+		sort: query.sort,
+		order: query.order
 	});
 	const categoryQuery = new URLSearchParams({
 		includeTree: 'true',
 		includeProductCount: 'true'
 	});
 
+	if (query.search) {
+		productsQuery.set('search', query.search);
+	}
+	if (query.categorySlug) {
+		productsQuery.set('categorySlug', query.categorySlug);
+	}
+
 	const [productsResponse, categoriesResponse] = await Promise.all([
 		fetchJson<PaginatedResponse<CatalogProductRecord>>(
-			_fetcher,
+			fetcher,
 			'/api/storefront/products',
 			productsQuery
 		),
 		fetchJson<{ data: CatalogCategoryNode[] }>(
-			_fetcher,
+			fetcher,
 			'/api/storefront/products/categories',
 			categoryQuery
 		)
@@ -72,57 +112,33 @@ export async function fetchCatalogIndexData(_fetcher: typeof fetch): Promise<{
 
 	return {
 		products: productsResponse.data,
-		categories: categoriesResponse.data
+		categories: categoriesResponse.data,
+		pagination: productsResponse.pagination
 	};
-	*/
-
-	return getCatalogPreviewIndexData();
 }
 
 export async function fetchCatalogProductBySlug(
-	_fetcher: typeof fetch,
+	fetcher: typeof fetch,
 	productSlug: string
 ): Promise<CatalogProductRecord> {
-	void _fetcher;
-
-	/*
 	const productQuery = new URLSearchParams({
 		includeSkus: 'true',
 		includeImages: 'true'
 	});
 
 	return fetchJson<CatalogProductRecord>(
-		_fetcher,
+		fetcher,
 		`/api/storefront/products/${encodeURIComponent(productSlug)}`,
 		productQuery
 	);
-	*/
-
-	const product = getCatalogPreviewProductBySlug(productSlug);
-	if (!product) {
-		throw error(404, `Catalog product "${productSlug}" was not found.`);
-	}
-
-	return product;
 }
 
 export async function fetchCatalogCategoryBySlug(
-	_fetcher: typeof fetch,
+	fetcher: typeof fetch,
 	categorySlug: string
 ): Promise<CatalogCategoryRecord> {
-	void _fetcher;
-
-	/*
 	return fetchJson<CatalogCategoryRecord>(
-		_fetcher,
+		fetcher,
 		`/api/storefront/products/categories/${encodeURIComponent(categorySlug)}`
 	);
-	*/
-
-	const category = getCatalogPreviewCategoryBySlug(categorySlug);
-	if (!category) {
-		throw error(404, `Catalog category "${categorySlug}" was not found.`);
-	}
-
-	return category;
 }

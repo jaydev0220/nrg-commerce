@@ -1,4 +1,4 @@
-import type { DatabaseClient } from '@packages/database';
+import type { DatabaseClient, Prisma } from '@packages/database';
 
 import type {
 	CatalogCategoryRecord,
@@ -10,7 +10,7 @@ import type {
 } from '../../types/catalog.js';
 
 type CategorySortField = 'name' | 'createdAt' | 'updatedAt' | 'position';
-type ProductSortField = 'name' | 'createdAt' | 'updatedAt';
+type ProductSortField = 'name' | 'createdAt' | 'updatedAt' | 'minPrice';
 type SkuSortField = 'createdAt' | 'updatedAt' | 'skuCode' | 'price';
 type StorefrontSkuSortField = 'name' | 'price' | 'createdAt';
 type ImageSortField = 'position' | 'createdAt' | 'updatedAt';
@@ -41,6 +41,7 @@ type ListProductsInput = {
 	search?: string;
 	published?: boolean;
 	categoryId?: string;
+	categoryIds?: string[];
 	categorySlug?: string;
 	sort: ProductSortField;
 	order: 'asc' | 'desc';
@@ -322,6 +323,12 @@ function resolveProductOrderBy(sort: ProductSortField, order: 'asc' | 'desc') {
 	}
 }
 
+function buildActiveSkuFilter() {
+	return {
+		deletedAt: null
+	};
+}
+
 function resolveSkuOrderBy(sort: SkuSortField | StorefrontSkuSortField, order: 'asc' | 'desc') {
 	switch (sort) {
 		case 'name':
@@ -356,7 +363,10 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 			where: {
 				categoryId,
 				deletedAt: null,
-				...(publishedOnly ? { published: true } : {})
+				...(publishedOnly ? { published: true } : {}),
+				skus: {
+					some: buildActiveSkuFilter()
+				}
 			}
 		});
 
@@ -435,21 +445,27 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 			input: ListProductsInput,
 			options: ListProductsOptions
 		): Promise<PaginatedResult<CatalogProductRecord>> {
-			const where = {
+			const productWhere = {
 				deletedAt: null,
 				...(options.publishedOnly ? { published: true } : {}),
 				...(input.published !== undefined ? { published: input.published } : {}),
-				...(input.categoryId ? { categoryId: input.categoryId } : {}),
-				...(input.categorySlug
-					? {
-							category: {
-								is: {
-									slug: input.categorySlug,
-									deletedAt: null
+				...(input.categoryIds
+					? { categoryId: { in: input.categoryIds } }
+					: input.categoryId
+						? { categoryId: input.categoryId }
+						: {}),
+				...(input.categoryIds || !input.categorySlug
+					? {}
+					: input.categorySlug
+						? {
+								category: {
+									is: {
+										slug: input.categorySlug,
+										deletedAt: null
+									}
 								}
 							}
-						}
-					: {}),
+						: {}),
 				...(input.search
 					? {
 							OR: [
@@ -457,44 +473,120 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 								{ name: { contains: input.search, mode: 'insensitive' as const } },
 								{ nameEn: { contains: input.search, mode: 'insensitive' as const } },
 								{ description: { contains: input.search, mode: 'insensitive' as const } },
-								{ descriptionEn: { contains: input.search, mode: 'insensitive' as const } }
+								{ descriptionEn: { contains: input.search, mode: 'insensitive' as const } },
+								{
+									skus: {
+										some: {
+											...buildActiveSkuFilter(),
+											skuCode: {
+												contains: input.search,
+												mode: 'insensitive' as const
+											}
+										}
+									}
+								}
 							]
 						}
 					: {})
 			};
+			const where = options.publishedOnly
+				? { ...productWhere, skus: { some: buildActiveSkuFilter() } }
+				: productWhere;
 			const paginate = options.paginate ?? true;
+			const include = {
+				category: {
+					select: {
+						slug: true
+					}
+				},
+				...(options.includeSkus
+					? {
+							skus: {
+								where: {
+									deletedAt: null
+								},
+								orderBy: [{ createdAt: 'asc' }],
+								...(options.includeImages
+									? {
+											include: {
+												images: {
+													where: {
+														deletedAt: null
+													},
+													orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+												}
+											}
+										}
+									: {})
+							}
+						}
+					: {})
+			} satisfies Prisma.ProductInclude;
+
+			if (input.sort === 'minPrice') {
+				const groupedSkus = await database.productSku.groupBy({
+					by: ['productId'],
+					where: {
+						...buildActiveSkuFilter(),
+						product: {
+							is: productWhere
+						}
+					},
+					_min: {
+						price: true
+					},
+					orderBy: {
+						_min: {
+							price: input.order
+						}
+					},
+					...(paginate && input.page && input.limit
+						? {
+								skip: (input.page - 1) * input.limit,
+								take: input.limit
+							}
+						: {})
+				});
+				const productIds = groupedSkus.map((group) => group.productId);
+				const products = productIds.length
+					? await database.product.findMany({
+							where: {
+								...where,
+								id: { in: productIds }
+							},
+							include
+						})
+					: [];
+				const productOrder = new Map(productIds.map((productId, index) => [productId, index]));
+				products.sort(
+					(left, right) =>
+						(productOrder.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+						(productOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+				);
+				const total = paginate
+					? (
+							await database.productSku.groupBy({
+								by: ['productId'],
+								where: {
+									...buildActiveSkuFilter(),
+									product: {
+										is: productWhere
+									}
+								}
+							})
+						).length
+					: products.length;
+
+				return {
+					data: products.map(mapProductRecord),
+					total
+				};
+			}
+
 			const products = await database.product.findMany({
 				where,
 				orderBy: resolveProductOrderBy(input.sort, input.order),
-				include: {
-					category: {
-						select: {
-							slug: true
-						}
-					},
-					...(options.includeSkus
-						? {
-								skus: {
-									where: {
-										deletedAt: null
-									},
-									orderBy: [{ createdAt: 'asc' }],
-									...(options.includeImages
-										? {
-												include: {
-													images: {
-														where: {
-															deletedAt: null
-														},
-														orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
-													}
-												}
-											}
-										: {})
-								}
-							}
-						: {})
-				},
+				include,
 				...(paginate && input.page && input.limit
 					? {
 							skip: (input.page - 1) * input.limit,
@@ -521,7 +613,9 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 				where: {
 					id: productId,
 					deletedAt: null,
-					...(options.publishedOnly ? { published: true } : {})
+					...(options.publishedOnly
+						? { published: true, skus: { some: buildActiveSkuFilter() } }
+						: {})
 				},
 				include: {
 					category: {
@@ -568,7 +662,9 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 				where: {
 					slug: productSlug,
 					deletedAt: null,
-					...(options.publishedOnly ? { published: true } : {})
+					...(options.publishedOnly
+						? { published: true, skus: { some: buildActiveSkuFilter() } }
+						: {})
 				},
 				include: {
 					category: {

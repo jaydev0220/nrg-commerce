@@ -17,7 +17,8 @@ test('parseCatalogQueryState reads category and sort without attribute state', (
 		locale: 'en',
 		query: 'pipette',
 		categorySlug: 'consumables',
-		sort: 'name'
+		sort: 'name',
+		page: 1
 	});
 });
 
@@ -29,6 +30,23 @@ test('buildCatalogQueryString clears category when null is passed', () => {
 	});
 
 	expect(queryString).toBe('');
+});
+
+test('parseCatalogQueryState normalizes malformed pages to page one', () => {
+	for (const rawPage of ['abc', '0', '-2']) {
+		expect(parseCatalogQueryState(new URLSearchParams(`page=${rawPage}`), 'en').page).toBe(1);
+	}
+});
+
+test('buildCatalogQueryString includes pages after the first page', () => {
+	expect(
+		buildCatalogQueryString({
+			query: 'pipette',
+			categorySlug: 'consumables',
+			sort: 'featured',
+			page: 3
+		})
+	).toBe('q=pipette&category=consumables&page=3');
 });
 
 test('parseInquiryQueryState reads and trims sku', () => {

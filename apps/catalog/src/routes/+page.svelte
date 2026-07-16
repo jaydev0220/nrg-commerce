@@ -9,7 +9,7 @@
 
 	import type { CatalogSort } from '$lib/catalog/types.js';
 	import type { PageProps } from './$types';
-	import { filterCatalogProducts, flattenCategoryNodes } from '$lib/catalog/logic.js';
+	import { deriveCatalogProductView, flattenCategoryNodes } from '$lib/catalog/logic.js';
 	import {
 		buildCatalogQueryString,
 		localeFromPathname,
@@ -21,6 +21,7 @@
 	import CatalogFilters from '$lib/components/CatalogFilters.svelte';
 	import CatalogHelpCard from '$lib/components/CatalogHelpCard.svelte';
 	import CatalogHero from '$lib/components/CatalogHero.svelte';
+	import CatalogPagination from '$lib/components/CatalogPagination.svelte';
 	import CatalogResultsToolbar from '$lib/components/CatalogResultsToolbar.svelte';
 	import CatalogSearchBar from '$lib/components/CatalogSearchBar.svelte';
 	import ProductCard from '$lib/components/ProductCard.svelte';
@@ -36,7 +37,9 @@
 	let debounceTimer: number | null = null;
 
 	let categoryList = $derived(flattenCategoryNodes(data.categories));
-	let filteredViews = $derived(filterCatalogProducts(data.products, data.categories, queryState));
+	let productViews = $derived(
+		data.products.map((product) => deriveCatalogProductView(product, queryState.locale))
+	);
 	let activeResultLabel = $derived.by(() => {
 		if (queryState.query) {
 			return `${m.catalog_results_for()} “${queryState.query}”`;
@@ -53,6 +56,7 @@
 		query?: string;
 		categorySlug?: string | null;
 		sort?: CatalogSort;
+		page?: number;
 	};
 
 	function getCategoryLabel(categorySlug: string | null): string | null {
@@ -73,10 +77,17 @@
 		const categorySlug =
 			'categorySlug' in nextState ? (nextState.categorySlug ?? null) : queryState.categorySlug;
 		const sort = 'sort' in nextState ? (nextState.sort ?? 'featured') : queryState.sort;
+		const page =
+			'page' in nextState
+				? (nextState.page ?? 1)
+				: 'query' in nextState || 'categorySlug' in nextState || 'sort' in nextState
+					? 1
+					: queryState.page;
 		const queryString = buildCatalogQueryString({
 			query,
 			categorySlug,
-			sort
+			sort,
+			page
 		});
 		const href = queryString
 			? `${localizeHref('/', { locale })}?${queryString}`
@@ -87,6 +98,20 @@
 			keepFocus: true,
 			noScroll: true
 		});
+	}
+
+	function pageHref(page: number): string {
+		const queryString = buildCatalogQueryString({
+			query: queryState.query,
+			categorySlug: queryState.categorySlug,
+			sort: queryState.sort,
+			page
+		});
+		const href = queryString
+			? `${localizeHref('/', { locale })}?${queryString}`
+			: localizeHref('/', { locale });
+
+		return href;
 	}
 
 	function resetFilters() {
@@ -206,7 +231,7 @@
 
 			<div class="min-w-0">
 				<CatalogResultsToolbar
-					resultCount={filteredViews.length}
+					resultCount={data.pagination.total}
 					scopeLabel={activeResultLabel}
 					sort={queryState.sort}
 					onSortChange={(sort) => updateQuery({ sort })}
@@ -222,12 +247,12 @@
 					onCategoryClear={() => updateQuery({ categorySlug: null })}
 				/>
 
-				{#if filteredViews.length > 0}
+				{#if productViews.length > 0}
 					<div
 						class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"
 						aria-live="polite"
 					>
-						{#each filteredViews as view (view.id)}
+						{#each productViews as view (view.id)}
 							<ProductCard
 								{view}
 								categoryLabel={getCategoryLabel(view.categorySlug)}
@@ -235,6 +260,11 @@
 							/>
 						{/each}
 					</div>
+					<CatalogPagination
+						page={data.pagination.page}
+						totalPages={data.pagination.totalPages}
+						getHref={pageHref}
+					/>
 				{:else}
 					<CatalogEmptyState onReset={resetFilters} />
 				{/if}

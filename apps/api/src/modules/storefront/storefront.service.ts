@@ -23,7 +23,6 @@ type StorefrontServiceDependencies = {
 		| 'findSkuByCode'
 		| 'findCategoryBySlug'
 		| 'countProductsForCategoryIds'
-		| 'countAssignedSkus'
 		| 'listChildCategories'
 	>;
 };
@@ -48,12 +47,15 @@ type StorefrontProductListQuery = {
 	categorySlug?: string;
 	includeSkus: boolean;
 	includeImages: boolean;
-	sort: 'name' | 'createdAt';
+	sort: 'name' | 'createdAt' | 'minPrice';
 	order: 'asc' | 'desc';
 };
 
-function ensurePublishedProduct(product: CatalogProductRecord | null): CatalogProductRecord {
-	if (!product || !product.published) {
+function ensurePublishedProduct(
+	product: CatalogProductRecord | null,
+	requireSku = false
+): CatalogProductRecord {
+	if (!product || !product.published || (requireSku && product.skus.length === 0)) {
 		throw new AppError(
 			404,
 			'PRODUCT_NOT_FOUND',
@@ -62,6 +64,72 @@ function ensurePublishedProduct(product: CatalogProductRecord | null): CatalogPr
 	}
 
 	return product;
+}
+
+function getCategoryDescendantIds(
+	categories: CatalogCategoryRecord[],
+	rootCategoryId: string
+): string[] {
+	const childrenByParentId = new Map<string, CatalogCategoryRecord[]>();
+
+	for (const category of categories) {
+		if (!category.parentId) {
+			continue;
+		}
+
+		const children = childrenByParentId.get(category.parentId) ?? [];
+		children.push(category);
+		childrenByParentId.set(category.parentId, children);
+	}
+
+	const ids: string[] = [];
+	const visit = (categoryId: string) => {
+		ids.push(categoryId);
+		for (const child of childrenByParentId.get(categoryId) ?? []) {
+			visit(child.id);
+		}
+	};
+
+	visit(rootCategoryId);
+	return ids;
+}
+
+function aggregateCategoryCounts(
+	categories: CatalogCategoryRecord[],
+	directCounts: Record<string, number>
+): Record<string, number> {
+	const childrenByParentId = new Map<string, CatalogCategoryRecord[]>();
+	const totals = new Map<string, number>();
+
+	for (const category of categories) {
+		if (category.parentId) {
+			const children = childrenByParentId.get(category.parentId) ?? [];
+			children.push(category);
+			childrenByParentId.set(category.parentId, children);
+		}
+	}
+
+	const getTotal = (categoryId: string): number => {
+		const cachedTotal = totals.get(categoryId);
+		if (cachedTotal !== undefined) {
+			return cachedTotal;
+		}
+
+		const total =
+			(directCounts[categoryId] ?? 0) +
+			(childrenByParentId.get(categoryId) ?? []).reduce(
+				(sum, child) => sum + getTotal(child.id),
+				0
+			);
+		totals.set(categoryId, total);
+		return total;
+	};
+
+	for (const category of categories) {
+		getTotal(category.id);
+	}
+
+	return Object.fromEntries(totals);
 }
 
 function ensurePublishedSku(sku: CatalogSkuRecord | null): CatalogSkuRecord {
@@ -99,14 +167,31 @@ export function createStorefrontCatalogService(dependencies: StorefrontServiceDe
 			data: CatalogProductRecord[];
 			total: number;
 		}> {
-			const result = await dependencies.repository.listProducts(query, {
-				includeSkus: query.includeSkus,
-				includeImages: query.includeImages,
-				publishedOnly: true
-			});
+			let categoryIds: string[] | undefined;
+			if (query.categorySlug) {
+				const categories = await dependencies.repository.listCategories(
+					{ sort: 'position', order: 'asc' },
+					{ paginate: false }
+				);
+				const category = ensureCategory(
+					categories.data.find((entry) => entry.slug === query.categorySlug) ?? null
+				);
+				categoryIds = getCategoryDescendantIds(categories.data, category.id);
+			}
+
+			const result = await dependencies.repository.listProducts(
+				{ ...query, categoryIds, categorySlug: undefined },
+				{
+					includeSkus: query.includeSkus,
+					includeImages: query.includeImages,
+					publishedOnly: true
+				}
+			);
 
 			return {
-				data: result.data.filter((product) => product.published),
+				data: result.data.filter(
+					(product) => product.published && (!query.includeSkus || product.skus.length > 0)
+				),
 				total: result.total
 			};
 		},
@@ -123,7 +208,8 @@ export function createStorefrontCatalogService(dependencies: StorefrontServiceDe
 					includeSkus: query.includeSkus,
 					includeImages: query.includeImages,
 					publishedOnly: true
-				})
+				}),
+				query.includeSkus
 			);
 		},
 
@@ -139,7 +225,8 @@ export function createStorefrontCatalogService(dependencies: StorefrontServiceDe
 					includeSkus: query.includeSkus,
 					includeImages: query.includeImages,
 					publishedOnly: true
-				})
+				}),
+				query.includeSkus
 			);
 		},
 
@@ -214,9 +301,8 @@ export function createStorefrontCatalogService(dependencies: StorefrontServiceDe
 				parentId = parent.id;
 			}
 
-			const result = await dependencies.repository.listCategories(
+			const allCategories = await dependencies.repository.listCategories(
 				{
-					parentId,
 					sort: 'position',
 					order: 'asc'
 				},
@@ -224,12 +310,21 @@ export function createStorefrontCatalogService(dependencies: StorefrontServiceDe
 					paginate: false
 				}
 			);
+			const result = parentId
+				? {
+						...allCategories,
+						data: allCategories.data.filter((category) => category.parentId === parentId)
+					}
+				: allCategories;
 
-			const productCounts = query.includeProductCount
+			const directProductCounts = query.includeProductCount
 				? await dependencies.repository.countProductsForCategoryIds(
-						result.data.map((category) => category.id),
+						allCategories.data.map((category) => category.id),
 						true
 					)
+				: undefined;
+			const productCounts = directProductCounts
+				? aggregateCategoryCounts(allCategories.data, directProductCounts)
 				: undefined;
 
 			if (query.includeTree) {
@@ -259,7 +354,19 @@ export function createStorefrontCatalogService(dependencies: StorefrontServiceDe
 			}
 
 			if (query.includeProductCount) {
-				detail.productCount = await dependencies.repository.countAssignedSkus(category.id, true);
+				const categories = await dependencies.repository.listCategories(
+					{ sort: 'position', order: 'asc' },
+					{ paginate: false }
+				);
+				const categoryIds = getCategoryDescendantIds(categories.data, category.id);
+				const directProductCounts = await dependencies.repository.countProductsForCategoryIds(
+					categoryIds,
+					true
+				);
+				detail.productCount = categoryIds.reduce(
+					(total, categoryId) => total + (directProductCounts[categoryId] ?? 0),
+					0
+				);
 			}
 
 			return detail;

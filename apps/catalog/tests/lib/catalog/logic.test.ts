@@ -191,7 +191,8 @@ test('filterCatalogProducts matches nested SKU content without duplicating produ
 		locale: 'zh-tw',
 		query: 'NL-DMM-720',
 		categorySlug: null,
-		sort: 'featured'
+		sort: 'featured',
+		page: 1
 	});
 
 	expect(filtered).toHaveLength(1);
@@ -205,7 +206,8 @@ test('filterCatalogProducts includes descendant categories and preserves price s
 		locale: 'zh-tw',
 		query: '',
 		categorySlug: 'measurement',
-		sort: 'price-asc'
+		sort: 'price-asc',
+		page: 1
 	});
 
 	expect(filtered.map((product) => product.slug)).toEqual([

@@ -165,7 +165,8 @@ test('productImageUploadRequestSchema rejects unsupported types and oversized fi
 test('storefront product query schemas parse include flags from query strings', () => {
 	const listQuery = storefrontProductListQuerySchema.parse({
 		includeSkus: 'true',
-		includeImages: 'true'
+		includeImages: 'true',
+		sort: 'minPrice'
 	});
 
 	test('productImageCropUpdateSchema validates the persisted crop range', () => {
@@ -184,6 +185,7 @@ test('storefront product query schemas parse include flags from query strings', 
 
 	assert.equal(listQuery.includeSkus, true);
 	assert.equal(listQuery.includeImages, true);
+	assert.equal(listQuery.sort, 'minPrice');
 	assert.equal(detailQuery.includeSkus, true);
 	assert.equal(detailQuery.includeImages, true);
 });

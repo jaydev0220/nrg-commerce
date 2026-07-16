@@ -278,7 +278,7 @@ export const storefrontProductListQuerySchema = paginationQuerySchema.extend({
 	categorySlug: z.string().trim().min(1).optional(),
 	includeSkus: booleanLikeSchema.default(false),
 	includeImages: booleanLikeSchema.default(false),
-	sort: z.enum(['name', 'createdAt']).default('createdAt'),
+	sort: z.enum(['name', 'createdAt', 'minPrice']).default('createdAt'),
 	order: sortOrderSchema.default('desc')
 });
 
