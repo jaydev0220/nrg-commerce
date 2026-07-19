@@ -6,6 +6,8 @@ import ContactForm from '$lib/components/contact/ContactForm.svelte';
 
 type TurnstileCallbacks = {
 	callback(token: string): void;
+	'expired-callback'(): void;
+	'error-callback'(): void;
 };
 
 function installTurnstile() {
@@ -22,6 +24,16 @@ function installTurnstile() {
 		verify(token = 'verified-token') {
 			if (!callbacks) throw new Error('Turnstile widget was not rendered.');
 			callbacks.callback(token);
+			flushSync();
+		},
+		expire() {
+			if (!callbacks) throw new Error('Turnstile widget was not rendered.');
+			callbacks['expired-callback']();
+			flushSync();
+		},
+		fail() {
+			if (!callbacks) throw new Error('Turnstile widget was not rendered.');
+			callbacks['error-callback']();
 			flushSync();
 		}
 	};
@@ -99,5 +111,44 @@ test('preserves contact values and allows retry after delivery failure', async (
 	);
 	expect(screen.container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(
 		false
+	);
+});
+
+test('requires valid fields and a current Turnstile verification', async () => {
+	const turnstile = installTurnstile();
+	const submitRequest = vi.fn(async () => undefined);
+	const screen = await render(ContactForm, {
+		workerUrl: 'https://contact.example.com',
+		turnstileSiteKey: 'site-key',
+		submitRequest
+	});
+
+	await vi.waitFor(() => expect(turnstile.renderWidget).toHaveBeenCalledOnce());
+	submit(screen.container);
+	expect(submitRequest).not.toHaveBeenCalled();
+	await vi.waitFor(() =>
+		expect(screen.container.querySelectorAll('[aria-invalid="true"]').length).toBeGreaterThan(0)
+	);
+
+	input(screen.container, '#name', 'Ada Lovelace');
+	input(screen.container, '#email', 'ada@example.com');
+	input(screen.container, '#message', 'Please send specifications.');
+	turnstile.verify();
+	turnstile.expire();
+	submit(screen.container);
+	expect(submitRequest).not.toHaveBeenCalled();
+
+	turnstile.fail();
+	expect(
+		Array.from(screen.container.querySelectorAll('[aria-live="polite"]')).some((element) =>
+			Boolean(element.textContent?.trim())
+		)
+	).toBe(true);
+	turnstile.verify('fresh-token');
+	submit(screen.container);
+	await vi.waitFor(() => expect(submitRequest).toHaveBeenCalledOnce());
+	expect(submitRequest).toHaveBeenCalledWith(
+		'https://contact.example.com',
+		expect.objectContaining({ turnstileToken: 'fresh-token' })
 	);
 });

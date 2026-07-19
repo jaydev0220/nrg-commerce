@@ -2,7 +2,12 @@ import { expect, test } from '@playwright/test';
 
 test('two tabs share one refresh and both finish their protected loads', async ({ context }) => {
 	let authenticated = false;
+	let expiredRequestCount = 0;
 	let refreshCount = 0;
+	let releaseExpiredRequests: (() => void) | undefined;
+	const bothTabsExpired = new Promise<void>((resolve) => {
+		releaseExpiredRequests = resolve;
+	});
 	const staff = {
 		id: 'staff-id',
 		email: 'admin@example.com',
@@ -31,6 +36,10 @@ test('two tabs share one refresh and both finish their protected loads', async (
 	await context.route('**/api/**', async (route) => {
 		const pathname = new URL(route.request().url()).pathname;
 		if (pathname === '/api/auth/me') {
+			if (!authenticated) {
+				expiredRequestCount += 1;
+				if (expiredRequestCount === 2) releaseExpiredRequests?.();
+			}
 			await route.fulfill({
 				status: authenticated ? 200 : 401,
 				json: authenticated
@@ -51,7 +60,7 @@ test('two tabs share one refresh and both finish their protected loads', async (
 		}
 		if (pathname === '/api/auth/refresh') {
 			refreshCount += 1;
-			await new Promise((resolve) => setTimeout(resolve, 150));
+			await bothTabsExpired;
 			authenticated = true;
 			await route.fulfill({ json: { status: 'authenticated' } });
 			return;
@@ -69,5 +78,6 @@ test('two tabs share one refresh and both finish their protected loads', async (
 
 	await expect(firstPage.getByRole('heading', { name: '完成銷售趨勢' })).toBeVisible();
 	await expect(secondPage.getByRole('heading', { name: '完成銷售趨勢' })).toBeVisible();
+	expect(expiredRequestCount).toBe(2);
 	expect(refreshCount).toBe(1);
 });

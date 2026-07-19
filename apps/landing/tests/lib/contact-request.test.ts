@@ -28,9 +28,11 @@ test('posts contact payloads to the contact endpoint', async () => {
 	expect(init).toEqual(
 		expect.objectContaining({
 			method: 'POST',
-			body: JSON.stringify(payload)
+			body: JSON.stringify(payload),
+			signal: expect.any(AbortSignal)
 		})
 	);
+	expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json');
 });
 
 test('rejects unsuccessful contact responses', async () => {
@@ -47,4 +49,19 @@ test('rejects unsuccessful contact responses', async () => {
 			message: 'Please send specifications.'
 		})
 	).rejects.toThrow('status 502');
+});
+
+test('rejects a missing Worker URL before issuing a request', async () => {
+	const fetchMock = vi.fn();
+	vi.stubGlobal('fetch', fetchMock);
+
+	await expect(
+		submitContactRequest(' ', {
+			turnstileToken: 'verification',
+			name: 'Ada Lovelace',
+			email: 'ada@example.com',
+			message: 'Please send specifications.'
+		})
+	).rejects.toThrow('URL is not configured');
+	expect(fetchMock).not.toHaveBeenCalled();
 });

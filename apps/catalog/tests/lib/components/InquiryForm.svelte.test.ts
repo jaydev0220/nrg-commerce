@@ -6,6 +6,8 @@ import InquiryForm from '$lib/components/InquiryForm.svelte';
 
 type TurnstileCallbacks = {
 	callback(token: string): void;
+	'expired-callback'(): void;
+	'error-callback'(): void;
 };
 
 function installTurnstile() {
@@ -22,6 +24,16 @@ function installTurnstile() {
 		verify(token = 'verified-token') {
 			if (!callbacks) throw new Error('Turnstile widget was not rendered.');
 			callbacks.callback(token);
+			flushSync();
+		},
+		expire() {
+			if (!callbacks) throw new Error('Turnstile widget was not rendered.');
+			callbacks['expired-callback']();
+			flushSync();
+		},
+		fail() {
+			if (!callbacks) throw new Error('Turnstile widget was not rendered.');
+			callbacks['error-callback']();
 			flushSync();
 		}
 	};
@@ -105,5 +117,45 @@ test('preserves inquiry values and resets verification after delivery failure', 
 	);
 	expect(screen.container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(
 		false
+	);
+});
+
+test('requires valid fields and a current Turnstile verification', async () => {
+	const turnstile = installTurnstile();
+	const submitRequest = vi.fn(async () => undefined);
+	const screen = await render(InquiryForm, {
+		initialSkuCode: 'SKU-100',
+		workerUrl: 'https://contact.example.com',
+		turnstileSiteKey: 'site-key',
+		submitRequest
+	});
+
+	await vi.waitFor(() => expect(turnstile.renderWidget).toHaveBeenCalledOnce());
+	submit(screen.container);
+	expect(submitRequest).not.toHaveBeenCalled();
+	await vi.waitFor(() =>
+		expect(screen.container.querySelectorAll('[aria-invalid="true"]').length).toBeGreaterThan(0)
+	);
+
+	input(screen.container, '#inquiry-name', 'Grace Hopper');
+	input(screen.container, '#inquiry-email', 'grace@example.com');
+	input(screen.container, '#inquiry-message', 'Please quote 100 units.');
+	turnstile.verify();
+	turnstile.expire();
+	submit(screen.container);
+	expect(submitRequest).not.toHaveBeenCalled();
+
+	turnstile.fail();
+	expect(
+		Array.from(screen.container.querySelectorAll('[aria-live="polite"]')).some((element) =>
+			Boolean(element.textContent?.trim())
+		)
+	).toBe(true);
+	turnstile.verify('fresh-token');
+	submit(screen.container);
+	await vi.waitFor(() => expect(submitRequest).toHaveBeenCalledOnce());
+	expect(submitRequest).toHaveBeenCalledWith(
+		'https://contact.example.com',
+		expect.objectContaining({ turnstileToken: 'fresh-token', skuCode: 'SKU-100' })
 	);
 });

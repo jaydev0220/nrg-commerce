@@ -1,6 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAdminApiClient } from './client';
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 function jsonResponse(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {
@@ -299,6 +303,5 @@ describe('admin browser API client', () => {
 			])
 		).resolves.toEqual([{ data: ['ok'] }, { data: ['ok'] }]);
 		expect(refreshCount).toBe(1);
-		vi.unstubAllGlobals();
 	});
 });

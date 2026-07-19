@@ -29,9 +29,11 @@ test('posts inquiry payloads to the inquiry endpoint', async () => {
 	expect(init).toEqual(
 		expect.objectContaining({
 			method: 'POST',
-			body: JSON.stringify(payload)
+			body: JSON.stringify(payload),
+			signal: expect.any(AbortSignal)
 		})
 	);
+	expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json');
 });
 
 test('rejects unsuccessful inquiry responses', async () => {
@@ -48,4 +50,19 @@ test('rejects unsuccessful inquiry responses', async () => {
 			message: 'Please quote 100 units.'
 		})
 	).rejects.toThrow('status 502');
+});
+
+test('rejects a missing Worker URL before issuing a request', async () => {
+	const fetchMock = vi.fn();
+	vi.stubGlobal('fetch', fetchMock);
+
+	await expect(
+		submitInquiryRequest(' ', {
+			turnstileToken: 'verification',
+			name: 'Grace Hopper',
+			email: 'grace@example.com',
+			message: 'Please quote 100 units.'
+		})
+	).rejects.toThrow('URL is not configured');
+	expect(fetchMock).not.toHaveBeenCalled();
 });
