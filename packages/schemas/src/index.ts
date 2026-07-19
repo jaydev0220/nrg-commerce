@@ -5,4 +5,5 @@ export * from './products.js';
 export * from './logs.js';
 export * from './businesses.js';
 export * from './orders.js';
+export * from './contact.js';
 export { z, ZodError, type ZodType } from 'zod';

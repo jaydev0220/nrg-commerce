@@ -5,8 +5,8 @@ const optionalText = (maximum: number) =>
 		.string()
 		.trim()
 		.max(maximum)
-		.optional()
-		.transform((value) => value || undefined);
+		.transform((value) => value || undefined)
+		.optional();
 
 const baseRequestSchema = z
 	.object({

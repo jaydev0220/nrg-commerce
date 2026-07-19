@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@packages/schemas';
 
 import { handleRequest, type TurnstileVerification, type WorkerConfig } from './worker.js';
 

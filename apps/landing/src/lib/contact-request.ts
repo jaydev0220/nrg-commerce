@@ -1,13 +1,6 @@
-export type ContactRequestPayload = {
-	turnstileToken: string;
-	name: string;
-	email: string;
-	company?: string;
-	phone?: string;
-	inquiryType?: string;
-	productInterest?: string;
-	message: string;
-};
+import type { ContactRequest } from '@packages/schemas';
+
+export type ContactRequestPayload = ContactRequest;
 
 export async function submitContactRequest(
 	workerUrl: string,

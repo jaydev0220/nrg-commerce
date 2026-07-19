@@ -1,12 +1,6 @@
-export type InquiryRequestPayload = {
-	turnstileToken: string;
-	name: string;
-	email: string;
-	company?: string;
-	phone?: string;
-	skuCode?: string;
-	message: string;
-};
+import type { InquiryRequest } from '@packages/schemas';
+
+export type InquiryRequestPayload = InquiryRequest;
 
 export async function submitInquiryRequest(
 	workerUrl: string,

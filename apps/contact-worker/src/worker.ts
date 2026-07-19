@@ -1,12 +1,12 @@
-import type { ZodType } from 'zod';
-
-import { buildRequestEmail, type OutgoingEmail } from './email.js';
 import {
 	contactRequestSchema,
 	inquiryRequestSchema,
 	type ContactRequest,
-	type InquiryRequest
-} from './schemas.js';
+	type InquiryRequest,
+	type ZodType
+} from '@packages/schemas';
+
+import { buildRequestEmail, type OutgoingEmail } from './email.js';
 
 const MAX_BODY_BYTES = 16 * 1024;
 

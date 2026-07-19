@@ -1,4 +1,4 @@
-import type { ContactRequest, InquiryRequest } from './schemas.js';
+import type { ContactRequest, InquiryRequest } from '@packages/schemas';
 
 type FormRequest = ContactRequest | InquiryRequest;
 
