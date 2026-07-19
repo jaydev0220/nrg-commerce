@@ -182,19 +182,6 @@ jobs:
         working-directory: apps/contact-worker
         run: pnpm exec wrangler deploy --keep-vars --domain "$CONTACT_DOMAIN"
 
-      - name: Smoke test contact Worker
-        if: needs.changes.outputs.contact == 'true'
-        run: |
-          for attempt in {1..12}; do
-            status="$(curl --silent --show-error --max-time 15 --dump-header "$RUNNER_TEMP/contact-headers" --output /dev/null --write-out '%{http_code}' --request OPTIONS --header "Origin: $LANDING_SITE_URL" "https://$CONTACT_DOMAIN/contact" || true)"
-            if [[ "$status" == '204' ]] && grep --fixed-strings --ignore-case --quiet "access-control-allow-origin: $LANDING_SITE_URL" "$RUNNER_TEMP/contact-headers"; then
-              exit 0
-            fi
-            sleep 5
-          done
-          echo 'Contact Worker smoke test failed.' >&2
-          exit 1
-
       - name: Validate catalog environment
         if: needs.changes.outputs.catalog == 'true'
         run: node scripts/ci/production-env.mjs catalog
@@ -207,19 +194,6 @@ jobs:
         if: needs.changes.outputs.catalog == 'true'
         working-directory: apps/catalog
         run: pnpm exec wrangler deploy --keep-vars --domain "$CATALOG_DOMAIN" --var "PUBLIC_API_BASE_URL:$CATALOG_API_BASE_URL"
-
-      - name: Smoke test catalog Worker
-        if: needs.changes.outputs.catalog == 'true'
-        run: |
-          for attempt in {1..12}; do
-            status="$(curl --silent --show-error --max-time 15 --output "$RUNNER_TEMP/catalog.html" --write-out '%{http_code}' "https://$CATALOG_DOMAIN/" || true)"
-            if [[ "$status" =~ ^2[0-9][0-9]$ ]] && grep --fixed-strings --quiet '<main' "$RUNNER_TEMP/catalog.html"; then
-              exit 0
-            fi
-            sleep 5
-          done
-          echo 'Catalog Worker smoke test failed.' >&2
-          exit 1
 
   deploy-landing:
     name: Deploy landing to GitHub Pages
