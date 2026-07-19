@@ -22,6 +22,14 @@ project-root/
 |   |   |-- eslint.config.js
 |   |   |-- prettier.config.js
 |   |   `-- tsconfig.json
+|   |-- contact-worker/
+|   |   |-- src/
+|   |   |-- tests/
+|   |   |-- package.json
+|   |   |-- eslint.config.js
+|   |   |-- prettier.config.js
+|   |   |-- tsconfig.json
+|   |   `-- wrangler.jsonc
 |   |-- admin/                                # Management page for staff
 |   |   |-- src/
 |   |   |   |-- lib/
