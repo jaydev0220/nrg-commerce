@@ -1,11 +1,21 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
+	import { TurnstileWidget } from '@packages/components';
+	import { submitInquiryRequest, type InquiryRequestPayload } from '$lib/inquiry-request.js';
 
 	type Props = {
 		initialSkuCode: string;
+		workerUrl?: string;
+		turnstileSiteKey?: string;
+		submitRequest?: (workerUrl: string, payload: InquiryRequestPayload) => Promise<void>;
 	};
 
-	let { initialSkuCode }: Props = $props();
+	let {
+		initialSkuCode,
+		workerUrl = import.meta.env['PUBLIC_CONTACT_WORKER_URL']?.trim() ?? '',
+		turnstileSiteKey = import.meta.env['PUBLIC_TURNSTILE_SITE_KEY']?.trim() ?? '',
+		submitRequest = submitInquiryRequest
+	}: Props = $props();
 
 	let form = $state({
 		name: '',
@@ -22,6 +32,24 @@
 	let isSubmitting = $state(false);
 	let statusMessage = $state('');
 	let statusTone = $state<'success' | 'error' | ''>('');
+	let skuCode = $derived(initialSkuCode);
+	let turnstileToken = $state('');
+	let turnstileGeneration = $state(0);
+	let turnstileError = $state('');
+
+	function handleTurnstileVerification(value: string) {
+		turnstileToken = value;
+		turnstileError = '';
+	}
+
+	function handleTurnstileExpiration() {
+		turnstileToken = '';
+	}
+
+	function handleTurnstileError() {
+		turnstileToken = '';
+		turnstileError = m.inquiry_turnstile_error();
+	}
 
 	function validateForm(): boolean {
 		errors.name = form.name.trim() ? '' : m.inquiry_error_name_required();
@@ -47,7 +75,7 @@
 			?.focus();
 	}
 
-	function handleSubmit(event: Event) {
+	async function handleSubmit(event: Event) {
 		event.preventDefault();
 
 		statusMessage = '';
@@ -59,14 +87,35 @@
 			focusFirstInvalidField();
 			return;
 		}
+		if (!turnstileToken) {
+			statusTone = 'error';
+			statusMessage = m.inquiry_turnstile_required();
+			return;
+		}
 
 		isSubmitting = true;
 
 		try {
+			await submitRequest(workerUrl, {
+				turnstileToken,
+				name: form.name.trim(),
+				email: form.email.trim(),
+				company: form.company.trim() || undefined,
+				phone: form.phone.trim() || undefined,
+				skuCode: skuCode.trim() || undefined,
+				message: form.message.trim()
+			});
 			statusTone = 'success';
-			statusMessage = m.inquiry_submit_pending();
+			statusMessage = m.inquiry_submit_success();
+			form = { name: '', company: '', email: '', phone: '', message: '' };
+			skuCode = '';
+		} catch {
+			statusTone = 'error';
+			statusMessage = m.inquiry_submit_error();
 		} finally {
 			isSubmitting = false;
+			turnstileToken = '';
+			turnstileGeneration += 1;
 		}
 	}
 </script>
@@ -189,7 +238,7 @@
 			id="inquiry-sku"
 			name="skuCode"
 			type="text"
-			value={initialSkuCode}
+			bind:value={skuCode}
 			autocomplete="off"
 			placeholder={m.inquiry_sku_placeholder()}
 			class="w-full rounded-md border border-border bg-bg-sunken px-3 py-2.5 font-mono text-sm text-text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
@@ -225,6 +274,27 @@
 	</div>
 
 	<div class="mt-6">
+		{#key turnstileGeneration}
+			<TurnstileWidget
+				siteKey={turnstileSiteKey}
+				action="inquiry"
+				label={m.inquiry_turnstile_label()}
+				onverify={handleTurnstileVerification}
+				onexpire={handleTurnstileExpiration}
+				onerror={handleTurnstileError}
+			/>
+		{/key}
+		{#if turnstileError}
+			<p
+				class="mt-2 text-sm text-red-600"
+				aria-live="polite"
+			>
+				{turnstileError}
+			</p>
+		{/if}
+	</div>
+
+	<div class="mt-4">
 		<button
 			type="submit"
 			disabled={isSubmitting}

@@ -2,6 +2,20 @@
 	import { browser } from '$app/environment';
 	import * as m from '$lib/paraglide/messages';
 	import { page } from '$app/state';
+	import { TurnstileWidget } from '@packages/components';
+	import { submitContactRequest, type ContactRequestPayload } from '$lib/contact-request.js';
+
+	type Props = {
+		workerUrl?: string;
+		turnstileSiteKey?: string;
+		submitRequest?: (workerUrl: string, payload: ContactRequestPayload) => Promise<void>;
+	};
+
+	let {
+		workerUrl = import.meta.env['PUBLIC_CONTACT_WORKER_URL']?.trim() ?? '',
+		turnstileSiteKey = import.meta.env['PUBLIC_TURNSTILE_SITE_KEY']?.trim() ?? '',
+		submitRequest = submitContactRequest
+	}: Props = $props();
 
 	function mapInquiryType(queryType: string | null): string {
 		switch (queryType) {
@@ -33,6 +47,23 @@
 	let isSubmitting = $state(false);
 	let statusMessage = $state('');
 	let statusTone = $state<'success' | 'error' | ''>('');
+	let turnstileToken = $state('');
+	let turnstileGeneration = $state(0);
+	let turnstileError = $state('');
+
+	function handleTurnstileVerification(value: string) {
+		turnstileToken = value;
+		turnstileError = '';
+	}
+
+	function handleTurnstileExpiration() {
+		turnstileToken = '';
+	}
+
+	function handleTurnstileError() {
+		turnstileToken = '';
+		turnstileError = m.form_turnstile_error();
+	}
 
 	function validateForm(): boolean {
 		errors.name = form.name.trim() ? '' : m.form_error_name_required();
@@ -87,11 +118,25 @@
 			focusFirstInvalidField();
 			return;
 		}
+		if (!turnstileToken) {
+			statusTone = 'error';
+			statusMessage = m.form_turnstile_required();
+			return;
+		}
 
 		isSubmitting = true;
 
 		try {
-			await new Promise((resolve) => setTimeout(resolve, 1000));
+			await submitRequest(workerUrl, {
+				turnstileToken,
+				name: form.name.trim(),
+				email: form.email.trim(),
+				company: form.company.trim() || undefined,
+				phone: form.phone.trim() || undefined,
+				inquiryType: form.inquiryType.trim() || undefined,
+				productInterest: form.productInterest.trim() || undefined,
+				message: form.message.trim()
+			});
 			statusTone = 'success';
 			statusMessage = m.form_submit_success();
 
@@ -104,12 +149,13 @@
 				productInterest: '',
 				message: ''
 			};
-		} catch (error) {
-			console.error('Submission error:', error);
+		} catch {
 			statusTone = 'error';
 			statusMessage = m.form_submit_error();
 		} finally {
 			isSubmitting = false;
+			turnstileToken = '';
+			turnstileGeneration += 1;
 		}
 	}
 
@@ -441,6 +487,25 @@
 				</p>
 			{/if}
 		</div>
+
+		{#key turnstileGeneration}
+			<TurnstileWidget
+				siteKey={turnstileSiteKey}
+				action="contact"
+				label={m.form_turnstile_label()}
+				onverify={handleTurnstileVerification}
+				onexpire={handleTurnstileExpiration}
+				onerror={handleTurnstileError}
+			/>
+		{/key}
+		{#if turnstileError}
+			<p
+				class="text-sm text-red-600"
+				aria-live="polite"
+			>
+				{turnstileError}
+			</p>
+		{/if}
 
 		<!-- Submit Button -->
 		<div>
