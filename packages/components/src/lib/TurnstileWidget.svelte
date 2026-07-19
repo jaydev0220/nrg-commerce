@@ -24,18 +24,22 @@
 		if (existing) return Promise.resolve(existing);
 		if (turnstileLoader) return turnstileLoader;
 
-		turnstileLoader = new Promise((resolve, reject) => {
+		const loader = new Promise<TurnstileApi>((resolve, reject) => {
 			const scriptId = 'cloudflare-turnstile-script';
 			const currentScript = document.getElementById(scriptId) as HTMLScriptElement | null;
 			const script = currentScript ?? document.createElement('script');
+			const fail = (message: string) => {
+				script.remove();
+				reject(new Error(message));
+			};
 			const handleLoad = () => {
 				const api = (window as TurnstileWindow).turnstile;
 				if (api) resolve(api);
-				else reject(new Error('Turnstile did not initialize.'));
+				else fail('Turnstile did not initialize.');
 			};
 
 			script.addEventListener('load', handleLoad, { once: true });
-			script.addEventListener('error', () => reject(new Error('Turnstile failed to load.')), {
+			script.addEventListener('error', () => fail('Turnstile failed to load.'), {
 				once: true
 			});
 
@@ -46,9 +50,13 @@
 				script.defer = true;
 				document.head.append(script);
 			}
+		}).catch((error: unknown) => {
+			turnstileLoader = undefined;
+			throw error;
 		});
+		turnstileLoader = loader;
 
-		return turnstileLoader;
+		return loader;
 	}
 </script>
 
