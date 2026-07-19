@@ -1,4 +1,4 @@
-import { appendFile, readFile } from 'node:fs/promises';
+import { appendFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
 const targetNames = ['landing', 'catalog', 'contact'];
@@ -60,10 +60,21 @@ export function determineAffectedTargets(paths, manualTarget) {
 	);
 }
 
+export async function readChangedPaths(stream) {
+	stream.setEncoding('utf8');
+
+	let input = '';
+	for await (const chunk of stream) {
+		input += chunk;
+	}
+
+	return input.split(/\r?\n/);
+}
+
 async function main() {
 	const manualTargetIndex = process.argv.indexOf('--manual-target');
 	const manualTarget = manualTargetIndex === -1 ? undefined : process.argv[manualTargetIndex + 1];
-	const paths = manualTarget ? [] : (await readFile(0, 'utf8')).split(/\r?\n/);
+	const paths = manualTarget ? [] : await readChangedPaths(process.stdin);
 	const targets = determineAffectedTargets(paths, manualTarget);
 	const output = `${targetNames.map((target) => `${target}=${targets[target]}`).join('\n')}\n`;
 

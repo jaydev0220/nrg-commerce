@@ -1,7 +1,23 @@
 import assert from 'node:assert/strict';
+import { Readable } from 'node:stream';
 import test from 'node:test';
 
-import { determineAffectedTargets } from '../../../scripts/ci/affected-targets.mjs';
+import {
+	determineAffectedTargets,
+	readChangedPaths
+} from '../../../scripts/ci/affected-targets.mjs';
+
+test('changed paths are read from a text stream', async () => {
+	const paths = await readChangedPaths(
+		Readable.from(['apps/catalog/src/routes/+page.svelte\n', 'packages/seo/src/index.ts\n'])
+	);
+
+	assert.deepEqual(paths, [
+		'apps/catalog/src/routes/+page.svelte',
+		'packages/seo/src/index.ts',
+		''
+	]);
+});
 
 test('app-only changes affect only their deployment target', () => {
 	assert.deepEqual(determineAffectedTargets(['apps/landing/src/routes/+page.svelte']), {
