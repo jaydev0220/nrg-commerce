@@ -18,6 +18,13 @@ export default defineConfig({
 	],
 	test: {
 		expect: { requireAssertions: true },
+		coverage: {
+			provider: 'v8',
+			reporter: ['text'],
+			include: ['src/**/*.{js,ts,svelte}'],
+			exclude: ['src/**/*.d.ts'],
+			thresholds: { lines: 17, branches: 14, functions: 20 }
+		},
 		projects: [
 			{
 				extends: './vite.config.ts',

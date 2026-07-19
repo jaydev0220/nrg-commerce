@@ -13,6 +13,7 @@
 		"format": "prettier --ignore-path ../../.prettierignore --write . && prisma format",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
 		"test": "prisma generate && node --import tsx --test \"tests/**/*.test.ts\"",
+		"test:coverage": "prisma generate && node --import tsx --test --experimental-test-coverage --test-coverage-include=src/**/*.ts --test-coverage-lines=99 --test-coverage-branches=80 --test-coverage-functions=100 \"tests/**/*.test.ts\"",
 		"db:generate": "prisma generate",
 		"db:migrate": "prisma migrate dev",
 		"db:deploy": "prisma migrate deploy",

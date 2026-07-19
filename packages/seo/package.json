@@ -12,7 +12,8 @@
 		"check": "tsc --noEmit --project tsconfig.json",
 		"format": "prettier --ignore-path ../../.prettierignore --write .",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
-		"test": "node --import tsx --test \"tests/**/*.test.ts\""
+		"test": "node --import tsx --test \"tests/**/*.test.ts\"",
+		"test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-include=src/**/*.ts --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 \"tests/**/*.test.ts\""
 	},
 	"dependencies": {
 		"svead": "catalog:svelte"

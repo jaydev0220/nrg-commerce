@@ -23,6 +23,13 @@ export default defineConfig(({ mode }) => {
 		],
 		test: {
 			expect: { requireAssertions: true },
+			coverage: {
+				provider: 'v8',
+				reporter: ['text'],
+				include: ['src/**/*.{js,ts,svelte}'],
+				exclude: ['src/**/*.d.ts', 'src/lib/paraglide/**'],
+				thresholds: { lines: 52, branches: 58, functions: 53 }
+			},
 			projects: [
 				{
 					extends: './vite.config.ts',

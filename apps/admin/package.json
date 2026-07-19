@@ -12,7 +12,8 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --ignore-path ../../.prettierignore --write .",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
-		"test": "vitest run --passWithNoTests",
+		"test": "vitest run",
+		"test:coverage": "vitest run --coverage",
 		"test:watch": "vitest",
 		"test:e2e": "playwright test"
 	},
@@ -31,6 +32,7 @@
 		"@tailwindcss/vite": "catalog:svelte",
 		"@types/node": "catalog:",
 		"@types/qrcode": "catalog:",
+		"@vitest/coverage-v8": "catalog:test",
 		"@vitest/browser-playwright": "catalog:test",
 		"eslint": "catalog:lint",
 		"eslint-config-prettier": "catalog:lint",

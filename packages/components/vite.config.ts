@@ -1,7 +1,8 @@
 import tailwindcss from '@tailwindcss/vite';
 import adapter from '@sveltejs/adapter-auto';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { playwright } from '@vitest/browser-playwright';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	plugins: [
@@ -14,5 +15,21 @@ export default defineConfig({
 			},
 			adapter: adapter()
 		})
-	]
+	],
+	test: {
+		expect: { requireAssertions: true },
+		coverage: {
+			provider: 'v8',
+			reporter: ['text'],
+			include: ['src/lib/**/*.{js,ts,svelte}'],
+			exclude: ['src/**/*.d.ts'],
+			thresholds: { lines: 70, branches: 75, functions: 79 }
+		},
+		browser: {
+			enabled: true,
+			provider: playwright(),
+			instances: [{ browser: 'chromium', headless: true }]
+		},
+		include: ['tests/**/*.svelte.{test,spec}.{js,ts}']
+	}
 });
