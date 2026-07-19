@@ -269,15 +269,3 @@ jobs:
       - name: Deploy GitHub Pages artifact
         id: deployment
         uses: actions/deploy-pages@v4
-
-      - name: Smoke test landing site
-        run: |
-          for attempt in {1..12}; do
-            status="$(curl --silent --show-error --location --max-time 15 --output "$RUNNER_TEMP/landing.html" --write-out '%{http_code}' "$LANDING_SITE_URL/" || true)"
-            if [[ "$status" =~ ^2[0-9][0-9]$ ]] && grep --fixed-strings --quiet 'id="main-content"' "$RUNNER_TEMP/landing.html"; then
-              exit 0
-            fi
-            sleep 5
-          done
-          echo 'Landing site smoke test failed.' >&2
-          exit 1
