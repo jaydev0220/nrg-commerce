@@ -1,0 +1,14 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "contact-worker",
+	"compatibility_date": "2026-07-19",
+	"compatibility_flags": ["nodejs_compat"],
+	"main": "src/index.ts",
+	"send_email": [{ "name": "EMAIL" }],
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1
+	},
+	"workers_dev": true,
+	"preview_urls": true
+}

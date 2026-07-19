@@ -1,0 +1,10 @@
+{
+	"extends": "@packages/tsconfig/node.json",
+	"compilerOptions": {
+		"rootDir": ".",
+		"outDir": "./build"
+	},
+	"files": ["worker-configuration.d.ts"],
+	"include": ["src/**/*.ts", "tests/**/*.ts"],
+	"exclude": ["build", "node_modules"]
+}

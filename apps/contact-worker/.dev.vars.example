@@ -1,0 +1,4 @@
+CONTACT_SENDER_EMAIL=contact@example.com
+CONTACT_RECIPIENT_EMAIL=contact@example.com
+TURNSTILE_SECRET_KEY=replace-with-turnstile-secret
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
