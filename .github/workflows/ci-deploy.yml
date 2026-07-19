@@ -1,0 +1,304 @@
+name: CI and Deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Production target to deploy
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - landing
+          - catalog
+          - contact
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number) || 'ci-production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Detect deployment targets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      landing: ${{ steps.targets.outputs.landing }}
+      catalog: ${{ steps.targets.outputs.catalog }}
+      contact: ${{ steps.targets.outputs.contact }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine affected targets
+        id: targets
+        env:
+          BASE_SHA: ${{ github.event.before || github.event.pull_request.base.sha }}
+          CURRENT_SHA: ${{ github.sha }}
+          MANUAL_TARGET: ${{ inputs.target }}
+        run: |
+          if [[ -n "$MANUAL_TARGET" ]]; then
+            node scripts/ci/affected-targets.mjs --manual-target "$MANUAL_TARGET"
+          elif [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            node scripts/ci/affected-targets.mjs --manual-target all
+          else
+            git diff --name-only "$BASE_SHA" "$CURRENT_SHA" | node scripts/ci/affected-targets.mjs
+          fi
+
+  validate:
+    name: Validate monorepo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ALLOWED_ORIGINS: https://www.example.test,https://catalog.example.test
+      CI: 'true'
+      CONTACT_RECIPIENT_EMAIL: recipient@example.test
+      CONTACT_SENDER_EMAIL: sender@example.test
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_ci
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_ci
+      PUBLIC_API_BASE_URL: http://127.0.0.1:4174
+      PUBLIC_CDN_BASE_URL: https://cdn.example.test
+      PUBLIC_COOKIE_DOMAIN: example.test
+      PUBLIC_CONTACT_WORKER_URL: https://contact.example.test
+      PUBLIC_CTA_URL: https://catalog.example.test
+      PUBLIC_FACEBOOK_URL: https://www.facebook.com/example
+      PUBLIC_HOME_URL: https://www.example.test
+      PUBLIC_LINE_URL: https://line.me/ti/p/example
+      PUBLIC_SITE_URL: https://www.example.test
+      PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+      TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate project types
+        run: pnpm ci:generate
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Check formatting and lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm check
+
+      - name: Run unit and component tests
+        run: pnpm test
+
+      - name: Build all workspaces
+        run: pnpm build
+
+      - name: Verify prerendered landing output
+        run: node scripts/ci/verify-landing-build.mjs apps/landing/build
+
+      - name: Run browser journeys
+        run: pnpm test:e2e
+
+  deploy-workers:
+    name: Deploy Cloudflare Workers
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (needs.changes.outputs.contact == 'true' || needs.changes.outputs.catalog == 'true')
+    needs: [changes, validate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
+      CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
+      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
+      CATALOG_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
+      CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
+      COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
+      FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
+      LINE_URL: ${{ vars.LINE_URL }}
+      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+      PUBLIC_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
+      PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
+      PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
+      PUBLIC_CONTACT_WORKER_URL: https://${{ vars.CONTACT_DOMAIN }}
+      PUBLIC_FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
+      PUBLIC_HOME_URL: ${{ vars.LANDING_SITE_URL }}
+      PUBLIC_LINE_URL: ${{ vars.LINE_URL }}
+      PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate contact Worker environment
+        if: needs.changes.outputs.contact == 'true'
+        run: node scripts/ci/production-env.mjs contact
+
+      - name: Deploy contact Worker
+        if: needs.changes.outputs.contact == 'true'
+        working-directory: apps/contact-worker
+        run: pnpm exec wrangler deploy --keep-vars --domain "$CONTACT_DOMAIN"
+
+      - name: Smoke test contact Worker
+        if: needs.changes.outputs.contact == 'true'
+        run: |
+          for attempt in {1..12}; do
+            status="$(curl --silent --show-error --max-time 15 --dump-header "$RUNNER_TEMP/contact-headers" --output /dev/null --write-out '%{http_code}' --request OPTIONS --header "Origin: $LANDING_SITE_URL" "https://$CONTACT_DOMAIN/contact" || true)"
+            if [[ "$status" == '204' ]] && grep --fixed-strings --ignore-case --quiet "access-control-allow-origin: $LANDING_SITE_URL" "$RUNNER_TEMP/contact-headers"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Contact Worker smoke test failed.' >&2
+          exit 1
+
+      - name: Validate catalog environment
+        if: needs.changes.outputs.catalog == 'true'
+        run: node scripts/ci/production-env.mjs catalog
+
+      - name: Build catalog Worker
+        if: needs.changes.outputs.catalog == 'true'
+        run: pnpm --filter @apps/catalog build
+
+      - name: Deploy catalog Worker
+        if: needs.changes.outputs.catalog == 'true'
+        working-directory: apps/catalog
+        run: pnpm exec wrangler deploy --keep-vars --domain "$CATALOG_DOMAIN" --var "PUBLIC_API_BASE_URL:$CATALOG_API_BASE_URL"
+
+      - name: Smoke test catalog Worker
+        if: needs.changes.outputs.catalog == 'true'
+        run: |
+          for attempt in {1..12}; do
+            status="$(curl --silent --show-error --max-time 15 --output "$RUNNER_TEMP/catalog.html" --write-out '%{http_code}' "https://$CATALOG_DOMAIN/" || true)"
+            if [[ "$status" =~ ^2[0-9][0-9]$ ]] && grep --fixed-strings --quiet '<main' "$RUNNER_TEMP/catalog.html"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Catalog Worker smoke test failed.' >&2
+          exit 1
+
+  deploy-landing:
+    name: Deploy landing to GitHub Pages
+    if: >-
+      always() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.validate.result == 'success' &&
+      needs.changes.outputs.landing == 'true' &&
+      (needs.deploy-workers.result == 'success' || needs.deploy-workers.result == 'skipped')
+    needs: [changes, validate, deploy-workers]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: production
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
+      CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
+      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
+      CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
+      COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
+      FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
+      LINE_URL: ${{ vars.LINE_URL }}
+      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+      PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
+      PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
+      PUBLIC_CONTACT_WORKER_URL: https://${{ vars.CONTACT_DOMAIN }}
+      PUBLIC_CTA_URL: https://${{ vars.CATALOG_DOMAIN }}
+      PUBLIC_FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
+      PUBLIC_LINE_URL: ${{ vars.LINE_URL }}
+      PUBLIC_SITE_URL: ${{ vars.LANDING_SITE_URL }}
+      PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate landing environment
+        run: node scripts/ci/production-env.mjs landing
+
+      - name: Build landing site
+        run: pnpm --filter @apps/landing build
+
+      - name: Verify prerendered landing output
+        run: node scripts/ci/verify-landing-build.mjs apps/landing/build
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/landing/build
+
+      - name: Deploy GitHub Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Smoke test landing site
+        run: |
+          for attempt in {1..12}; do
+            status="$(curl --silent --show-error --location --max-time 15 --output "$RUNNER_TEMP/landing.html" --write-out '%{http_code}' "$LANDING_SITE_URL/" || true)"
+            if [[ "$status" =~ ^2[0-9][0-9]$ ]] && grep --fixed-strings --quiet 'id="main-content"' "$RUNNER_TEMP/landing.html"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Landing site smoke test failed.' >&2
+          exit 1

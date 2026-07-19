@@ -1,17 +1,25 @@
 {
 	"name": "nrg-commerce",
+	"type": "module",
 	"author": {
 		"name": "Jay",
 		"url": "https://github.com/jaydev0220"
 	},
 	"license": "CC-BY-NC-ND-4.0",
+	"packageManager": "pnpm@11.4.0",
+	"engines": {
+		"node": ">=24.18.0 <25",
+		"pnpm": "11.4.0"
+	},
 	"scripts": {
 		"dev": "pnpm --parallel --filter './apps/*' run dev",
 		"build": "pnpm -r run build",
 		"check": "pnpm -r run check",
-		"format": "pnpm -r run format",
-		"lint": "pnpm -r run lint",
-		"test": "pnpm -r run test",
+		"ci:generate": "pnpm --filter @packages/database db:generate && pnpm --filter @apps/catalog types && pnpm --filter @apps/contact-worker types",
+		"format": "prettier --ignore-path .prettierignore --write package.json prettier.config.js '.github/**/*.yml' 'scripts/**/*.mjs' 'tests/**/*.mjs' && pnpm -r run format",
+		"lint": "prettier --ignore-path .prettierignore --check package.json prettier.config.js '.github/**/*.yml' 'scripts/**/*.mjs' 'tests/**/*.mjs' && pnpm -r run lint",
+		"test": "pnpm run test:ci && pnpm -r run test",
+		"test:ci": "node --test \"tests/scripts/ci/**/*.test.mjs\"",
 		"test:coverage": "pnpm -r --if-present run test:coverage",
 		"test:e2e": "pnpm --filter './apps/*' run test:e2e"
 	},
@@ -23,6 +31,8 @@
 		}
 	},
 	"devDependencies": {
-		"node": "catalog:"
+		"@packages/prettier-config": "workspace:*",
+		"node": "catalog:",
+		"prettier": "catalog:lint"
 	}
 }

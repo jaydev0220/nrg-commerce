@@ -2,13 +2,6 @@ import { z } from '@packages/schemas';
 
 import { handleRequest, type TurnstileVerification, type WorkerConfig } from './worker.js';
 
-type ContactWorkerEnv = Env & {
-	CONTACT_SENDER_EMAIL: string;
-	CONTACT_RECIPIENT_EMAIL: string;
-	TURNSTILE_SECRET_KEY: string;
-	ALLOWED_ORIGINS: string;
-};
-
 const turnstileResponseSchema = z
 	.object({
 		success: z.boolean(),
@@ -24,7 +17,7 @@ function required(value: string | undefined, name: string): string {
 	return normalized;
 }
 
-function readConfig(env: ContactWorkerEnv): WorkerConfig {
+function readConfig(env: Env): WorkerConfig {
 	const origins = required(env.ALLOWED_ORIGINS, 'ALLOWED_ORIGINS')
 		.split(',')
 		.map((origin) => origin.trim())
@@ -84,4 +77,4 @@ export default {
 			now: () => Date.now()
 		});
 	}
-} satisfies ExportedHandler<ContactWorkerEnv>;
+} satisfies ExportedHandler<Env>;

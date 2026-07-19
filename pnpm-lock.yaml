@@ -401,9 +401,15 @@ importers:
 
   .:
     devDependencies:
+      '@packages/prettier-config':
+        specifier: workspace:*
+        version: link:packages/prettier-config
       node:
         specifier: 'catalog:'
         version: runtime:24.18.0
+      prettier:
+        specifier: catalog:lint
+        version: 3.8.4
 
   apps/admin:
     dependencies:
