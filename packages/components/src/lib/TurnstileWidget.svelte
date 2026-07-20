@@ -107,7 +107,7 @@
 
 <div
 	bind:this={container}
-	class="min-h-[65px]"
+	class="min-h-16.25"
 	role="group"
 	aria-label={label}
 	data-action="turnstile-spin-v1"
