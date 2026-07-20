@@ -30,6 +30,7 @@ function sku(id, skuCode, name, volume, price) {
 		categoryId: category.id,
 		categorySlug: category.slug,
 		price,
+		availability: 'in_stock',
 		published: true,
 		attributes: { volume },
 		deletedAt: null,
@@ -52,6 +53,8 @@ const beaker = {
 	deletedAt: null,
 	createdAt: '2026-07-19T02:00:00.000Z',
 	updatedAt: timestamp,
+	thumbnail: null,
+	images: [],
 	skus: [
 		sku('sku-beaker-100', 'BEAKER-100', 'Beaker 100 ml', '100 ml', 120),
 		sku('sku-beaker-250', 'BEAKER-250', 'Beaker 250 ml', '250 ml', 180)
