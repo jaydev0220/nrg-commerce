@@ -27,6 +27,7 @@
 	import ProductCard from '$lib/components/ProductCard.svelte';
 
 	let { data }: PageProps = $props();
+	const catalogYear = new Date().getFullYear();
 
 	let locale = $derived(localeFromPathname(page.url.pathname));
 	let queryState = $derived(parseCatalogQueryState(page.url.searchParams, locale));
@@ -195,7 +196,7 @@
 	<CatalogHero
 		title={m.catalog_title()}
 		description={m.catalog_description()}
-		eyebrow={m.catalog_eyebrow()}
+		eyebrow={m.catalog_eyebrow({ year: catalogYear })}
 		homeLabel={m.nav_home()}
 	/>
 

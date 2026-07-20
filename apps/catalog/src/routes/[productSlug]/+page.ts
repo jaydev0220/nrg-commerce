@@ -8,6 +8,7 @@ import type { PageLoad } from './$types';
 export const load: PageLoad = ({ data, url }) => {
 	const locale = localeFromPathname(url.pathname);
 	const localizedName = localizeValue(locale, data.product.name, data.product.nameEn);
+	const localizedTitle = m.product_meta_title({ productName: localizedName });
 	const localizedDescription =
 		localizeValue(locale, data.product.description, data.product.descriptionEn) ??
 		m.product_meta_description({ productName: localizedName });
@@ -17,7 +18,7 @@ export const load: PageLoad = ({ data, url }) => {
 	return {
 		...data,
 		...createSeoPageData({
-			title: localizedName,
+			title: localizedTitle,
 			description: localizedDescription,
 			pageType: 'WebPage',
 			openGraphImage,
