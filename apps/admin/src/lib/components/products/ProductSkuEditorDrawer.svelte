@@ -52,8 +52,15 @@
 		const values = new FormData(event.currentTarget as HTMLFormElement);
 		const skuCode = String(values.get('skuCode') ?? '').trim();
 		const price = Number(values.get('price'));
-		if (!skuCode || !Number.isFinite(price) || price < 0) {
-			errorMessage = '請填寫 SKU 代碼與有效價格。';
+		const stockQuantity = Number(values.get('stockQuantity'));
+		if (
+			!skuCode ||
+			!Number.isFinite(price) ||
+			price < 0 ||
+			!Number.isInteger(stockQuantity) ||
+			stockQuantity < 0
+		) {
+			errorMessage = '請填寫 SKU 代碼、有效價格與非負整數庫存。';
 			return;
 		}
 		const keys = values.getAll('attributeKey').map((value) => String(value).trim());
@@ -63,7 +70,7 @@
 		);
 		busy = true;
 		try {
-			await onsave({ skuCode, price, attributes });
+			await onsave({ skuCode, price, stockQuantity, attributes });
 			onclose();
 		} catch (error) {
 			errorMessage = message(error);
@@ -108,6 +115,18 @@
 				type="number"
 				name="price"
 				value={sku?.price ?? ''}
+				class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3"
+			/>
+		</label>
+		<label class="block text-sm font-medium">
+			庫存數量
+			<input
+				required
+				min="0"
+				step="1"
+				type="number"
+				name="stockQuantity"
+				value={sku?.stockQuantity ?? 0}
 				class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3"
 			/>
 		</label>

@@ -20,10 +20,9 @@ export const load: PageLoad = ({ data, url }) => {
 	const localizedName = localizeValue(locale, data.product.name, data.product.nameEn);
 	const localizedDescription =
 		localizeValue(locale, data.product.description, data.product.descriptionEn) ??
-		m.catalog_description();
+		m.product_meta_description({ productName: localizedName });
 	const openGraphImage =
-		data.product.skus.flatMap((sku) => sku.images)[0]?.imageUrl ??
-		catalogCdnUrl('/landing/products-beakers.webp');
+		data.product.thumbnail?.imageUrl ?? catalogCdnUrl('/og/catalog/gallery.webp');
 
 	return {
 		...data,
@@ -33,6 +32,29 @@ export const load: PageLoad = ({ data, url }) => {
 			pageType: 'WebPage',
 			openGraphImage,
 			openGraphImageAlt: localizedName
-		})
+		}),
+		productStructuredData: {
+			'@type': 'ProductGroup',
+			'@id': `${url.origin}${url.pathname}#product`,
+			name: localizedName,
+			description: localizedDescription,
+			url: `${url.origin}${url.pathname}`,
+			...(data.product.thumbnail ? { image: data.product.thumbnail.imageUrl } : {}),
+			hasVariant: data.product.skus.map((sku) => ({
+				'@type': 'Product',
+				sku: sku.skuCode,
+				name: `${localizedName} - ${sku.skuCode}`,
+				offers: {
+					'@type': 'Offer',
+					priceCurrency: 'TWD',
+					price: sku.price,
+					availability:
+						sku.availability === 'in_stock'
+							? 'https://schema.org/InStock'
+							: 'https://schema.org/OutOfStock',
+					url: `${url.origin}${url.pathname}`
+				}
+			}))
+		}
 	};
 };

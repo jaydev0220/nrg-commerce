@@ -13,10 +13,10 @@ function createStorefrontService(
 ): StorefrontCatalogService {
 	return {
 		listProducts: async () => ({ data: [], total: 0 }),
-		getProductById: async () => ({}) as never,
-		getProductBySlug: async () => ({}) as never,
+		getProductById: async () => ({ skus: [] }) as never,
+		getProductBySlug: async () => ({ skus: [] }) as never,
 		listSkus: async () => ({ data: [], total: 0 }),
-		getSkuByCode: async () => ({}) as never,
+		getSkuByCode: async () => ({ stockQuantity: 5 }) as never,
 		listCategories: async () => [],
 		getCategoryBySlug: async () => ({}) as never,
 		...overrides
@@ -47,6 +47,7 @@ test('all storefront success responses advertise the shared cache policy', async
 		assert.equal(response.status, 200, response.text());
 		assert.equal(response.headers['cache-control'], 'public, max-age=0, s-maxage=45');
 	}
+	assert.equal('stockQuantity' in responses[2]!.json<Record<string, unknown>>(), false);
 });
 
 test('storefront errors do not advertise a public cache policy', async () => {

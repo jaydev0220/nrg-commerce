@@ -15,6 +15,7 @@
 		updateProductSku
 	} from '$lib/api/admin-api';
 	import ProductProfileForm from '$lib/components/products/ProductProfileForm.svelte';
+	import ProductImageSection from '$lib/components/products/ProductImageSection.svelte';
 	import ProductSkuSection from '$lib/components/products/ProductSkuSection.svelte';
 	import type {
 		ProductImageUploadInput,
@@ -46,7 +47,7 @@
 	}
 
 	async function uploadImage(input: ProductImageUploadInput) {
-		const target = await createImageUploadTarget(input.skuId, {
+		const target = await createImageUploadTarget(data.product.id, {
 			fileName: input.file.name,
 			contentType: input.file.type,
 			fileSize: input.file.size
@@ -58,38 +59,38 @@
 			credentials: 'omit'
 		});
 		if (!uploadResponse.ok) throw new Error('圖片上傳失敗。');
-		await registerProductImage(input.skuId, {
+		await registerProductImage(data.product.id, {
 			uploadId: target.uploadId,
+			skuId: input.skuId,
 			altText: input.altText,
-			type: input.type,
-			focusX: input.type === 'thumbnail' ? input.focusX : null,
-			focusY: input.type === 'thumbnail' ? input.focusY : null,
-			zoom: input.type === 'thumbnail' ? input.zoom : null
+			placement: input.placement,
+			focusX: input.placement === 'thumbnail' ? input.focusX : null,
+			focusY: input.placement === 'thumbnail' ? input.focusY : null,
+			zoom: input.placement === 'thumbnail' ? input.zoom : null
 		});
 		await invalidateAll();
 	}
 
 	async function updateImageCrop(
-		skuId: string,
 		imageId: string,
 		input: { focusX: number; focusY: number; zoom: number }
 	) {
-		await updateProductImageCrop(skuId, imageId, input);
+		await updateProductImageCrop(data.product.id, imageId, input);
 		await invalidateAll();
 	}
 
-	async function deleteImage(skuId: string, imageId: string) {
-		await deleteProductImage(skuId, imageId);
+	async function deleteImage(imageId: string) {
+		await deleteProductImage(data.product.id, imageId);
 		await invalidateAll();
 	}
 
-	async function restoreImage(skuId: string, imageId: string) {
-		await restoreProductImage(skuId, imageId);
+	async function restoreImage(imageId: string) {
+		await restoreProductImage(data.product.id, imageId);
 		await invalidateAll();
 	}
 
-	async function forceDeleteImage(skuId: string, imageId: string) {
-		await deleteProductImage(skuId, imageId, { force: true, deleteAsset: true });
+	async function forceDeleteImage(imageId: string) {
+		await deleteProductImage(data.product.id, imageId, { force: true, deleteAsset: true });
 		await invalidateAll();
 	}
 </script>
@@ -117,14 +118,18 @@
 	/>
 	<ProductSkuSection
 		skus={data.product.skus}
-		deletedImages={data.deletedImages}
 		oncreateSku={createSku}
 		onupdateSku={updateSku}
 		ondeleteSku={deleteSku}
-		onuploadImage={uploadImage}
-		onupdateImageCrop={updateImageCrop}
-		ondeleteImage={deleteImage}
-		onrestoreImage={restoreImage}
-		onforceDeleteImage={forceDeleteImage}
+	/>
+	<ProductImageSection
+		images={data.product.images}
+		deletedImages={data.deletedImages}
+		skus={data.product.skus}
+		onupload={uploadImage}
+		onupdateCrop={updateImageCrop}
+		ondelete={deleteImage}
+		onrestore={restoreImage}
+		onforceDelete={forceDeleteImage}
 	/>
 </div>

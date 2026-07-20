@@ -62,6 +62,19 @@ function createCategoryTree(): CatalogCategoryNode[] {
 }
 
 function createProducts(): CatalogProductRecord[] {
+	const thumbnail = {
+		id: 'image-1',
+		productId: 'product-1',
+		skuId: null,
+		imageUrl: 'https://assets.example.com/product-1/front.png',
+		assetKey: 'products/product-1/front.png',
+		altText: 'Front image',
+		placement: 'thumbnail' as const,
+		position: 0,
+		deletedAt: null,
+		createdAt: '2026-01-01T00:00:00.000Z',
+		updatedAt: '2026-01-01T00:00:00.000Z'
+	};
 	return [
 		{
 			id: 'product-1',
@@ -76,6 +89,8 @@ function createProducts(): CatalogProductRecord[] {
 			deletedAt: null,
 			createdAt: '2026-01-01T00:00:00.000Z',
 			updatedAt: '2026-01-01T00:00:00.000Z',
+			thumbnail,
+			images: [thumbnail],
 			skus: [
 				{
 					id: 'sku-1',
@@ -89,6 +104,7 @@ function createProducts(): CatalogProductRecord[] {
 					categoryId: 'category-electrical',
 					categorySlug: 'electrical',
 					price: 689,
+					availability: 'in_stock',
 					published: true,
 					attributes: {
 						Resolution: '6½ digit',
@@ -101,11 +117,12 @@ function createProducts(): CatalogProductRecord[] {
 					images: [
 						{
 							id: 'image-1',
+							productId: 'product-1',
 							skuId: 'sku-1',
 							imageUrl: 'https://assets.example.com/sku-1/front.png',
 							assetKey: 'products/skus/sku-1/front.png',
 							altText: 'Front image',
-							type: 'thumbnail',
+							placement: 'sku-gallery',
 							position: 0,
 							deletedAt: null,
 							createdAt: '2026-01-01T00:00:00.000Z',
@@ -125,6 +142,7 @@ function createProducts(): CatalogProductRecord[] {
 					categoryId: 'category-electrical',
 					categorySlug: 'electrical',
 					price: 989,
+					availability: 'out_of_stock',
 					published: true,
 					attributes: {
 						Resolution: '7½ digit',
@@ -151,6 +169,8 @@ function createProducts(): CatalogProductRecord[] {
 			deletedAt: null,
 			createdAt: '2026-01-03T00:00:00.000Z',
 			updatedAt: '2026-01-03T00:00:00.000Z',
+			thumbnail: null,
+			images: [],
 			skus: [
 				{
 					id: 'sku-3',
@@ -164,6 +184,7 @@ function createProducts(): CatalogProductRecord[] {
 					categoryId: 'category-environmental',
 					categorySlug: 'environmental',
 					price: 1240,
+					availability: 'in_stock',
 					published: true,
 					attributes: {
 						Detector: '240 × 180 px',
@@ -224,34 +245,27 @@ test('deriveCatalogProductView computes representative price and image fallback'
 	expect(view.minimumPrice).toBe(689);
 	expect(view.maximumPrice).toBe(989);
 	expect(view.skuCount).toBe(2);
-	expect(view.representativeImage?.imageUrl).toBe('https://assets.example.com/sku-1/front.png');
+	expect(view.representativeImage?.imageUrl).toBe('https://assets.example.com/product-1/front.png');
 });
 
-test('getProductGalleryImages keeps images from every SKU in stable order', () => {
+test('getProductGalleryImages keeps product images in stable order across SKU changes', () => {
 	const source = createProducts()[0]!;
+	const skuImage = {
+		id: 'image-2',
+		productId: source.id,
+		skuId: 'sku-2',
+		imageUrl: 'https://assets.example.com/sku-2/front.png',
+		assetKey: 'products/product-1/sku-2-front.png',
+		altText: 'SKU 2 front image',
+		placement: 'sku-gallery' as const,
+		position: 1,
+		deletedAt: null,
+		createdAt: '2026-01-02T00:00:00.000Z',
+		updatedAt: '2026-01-02T00:00:00.000Z'
+	};
 	const product = {
 		...source,
-		skus: source.skus.map((sku, index) =>
-			index === 0
-				? sku
-				: {
-						...sku,
-						images: [
-							{
-								id: 'image-2',
-								skuId: sku.id,
-								imageUrl: 'https://assets.example.com/sku-2/front.png',
-								assetKey: 'products/skus/sku-2/front.png',
-								altText: 'SKU 2 front image',
-								type: 'thumbnail' as const,
-								position: 0,
-								deletedAt: null,
-								createdAt: '2026-01-02T00:00:00.000Z',
-								updatedAt: '2026-01-02T00:00:00.000Z'
-							}
-						]
-					}
-		)
+		images: [...source.images, skuImage]
 	};
 
 	expect(getProductGalleryImages(product).map((image) => image.id)).toEqual(['image-1', 'image-2']);

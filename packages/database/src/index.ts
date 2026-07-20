@@ -25,6 +25,5 @@ export {
 	PasskeyDeviceType,
 	Prisma,
 	PrismaClient,
-	ProductImageType,
 	StaffStatus
 } from '../prisma/generated/prisma/client.js';

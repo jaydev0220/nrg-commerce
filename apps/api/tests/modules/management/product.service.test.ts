@@ -18,6 +18,8 @@ function createCatalogProductRecord() {
 		deletedAt: null,
 		createdAt: new Date(),
 		updatedAt: new Date(),
+		thumbnail: null,
+		images: [],
 		skus: []
 	};
 }
@@ -184,6 +186,8 @@ test('deleteProduct rejects force deletion when variants are still assigned', as
 						productSlug: 'canvas-tote',
 						published: true,
 						price: 19.99,
+						stockQuantity: 5,
+						availability: 'in_stock' as const,
 						attributes: {},
 						deletedAt: null,
 						createdAt: new Date(),

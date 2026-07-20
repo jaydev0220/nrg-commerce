@@ -11,9 +11,9 @@ import {
 	uuidSchema
 } from './common.js';
 
-export const productImageTypeValues = ['thumbnail', 'gallery'] as const;
+export const productImagePlacementValues = ['thumbnail', 'shared-gallery', 'sku-gallery'] as const;
 
-export const productImageTypeSchema = z.enum(productImageTypeValues);
+export const productImagePlacementSchema = z.enum(productImagePlacementValues);
 
 export const productImageContentTypeValues = [
 	'image/jpeg',
@@ -69,11 +69,12 @@ export const productSchema = z.object({
 
 export const productImageSchema = z.object({
 	id: uuidSchema,
-	skuId: uuidSchema,
+	productId: uuidSchema,
+	skuId: uuidSchema.nullable(),
 	imageUrl: z.url(),
 	assetKey: z.string().min(1).nullable(),
 	altText: z.string().min(1),
-	type: productImageTypeSchema,
+	placement: productImagePlacementSchema,
 	position: z.number().int().min(0),
 	focusX: productImageFocusCoordinateSchema.nullable(),
 	focusY: productImageFocusCoordinateSchema.nullable(),
@@ -88,6 +89,7 @@ export const productSkuSchema = z.object({
 	productId: uuidSchema,
 	skuCode: z.string().trim().min(1),
 	price: moneySchema,
+	stockQuantity: z.number().int().min(0),
 	attributes: attributeMapSchema,
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
@@ -120,6 +122,7 @@ export const productSkuCreateSchema = z.object({
 	productId: uuidSchema,
 	skuCode: z.string().trim().min(1),
 	price: moneySchema,
+	stockQuantity: z.coerce.number().int().min(0),
 	attributes: attributeMapSchema.default({})
 });
 
@@ -138,6 +141,7 @@ export const productSkuUpdateSchema = nonEmptyUpdate(
 		productId: uuidSchema.optional(),
 		skuCode: z.string().trim().min(1).optional(),
 		price: moneySchema.optional(),
+		stockQuantity: z.coerce.number().int().min(0).optional(),
 		attributes: attributeMapSchema.optional()
 	})
 );
@@ -251,7 +255,7 @@ export const productCategoryDetailQuerySchema = z.object({
 });
 
 export const managementProductImageListQuerySchema = paginationQuerySchema.extend({
-	type: productImageTypeSchema.optional(),
+	placement: productImagePlacementSchema.optional(),
 	state: z.enum(['active', 'deleted']).default('active'),
 	sort: z.enum(['position', 'createdAt', 'updatedAt']).default('position'),
 	order: sortOrderSchema.default('asc')
@@ -267,7 +271,8 @@ export const productImageCreateSchema = z
 	.object({
 		uploadId: uuidSchema,
 		altText: z.string().trim().min(1),
-		type: productImageTypeSchema.default('gallery'),
+		placement: productImagePlacementSchema.default('shared-gallery'),
+		skuId: uuidSchema.nullish(),
 		focusX: productImageFocusCoordinateSchema.nullish(),
 		focusY: productImageFocusCoordinateSchema.nullish(),
 		zoom: productImageZoomSchema.nullish()
@@ -281,6 +286,27 @@ export const productImageCreateSchema = z
 				code: 'custom',
 				path: ['focusX'],
 				message: 'focusX, focusY, and zoom must be provided together.'
+			});
+		}
+		if (input.placement === 'sku-gallery' && !input.skuId) {
+			context.addIssue({
+				code: 'custom',
+				path: ['skuId'],
+				message: 'skuId is required for SKU gallery images.'
+			});
+		}
+		if (input.placement !== 'sku-gallery' && input.skuId) {
+			context.addIssue({
+				code: 'custom',
+				path: ['skuId'],
+				message: 'skuId is only allowed for SKU gallery images.'
+			});
+		}
+		if (input.placement !== 'thumbnail' && cropFieldCount !== 0) {
+			context.addIssue({
+				code: 'custom',
+				path: ['focusX'],
+				message: 'Only thumbnail images support crop positioning.'
 			});
 		}
 	});

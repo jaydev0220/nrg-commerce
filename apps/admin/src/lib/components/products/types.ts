@@ -37,14 +37,15 @@ export type ProductProfileInput = {
 export type ProductSkuInput = {
 	skuCode: string;
 	price: number;
+	stockQuantity: number;
 	attributes: Record<string, unknown>;
 };
 
 export type ProductImageUploadInput = {
-	skuId: string;
+	skuId: string | null;
 	file: File;
 	altText: string;
-	type: 'thumbnail' | 'gallery';
+	placement: 'thumbnail' | 'shared-gallery' | 'sku-gallery';
 	focusX: number | null;
 	focusY: number | null;
 	zoom: number | null;

@@ -189,7 +189,8 @@ test('management order route updates order status and records transition metadat
 	assert.equal(response.status, 200, response.text());
 	assert.deepEqual(auditInput?.metadata, {
 		previousStatus: 'pending',
-		status: 'confirmed'
+		status: 'confirmed',
+		inventoryAdjustment: null
 	});
 });
 

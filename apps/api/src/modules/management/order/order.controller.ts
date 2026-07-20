@@ -12,6 +12,7 @@ import {
 import { buildPaginatedResponse } from '../../../utils/pagination.js';
 import type { LogService } from '../log/log.service.js';
 import type { OrderService } from './order.service.js';
+import { resolveInventoryAdjustment } from './order.inventory.js';
 
 type OrderControllerDependencies = {
 	orderService: OrderService;
@@ -76,7 +77,10 @@ export function createOrderManagementController(dependencies: OrderControllerDep
 					path: getRequestPath(request),
 					statusCode: 201,
 					entityType: 'order',
-					entityId: order.id
+					entityId: order.id,
+					metadata: {
+						inventoryManagedItems: body.items.filter((item) => item.productSkuId).length
+					}
 				});
 			}
 			response
@@ -110,7 +114,11 @@ export function createOrderManagementController(dependencies: OrderControllerDep
 				entityId: result.order.id,
 				metadata: {
 					previousStatus: result.previousStatus,
-					status: result.order.status
+					status: result.order.status,
+					inventoryAdjustment: resolveInventoryAdjustment(
+						result.previousStatus,
+						result.order.status
+					)
 				}
 			});
 			response.status(200).json(result.order);
@@ -130,7 +138,14 @@ export function createOrderManagementController(dependencies: OrderControllerDep
 				statusCode: 200,
 				entityType: 'order',
 				entityId: result.order.id,
-				metadata: { previousStatus: result.previousStatus, status: result.order.status }
+				metadata: {
+					previousStatus: result.previousStatus,
+					status: result.order.status,
+					inventoryAdjustment: resolveInventoryAdjustment(
+						result.previousStatus,
+						result.order.status
+					)
+				}
 			});
 			response.status(200).json(result.order);
 		}) satisfies RequestHandler

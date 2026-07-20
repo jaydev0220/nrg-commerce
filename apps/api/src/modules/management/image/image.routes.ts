@@ -20,12 +20,12 @@ type ImageManagementRouterDependencies = {
 	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
-const skuParamsSchema = z.object({
-	skuId: uuidSchema
+const productParamsSchema = z.object({
+	productId: uuidSchema
 });
 
 const imageParamsSchema = z.object({
-	skuId: uuidSchema,
+	productId: uuidSchema,
 	imageId: uuidSchema
 });
 
@@ -36,49 +36,49 @@ export function createImageManagementRouter(
 	const router = Router();
 
 	router.get(
-		'/skus/:skuId/images',
+		'/:productId/images',
 		requirePermission('product.image.read'),
-		validateRequest({ params: skuParamsSchema, query: managementProductImageListQuerySchema }),
+		validateRequest({ params: productParamsSchema, query: managementProductImageListQuerySchema }),
 		controller.listImages
 	);
 
 	router.post(
-		'/skus/:skuId/images/upload-url',
+		'/:productId/images/upload-url',
 		requirePermission('product.image.create'),
-		validateRequest({ params: skuParamsSchema, body: productImageUploadRequestSchema }),
+		validateRequest({ params: productParamsSchema, body: productImageUploadRequestSchema }),
 		controller.createImageUploadTarget
 	);
 
 	router.post(
-		'/skus/:skuId/images',
+		'/:productId/images',
 		requirePermission('product.image.create'),
-		validateRequest({ params: skuParamsSchema, body: productImageCreateSchema }),
+		validateRequest({ params: productParamsSchema, body: productImageCreateSchema }),
 		controller.createImage
 	);
 
 	router.get(
-		'/skus/:skuId/images/:imageId',
+		'/:productId/images/:imageId',
 		requirePermission('product.image.read'),
 		validateRequest({ params: imageParamsSchema }),
 		controller.getImage
 	);
 
 	router.patch(
-		'/skus/:skuId/images/:imageId/crop',
+		'/:productId/images/:imageId/crop',
 		requirePermission('product.image.update'),
 		validateRequest({ params: imageParamsSchema, body: productImageCropUpdateSchema }),
 		controller.updateImageCrop
 	);
 
 	router.delete(
-		'/skus/:skuId/images/:imageId',
+		'/:productId/images/:imageId',
 		requirePermission('product.image.delete'),
 		validateRequest({ params: imageParamsSchema, query: productImageDeleteQuerySchema }),
 		controller.deleteImage
 	);
 
 	router.post(
-		'/skus/:skuId/images/:imageId/restore',
+		'/:productId/images/:imageId/restore',
 		requirePermission('product.image.delete'),
 		validateRequest({ params: imageParamsSchema }),
 		controller.restoreImage

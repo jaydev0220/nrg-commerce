@@ -133,6 +133,24 @@ export async function fetchCatalogProductBySlug(
 	);
 }
 
+export async function fetchCatalogSitemapProducts(fetcher: typeof fetch) {
+	const products: Pick<CatalogProductRecord, 'slug' | 'updatedAt'>[] = [];
+	let page = 1;
+
+	while (true) {
+		const response = await fetchJson<PaginatedResponse<CatalogProductRecord>>(
+			fetcher,
+			'/api/storefront/products',
+			new URLSearchParams({ page: String(page), limit: '100', sort: 'createdAt', order: 'desc' })
+		);
+		products.push(...response.data.map(({ slug, updatedAt }) => ({ slug, updatedAt })));
+		if (page >= response.pagination.totalPages) break;
+		page += 1;
+	}
+
+	return products;
+}
+
 export async function fetchCatalogCategoryBySlug(
 	fetcher: typeof fetch,
 	categorySlug: string

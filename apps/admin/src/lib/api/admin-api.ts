@@ -106,11 +106,12 @@ export type CategoryDeleteResult = {
 
 export type ManagedProductImage = {
 	id: string;
-	skuId: string;
+	productId: string;
+	skuId: string | null;
 	imageUrl: string;
 	assetKey: string | null;
 	altText: string;
-	type: 'thumbnail' | 'gallery';
+	placement: 'thumbnail' | 'shared-gallery' | 'sku-gallery';
 	position: number;
 	focusX: number | null;
 	focusY: number | null;
@@ -132,6 +133,8 @@ export type ManagedProductSku = {
 	categoryId: string | null;
 	categorySlug: string | null;
 	price: number;
+	stockQuantity: number;
+	availability: 'in_stock' | 'out_of_stock';
 	published: boolean;
 	attributes: Record<string, unknown>;
 	deletedAt: Date | null;
@@ -153,6 +156,8 @@ export type ManagedProduct = {
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
+	thumbnail: ManagedProductImage | null;
+	images: ManagedProductImage[];
 	skus: ManagedProductSku[];
 };
 
@@ -635,17 +640,10 @@ export async function loadProductEditorData(productId: string) {
 		),
 		collectPaginatedData<ManagedCategory>('/api/management/products/categories')
 	]);
-	const deletedImages = Object.fromEntries(
-		await Promise.all(
-			product.skus.map(async (sku) => {
-				const result = await json<PaginatedResponse<ManagedProductImage>>(
-					`/api/management/products/skus/${sku.id}/images?state=deleted&page=1&limit=${pageSize}`
-				);
-				return [sku.id, result.data] as const;
-			})
-		)
+	const deletedImages = await json<PaginatedResponse<ManagedProductImage>>(
+		`/api/management/products/${productId}/images?state=deleted&page=1&limit=${pageSize}`
 	);
-	return { product, categories, deletedImages };
+	return { product, categories, deletedImages: deletedImages.data };
 }
 
 export function createProduct(input: {
@@ -678,6 +676,7 @@ export function createProductSku(input: {
 	productId: string;
 	skuCode: string;
 	price: number;
+	stockQuantity: number;
 	attributes: Record<string, unknown>;
 }) {
 	return json<ManagedProductSku>('/api/management/products/skus', body('POST', input));
@@ -685,7 +684,12 @@ export function createProductSku(input: {
 
 export function updateProductSku(
 	skuId: string,
-	input: { skuCode?: string; price?: number; attributes?: Record<string, unknown> }
+	input: {
+		skuCode?: string;
+		price?: number;
+		stockQuantity?: number;
+		attributes?: Record<string, unknown>;
+	}
 ) {
 	return json<ManagedProductSku>(`/api/management/products/skus/${skuId}`, body('PATCH', input));
 }
@@ -697,45 +701,46 @@ export function deleteProductSku(skuId: string) {
 }
 
 export function createImageUploadTarget(
-	skuId: string,
+	productId: string,
 	input: { fileName: string; contentType: string; fileSize: number }
 ) {
 	return json<{ uploadId: string; uploadUrl: string; assetKey: string; expiresAt: Date }>(
-		`/api/management/products/skus/${skuId}/images/upload-url`,
+		`/api/management/products/${productId}/images/upload-url`,
 		body('POST', input)
 	);
 }
 
 export function registerProductImage(
-	skuId: string,
+	productId: string,
 	input: {
 		uploadId: string;
+		skuId?: string | null;
 		altText: string;
-		type: 'thumbnail' | 'gallery';
+		placement: 'thumbnail' | 'shared-gallery' | 'sku-gallery';
 		focusX?: number | null;
 		focusY?: number | null;
 		zoom?: number | null;
 	}
 ) {
 	return json<ManagedProductImage>(
-		`/api/management/products/skus/${skuId}/images`,
+		`/api/management/products/${productId}/images`,
 		body('POST', input)
 	);
 }
 
 export function updateProductImageCrop(
-	skuId: string,
+	productId: string,
 	imageId: string,
 	input: { focusX: number; focusY: number; zoom: number }
 ) {
 	return json<ManagedProductImage>(
-		`/api/management/products/skus/${skuId}/images/${imageId}/crop`,
+		`/api/management/products/${productId}/images/${imageId}/crop`,
 		body('PATCH', input)
 	);
 }
 
 export function deleteProductImage(
-	skuId: string,
+	productId: string,
 	imageId: string,
 	options: { force?: boolean; deleteAsset?: boolean } = {}
 ) {
@@ -743,14 +748,14 @@ export function deleteProductImage(
 	if (options.force) params.set('force', 'true');
 	if (options.deleteAsset) params.set('deleteAsset', 'true');
 	return json<{ deleted: boolean; mode: 'soft' | 'force'; assetDeleted: boolean }>(
-		`/api/management/products/skus/${skuId}/images/${imageId}${params.size ? `?${params}` : ''}`,
+		`/api/management/products/${productId}/images/${imageId}${params.size ? `?${params}` : ''}`,
 		{ method: 'DELETE' }
 	);
 }
 
-export function restoreProductImage(skuId: string, imageId: string) {
+export function restoreProductImage(productId: string, imageId: string) {
 	return json<ManagedProductImage>(
-		`/api/management/products/skus/${skuId}/images/${imageId}/restore`,
+		`/api/management/products/${productId}/images/${imageId}/restore`,
 		body('POST', {})
 	);
 }

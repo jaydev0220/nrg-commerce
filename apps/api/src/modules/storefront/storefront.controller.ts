@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'express';
 
 import { getValidatedParams, getValidatedQuery } from '../../middlewares/validate-request.js';
+import type { CatalogProductRecord, CatalogSkuRecord } from '../../types/catalog.js';
 import { buildPaginatedResponse } from '../../utils/pagination.js';
 import type { StorefrontCatalogService } from './storefront.service.js';
 
@@ -29,6 +30,16 @@ type StorefrontCatalogController = {
 	getCategoryBySlug: RequestHandler;
 };
 
+function serializeSku(sku: CatalogSkuRecord) {
+	const { stockQuantity, ...publicSku } = sku;
+	void stockQuantity;
+	return publicSku;
+}
+
+function serializeProduct(product: CatalogProductRecord) {
+	return { ...product, skus: product.skus.map(serializeSku) };
+}
+
 export function createStorefrontCatalogController(dependencies: StorefrontControllerDependencies) {
 	const cacheTtlSeconds = dependencies.cacheTtlSeconds ?? 60;
 
@@ -43,7 +54,7 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 			const result = await dependencies.storefrontService.listProducts(query);
 			markCacheable(response);
 			response.status(200).json(
-				buildPaginatedResponse(result.data, {
+				buildPaginatedResponse(result.data.map(serializeProduct), {
 					page: query.page,
 					limit: query.limit,
 					total: result.total
@@ -60,7 +71,7 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 				query
 			);
 			markCacheable(response);
-			response.status(200).json(product);
+			response.status(200).json(serializeProduct(product));
 		},
 
 		listSkus: async (request, response) => {
@@ -68,7 +79,7 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 			const result = await dependencies.storefrontService.listSkus(query);
 			markCacheable(response);
 			response.status(200).json(
-				buildPaginatedResponse(result.data, {
+				buildPaginatedResponse(result.data.map(serializeSku), {
 					page: query.page,
 					limit: query.limit,
 					total: result.total
@@ -82,7 +93,7 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 				getValidatedQuery<Parameters<StorefrontCatalogService['getSkuByCode']>[1]>(request);
 			const sku = await dependencies.storefrontService.getSkuByCode(params.skuCode, query);
 			markCacheable(response);
-			response.status(200).json(sku);
+			response.status(200).json(serializeSku(sku));
 		},
 
 		listCategories: async (request, response) => {

@@ -27,7 +27,7 @@
 		type SupportedLocale
 	} from '@packages/seo';
 	import { onMount } from 'svelte';
-	import { Head, SchemaOrg } from 'svead';
+	import { Head, SchemaOrg, type SchemaOrgProps } from 'svead';
 	import './layout.css';
 
 	const THEME_COOKIE_NAME = 'theme';
@@ -48,10 +48,10 @@
 
 	const currentYear = new Date().getFullYear();
 	const fallbackSeo = createSeoPageData({
-		title: m.catalog_title(),
-		description: m.catalog_description(),
+		title: m.catalog_meta_title(),
+		description: m.catalog_meta_description(),
 		pageType: 'CollectionPage',
-		openGraphImage: catalogCdnUrl('/landing/products-beakers.webp'),
+		openGraphImage: catalogCdnUrl('/og/catalog/gallery.webp'),
 		openGraphImageAlt: m.catalog_title()
 	}).seo;
 	const ctaConfig: CtaConfig = $derived({
@@ -84,7 +84,7 @@
 			resolveLocalizedUrl: resolveCatalogSeoUrl
 		})
 	);
-	const structuredData = $derived(
+	const baseStructuredData = $derived(
 		buildStructuredData({
 			seo: seoPage,
 			pathname: page.url.pathname,
@@ -105,6 +105,10 @@
 						]
 		})
 	);
+	const productStructuredData = $derived(
+		page.data['productStructuredData'] as SchemaOrgProps['schema'] | undefined
+	);
+	const robotsContent = $derived(page.url.search ? 'noindex,follow' : 'index,follow');
 
 	function catalogCdnUrl(path: string): string {
 		if (!cdnBaseUrl) {
@@ -211,9 +215,16 @@
 </script>
 
 <Head seo_config={seoConfig} />
-<SchemaOrg schema={structuredData} />
+<SchemaOrg schema={baseStructuredData} />
+{#if productStructuredData}
+	<SchemaOrg schema={productStructuredData} />
+{/if}
 
 <svelte:head>
+	<meta
+		name="robots"
+		content={robotsContent}
+	/>
 	{#each alternateLinks as alternate (alternate.hreflang)}
 		<link
 			rel="alternate"

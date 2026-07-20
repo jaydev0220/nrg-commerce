@@ -16,12 +16,12 @@ type ImageManagementControllerDependencies = {
 	logService: Pick<LogService, 'recordAuditLog'>;
 };
 
-type SkuParams = {
-	skuId: string;
+type ProductParams = {
+	productId: string;
 };
 
 type ImageParams = {
-	skuId: string;
+	productId: string;
 	imageId: string;
 };
 type ImageManagementController = {
@@ -39,9 +39,9 @@ export function createImageManagementController(
 ) {
 	const controller: ImageManagementController = {
 		listImages: async (request, response) => {
-			const params = getValidatedParams<SkuParams>(request);
+			const params = getValidatedParams<ProductParams>(request);
 			const query = getValidatedQuery<Parameters<ImageService['listImages']>[1]>(request);
-			const result = await dependencies.imageService.listImages(params.skuId, query);
+			const result = await dependencies.imageService.listImages(params.productId, query);
 			response.status(200).json(
 				buildPaginatedResponse(result.data, {
 					page: query.page,
@@ -52,11 +52,11 @@ export function createImageManagementController(
 		},
 
 		createImageUploadTarget: async (request, response) => {
-			const params = getValidatedParams<SkuParams>(request);
+			const params = getValidatedParams<ProductParams>(request);
 			const body =
 				getValidatedBody<Parameters<ImageService['createImageUploadTarget']>[1]>(request);
 			const uploadTarget = await dependencies.imageService.createImageUploadTarget(
-				params.skuId,
+				params.productId,
 				body
 			);
 
@@ -65,9 +65,9 @@ export function createImageManagementController(
 
 		createImage: async (request, response) => {
 			const authContext = requireAuthContext(response);
-			const params = getValidatedParams<SkuParams>(request);
+			const params = getValidatedParams<ProductParams>(request);
 			const body = getValidatedBody<Parameters<ImageService['createImage']>[1]>(request);
-			const image = await dependencies.imageService.createImage(params.skuId, body);
+			const image = await dependencies.imageService.createImage(params.productId, body);
 			const requestContext = getRequestContext(request, response);
 			await dependencies.logService.recordAuditLog({
 				message: 'Staff created a product image.',
@@ -78,17 +78,17 @@ export function createImageManagementController(
 				statusCode: 201,
 				entityType: 'product_image',
 				entityId: image.id,
-				metadata: { skuId: params.skuId }
+				metadata: { productId: params.productId, skuId: image.skuId, placement: image.placement }
 			});
 			response
 				.status(201)
-				.location(`/api/management/products/skus/${params.skuId}/images/${image.id}`)
+				.location(`/api/management/products/${params.productId}/images/${image.id}`)
 				.json(image);
 		},
 
 		getImage: async (request, response) => {
 			const params = getValidatedParams<ImageParams>(request);
-			const image = await dependencies.imageService.getImage(params.skuId, params.imageId);
+			const image = await dependencies.imageService.getImage(params.productId, params.imageId);
 			response.status(200).json(image);
 		},
 
@@ -97,7 +97,7 @@ export function createImageManagementController(
 			const params = getValidatedParams<ImageParams>(request);
 			const body = getValidatedBody<Parameters<ImageService['updateImageCrop']>[2]>(request);
 			const image = await dependencies.imageService.updateImageCrop(
-				params.skuId,
+				params.productId,
 				params.imageId,
 				body
 			);
@@ -111,7 +111,12 @@ export function createImageManagementController(
 				statusCode: 200,
 				entityType: 'product_image',
 				entityId: image.id,
-				metadata: { skuId: params.skuId, focusX: body.focusX, focusY: body.focusY, zoom: body.zoom }
+				metadata: {
+					productId: params.productId,
+					focusX: body.focusX,
+					focusY: body.focusY,
+					zoom: body.zoom
+				}
 			});
 			response.status(200).json(image);
 		},
@@ -121,7 +126,7 @@ export function createImageManagementController(
 			const params = getValidatedParams<ImageParams>(request);
 			const query = getValidatedQuery<Parameters<ImageService['deleteImage']>[2]>(request);
 			const result = await dependencies.imageService.deleteImage(
-				params.skuId,
+				params.productId,
 				params.imageId,
 				query
 			);
@@ -136,7 +141,7 @@ export function createImageManagementController(
 				entityType: 'product_image',
 				entityId: params.imageId,
 				metadata: {
-					skuId: params.skuId,
+					productId: params.productId,
 					mode: result.mode,
 					assetDeleted: result.assetDeleted
 				}
@@ -152,7 +157,7 @@ export function createImageManagementController(
 		restoreImage: async (request, response) => {
 			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<ImageParams>(request);
-			const image = await dependencies.imageService.restoreImage(params.skuId, params.imageId);
+			const image = await dependencies.imageService.restoreImage(params.productId, params.imageId);
 			const requestContext = getRequestContext(request, response);
 			await dependencies.logService.recordAuditLog({
 				message: 'Staff restored a product image.',
@@ -163,7 +168,7 @@ export function createImageManagementController(
 				statusCode: 200,
 				entityType: 'product_image',
 				entityId: image.id,
-				metadata: { skuId: params.skuId }
+				metadata: { productId: params.productId, placement: image.placement }
 			});
 			response.status(200).json(image);
 		}

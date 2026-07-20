@@ -8,11 +8,12 @@ export type CatalogJsonValue =
 
 export type CatalogImageRecord = {
 	id: string;
-	skuId: string;
+	productId: string;
+	skuId: string | null;
 	imageUrl: string;
 	assetKey: string | null;
 	altText: string;
-	type: 'thumbnail' | 'gallery';
+	placement: 'thumbnail' | 'shared-gallery' | 'sku-gallery';
 	position: number;
 	focusX: number | null;
 	focusY: number | null;
@@ -34,6 +35,8 @@ export type CatalogSkuRecord = {
 	categoryId: string | null;
 	categorySlug: string | null;
 	price: number;
+	stockQuantity: number;
+	availability: 'in_stock' | 'out_of_stock';
 	published: boolean;
 	attributes: Record<string, CatalogJsonValue>;
 	deletedAt: Date | null;
@@ -55,6 +58,8 @@ export type CatalogProductRecord = {
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
+	thumbnail: CatalogImageRecord | null;
+	images: CatalogImageRecord[];
 	skus: CatalogSkuRecord[];
 };
 

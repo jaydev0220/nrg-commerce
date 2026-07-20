@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { CheckCircle2, FileImage, ImagePlus, Replace, UploadCloud } from '@lucide/svelte';
 
-	import { AdminApiError } from '$lib/api/admin-api';
+	import { AdminApiError, type ManagedProductSku } from '$lib/api/admin-api';
 	import Drawer from '$lib/components/shared/Drawer.svelte';
 	import ProductImageFocusPicker from './ProductImageFocusPicker.svelte';
 	import type { ProductImageUploadInput } from './types';
@@ -11,12 +11,12 @@
 
 	let {
 		open,
-		skuId,
+		skus,
 		onclose,
 		onupload
 	}: {
 		open: boolean;
-		skuId: string | null;
+		skus: ManagedProductSku[];
 		onclose: () => void;
 		onupload: (input: ProductImageUploadInput) => Promise<void>;
 	} = $props();
@@ -25,7 +25,8 @@
 	let selectedFile = $state<File | null>(null);
 	let previewUrl = $state('');
 	let imageDimensions = $state<{ width: number; height: number } | null>(null);
-	let type = $state<'thumbnail' | 'gallery'>('gallery');
+	let placement = $state<'thumbnail' | 'shared-gallery' | 'sku-gallery'>('shared-gallery');
+	let skuId = $state<string | null>(null);
 	let altText = $state('');
 	let focusX = $state(0.5);
 	let focusY = $state(0.5);
@@ -54,7 +55,8 @@
 		clearPreviewUrl();
 		selectedFile = null;
 		imageDimensions = null;
-		type = 'gallery';
+		placement = 'shared-gallery';
+		skuId = null;
 		altText = '';
 		focusX = 0.5;
 		focusY = 0.5;
@@ -113,8 +115,12 @@
 
 	async function submit() {
 		errorMessage = '';
-		if (!selectedFile || !skuId) {
+		if (!selectedFile) {
 			errorMessage = '請先選擇圖片。';
+			return;
+		}
+		if (placement === 'sku-gallery' && !skuId) {
+			errorMessage = '請選擇此圖片適用的 SKU。';
 			return;
 		}
 		if (!altText.trim()) {
@@ -127,10 +133,10 @@
 				skuId,
 				file: selectedFile,
 				altText: altText.trim(),
-				type,
-				focusX: type === 'thumbnail' ? focusX : null,
-				focusY: type === 'thumbnail' ? focusY : null,
-				zoom: type === 'thumbnail' ? zoom : null
+				placement,
+				focusX: placement === 'thumbnail' ? focusX : null,
+				focusY: placement === 'thumbnail' ? focusY : null,
+				zoom: placement === 'thumbnail' ? zoom : null
 			});
 			busy = false;
 			close();
@@ -187,7 +193,7 @@
 					</button>
 				</div>
 
-				{#if type === 'thumbnail'}
+				{#if placement === 'thumbnail'}
 					<div>
 						<div class="mb-2 flex items-end justify-between gap-3">
 							<div>
@@ -212,7 +218,7 @@
 					<div class="overflow-hidden rounded-md border border-border bg-bg-sunken">
 						<img
 							src={previewUrl}
-							alt="商品圖片預覽"
+							alt={altText || selectedFile.name}
 							class="max-h-72 w-full object-contain"
 						/>
 					</div>
@@ -254,13 +260,28 @@
 			<label class="block text-sm font-medium text-text-heading sm:col-span-2">
 				圖片用途
 				<select
-					bind:value={type}
+					bind:value={placement}
 					class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm"
 				>
-					<option value="gallery">圖庫圖片</option>
-					<option value="thumbnail">商品目錄縮圖</option>
+					<option value="shared-gallery">共用圖庫</option>
+					<option value="thumbnail">商品縮圖</option>
+					<option value="sku-gallery">指定 SKU 圖庫</option>
 				</select>
 			</label>
+			{#if placement === 'sku-gallery'}
+				<label class="block text-sm font-medium text-text-heading sm:col-span-2">
+					適用 SKU
+					<select
+						bind:value={skuId}
+						class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm"
+					>
+						<option value={null}>請選擇</option>
+						{#each skus as sku (sku.id)}
+							<option value={sku.id}>{sku.skuCode}</option>
+						{/each}
+					</select>
+				</label>
+			{/if}
 		</div>
 
 		<div class="flex items-start gap-2 rounded-md bg-bg-sunken p-3 text-xs text-text-muted">

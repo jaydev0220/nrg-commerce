@@ -84,7 +84,7 @@
 						class="h-full w-full object-cover"
 						style={imageStyle(image)}
 					/>
-					{#if image.type === 'thumbnail'}
+					{#if image.placement === 'thumbnail'}
 						<span
 							class="absolute left-2 top-2 rounded-sm bg-bg-surface/90 px-2 py-1 text-[11px] font-semibold text-text-accent"
 						>
@@ -100,7 +100,7 @@
 						{image.altText}
 					</p>
 					<div class="flex flex-wrap gap-2">
-						{#if image.type === 'thumbnail'}
+						{#if image.placement === 'thumbnail'}
 							<button
 								type="button"
 								class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border px-2 text-xs text-text-body hover:bg-bg-sunken"
@@ -114,9 +114,9 @@
 						<button
 							type="button"
 							class="inline-grid size-8 cursor-pointer place-items-center rounded-md text-danger hover:bg-danger-bg"
+							aria-label="刪除圖片"
 							onclick={() => void ondelete(image.id)}
 							title="刪除圖片"
-							aria-label="刪除圖片"
 						>
 							<Trash2 class="size-4" />
 						</button>

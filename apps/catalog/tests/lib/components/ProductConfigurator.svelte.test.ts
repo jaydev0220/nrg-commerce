@@ -16,6 +16,7 @@ const activeSku: CatalogSkuRecord = {
 	categoryId: 'category-1',
 	categorySlug: 'beakers',
 	price: 120,
+	availability: 'in_stock',
 	published: true,
 	attributes: { size: '100 ml' },
 	deletedAt: null,

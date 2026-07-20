@@ -46,7 +46,7 @@ export function flattenCategoryNodes(
 }
 
 function compareImages(left: CatalogImageRecord, right: CatalogImageRecord): number {
-	const typeRank = (image: CatalogImageRecord) => (image.type === 'thumbnail' ? 0 : 1);
+	const typeRank = (image: CatalogImageRecord) => (image.placement === 'thumbnail' ? 0 : 1);
 	return (
 		typeRank(left) - typeRank(right) ||
 		left.position - right.position ||
@@ -55,31 +55,24 @@ function compareImages(left: CatalogImageRecord, right: CatalogImageRecord): num
 	);
 }
 
-function getSortedImages(sku: CatalogSkuRecord): CatalogImageRecord[] {
-	return [...sku.images].sort(compareImages);
-}
-
 export function getProductGalleryImages(product: CatalogProductRecord): CatalogImageRecord[] {
-	return product.skus.flatMap((sku) => getSortedImages(sku));
+	return [...product.images].sort(compareImages);
 }
 
 export function getFirstImageForSku(
 	product: CatalogProductRecord,
 	skuId: string
 ): CatalogImageRecord | null {
-	const sku = product.skus.find((entry) => entry.id === skuId);
-	return sku ? (getSortedImages(sku)[0] ?? null) : null;
+	return (
+		product.images.find((image) => image.placement === 'sku-gallery' && image.skuId === skuId) ??
+		product.thumbnail ??
+		product.images[0] ??
+		null
+	);
 }
 
 function getRepresentativeImage(product: CatalogProductRecord): CatalogImageRecord | null {
-	for (const sku of product.skus) {
-		const [image] = getSortedImages(sku);
-		if (image) {
-			return image;
-		}
-	}
-
-	return null;
+	return product.thumbnail ?? getProductGalleryImages(product)[0] ?? null;
 }
 
 function getSearchTerms(

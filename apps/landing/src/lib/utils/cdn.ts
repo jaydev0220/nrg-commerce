@@ -7,6 +7,9 @@ export const CDN_ASSETS = {
 	logoDark: '/logo-dark.svg',
 	logoLight: '/logo-light.svg',
 	favicon: '/favicon.ico',
+	brandingOpenGraph: '/og/branding.webp',
+	aboutOpenGraph: '/og/landing/about.webp',
+	contactOpenGraph: '/og/landing/contact.webp',
 
 	// About page
 	companyStoryPhoto: '/landing/company-story-photo.webp',

@@ -39,6 +39,8 @@ test('listSkus only returns published catalog items in storefront flows', async 
 						categoryId: 'category-1',
 						categorySlug: 'bags',
 						price: 19.99,
+						stockQuantity: 5,
+						availability: 'in_stock' as const,
 						published: true,
 						attributes: {},
 						deletedAt: null,
@@ -58,6 +60,8 @@ test('listSkus only returns published catalog items in storefront flows', async 
 						categoryId: 'category-1',
 						categorySlug: 'bags',
 						price: 29.99,
+						stockQuantity: 0,
+						availability: 'out_of_stock' as const,
 						published: false,
 						attributes: {},
 						deletedAt: null,
@@ -108,6 +112,8 @@ test('listProducts only returns published product profiles in storefront flows',
 						deletedAt: null,
 						createdAt: new Date(),
 						updatedAt: new Date(),
+						thumbnail: null,
+						images: [],
 						skus: []
 					},
 					{
@@ -123,6 +129,8 @@ test('listProducts only returns published product profiles in storefront flows',
 						deletedAt: null,
 						createdAt: new Date(),
 						updatedAt: new Date(),
+						thumbnail: null,
+						images: [],
 						skus: []
 					}
 				],
@@ -173,6 +181,8 @@ test('getProductBySlug only resolves published product profiles in storefront fl
 							deletedAt: null,
 							createdAt: new Date(),
 							updatedAt: new Date(),
+							thumbnail: null,
+							images: [],
 							skus: []
 						}
 					: null,
@@ -314,6 +324,8 @@ test('getProductBySlug hides published products without active SKUs when details
 				deletedAt: null,
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				thumbnail: null,
+				images: [],
 				skus: []
 			}),
 			findSkuByCode: async () => null,

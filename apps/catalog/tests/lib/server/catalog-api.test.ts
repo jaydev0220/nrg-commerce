@@ -9,7 +9,8 @@ vi.mock('$env/dynamic/public', () => ({
 import {
 	fetchCatalogCategoryBySlug,
 	fetchCatalogIndexData,
-	fetchCatalogProductBySlug
+	fetchCatalogProductBySlug,
+	fetchCatalogSitemapProducts
 } from '$lib/server/catalog-api.js';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -101,5 +102,22 @@ describe('catalog API client', () => {
 		expect(requestUrl).toContain('/api/storefront/products/glassware%20%2F%20large');
 		expect(requestUrl).toContain('includeSkus=true');
 		expect(requestUrl).toContain('includeImages=true');
+	});
+
+	it('loads every storefront product page for sitemap generation', async () => {
+		const fetcher = vi.fn<typeof fetch>(async (input) => {
+			const page = Number(new URL(String(input)).searchParams.get('page'));
+			return jsonResponse({
+				data: [{ slug: `product-${page}`, updatedAt: `2026-07-${String(page).padStart(2, '0')}` }],
+				pagination: { page, limit: 100, total: 2, totalPages: 2 }
+			});
+		});
+
+		await expect(fetchCatalogSitemapProducts(fetcher)).resolves.toEqual([
+			{ slug: 'product-1', updatedAt: '2026-07-01' },
+			{ slug: 'product-2', updatedAt: '2026-07-02' }
+		]);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(new URL(String(fetcher.mock.calls[0]?.[0])).searchParams.get('limit')).toBe('100');
 	});
 });

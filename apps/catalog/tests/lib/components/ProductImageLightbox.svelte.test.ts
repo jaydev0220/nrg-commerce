@@ -7,11 +7,12 @@ import type { CatalogImageRecord } from '$lib/catalog/types.js';
 function createImage(id: string): CatalogImageRecord {
 	return {
 		id,
+		productId: 'product-1',
 		skuId: 'sku-1',
 		imageUrl: `https://assets.example.com/${id}.png`,
 		assetKey: `products/${id}.png`,
 		altText: `${id} image`,
-		type: 'gallery',
+		placement: 'sku-gallery',
 		position: 0,
 		focusX: null,
 		focusY: null,

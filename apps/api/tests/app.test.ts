@@ -245,7 +245,7 @@ test('management product image upload-url route returns a presigned upload targe
 
 	const response = await requestApp(app, {
 		method: 'POST',
-		path: '/api/management/products/skus/93f99825-2962-4a10-b453-daa375ff1c43/images/upload-url',
+		path: '/api/management/products/93f99825-2962-4a10-b453-daa375ff1c43/images/upload-url',
 		headers: {
 			'Content-Type': 'application/json'
 		},
@@ -306,6 +306,8 @@ test('management product creation records an audit log', async () => {
 					deletedAt: null,
 					createdAt: now,
 					updatedAt: now,
+					thumbnail: null,
+					images: [],
 					skus: []
 				}),
 				listProducts: async () => ({ data: [], total: 0 }),

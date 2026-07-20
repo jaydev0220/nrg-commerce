@@ -17,10 +17,10 @@ function catalogCdnUrl(path: string): string {
 export const load: PageLoad = ({ url }) => ({
 	...parseInquiryQueryState(url.searchParams),
 	...createSeoPageData({
-		title: m.inquiry_title(),
-		description: m.inquiry_description(),
+		title: m.inquiry_meta_title(),
+		description: m.inquiry_meta_description(),
 		pageType: 'ContactPage',
-		openGraphImage: catalogCdnUrl('/landing/products-beakers.webp'),
+		openGraphImage: catalogCdnUrl('/og/catalog/inquiry.webp'),
 		openGraphImageAlt: m.inquiry_title()
 	})
 });

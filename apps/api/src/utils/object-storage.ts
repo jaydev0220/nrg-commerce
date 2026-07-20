@@ -64,8 +64,8 @@ function sanitizeFileExtension(fileName: string): string {
 	return extension.replace(/[^a-z0-9.]/g, '');
 }
 
-function buildSkuAssetPrefix(assetKeyPrefix: string, skuId: string): string {
-	return `${assetKeyPrefix.replace(/^\/+|\/+$/g, '')}/${skuId}`;
+function buildProductAssetPrefix(assetKeyPrefix: string, productId: string): string {
+	return `${assetKeyPrefix.replace(/^\/+|\/+$/g, '')}/${productId}`;
 }
 
 function buildPublicUrl(publicBaseUrl: string, assetKey: string): string {
@@ -108,8 +108,8 @@ export function createR2ObjectStorage(
 	const createId = dependencies.createId ?? (() => crypto.randomUUID());
 
 	return {
-		async createImageUploadTarget(skuId: string, input: ImageUploadRequest) {
-			const assetKeyPrefix = buildSkuAssetPrefix(config.assetKeyPrefix, skuId);
+		async createImageUploadTarget(productId: string, input: ImageUploadRequest) {
+			const assetKeyPrefix = buildProductAssetPrefix(config.assetKeyPrefix, productId);
 			const assetKey = `${assetKeyPrefix}/${createId()}${sanitizeFileExtension(input.fileName)}`;
 			const uploadUrl = await signUrl(
 				s3Client,
@@ -137,16 +137,16 @@ export function createR2ObjectStorage(
 		},
 
 		async assertImageAssetExists(
-			skuId: string,
+			productId: string,
 			input: { assetKey: string }
 		): Promise<UploadedImageAsset> {
-			const assetKeyPrefix = `${buildSkuAssetPrefix(config.assetKeyPrefix, skuId)}/`;
+			const assetKeyPrefix = `${buildProductAssetPrefix(config.assetKeyPrefix, productId)}/`;
 
 			if (!input.assetKey.startsWith(assetKeyPrefix)) {
 				throw new AppError(
 					422,
 					'INVALID_IMAGE_ASSET_KEY',
-					'The uploaded image asset key must belong to the target product SKU.'
+					'The uploaded image asset key must belong to the target product.'
 				);
 			}
 

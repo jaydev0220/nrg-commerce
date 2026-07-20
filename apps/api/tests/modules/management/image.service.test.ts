@@ -17,6 +17,8 @@ function createCatalogSkuRecord() {
 		categoryId: 'category-1',
 		categorySlug: 'bags',
 		price: 19.99,
+		stockQuantity: 10,
+		availability: 'in_stock' as const,
 		published: true,
 		attributes: {},
 		deletedAt: null,
@@ -26,13 +28,34 @@ function createCatalogSkuRecord() {
 	};
 }
 
+function createCatalogProductRecord() {
+	return {
+		id: 'product-1',
+		slug: 'catalog-product',
+		name: 'Catalog Product',
+		nameEn: 'Catalog Product',
+		description: null,
+		descriptionEn: null,
+		categoryId: 'category-1',
+		categorySlug: 'bags',
+		published: true,
+		deletedAt: null,
+		createdAt: new Date(),
+		updatedAt: new Date(),
+		thumbnail: null,
+		images: [],
+		skus: []
+	};
+}
+
 test('createImage stores the uploaded asset URL after verifying the object exists', async () => {
 	let createdImageInput:
 		| {
 				imageUrl: string;
 				assetKey?: string;
 				altText: string;
-				type: 'thumbnail' | 'gallery';
+				placement: 'thumbnail' | 'shared-gallery' | 'sku-gallery';
+				skuId?: string | null;
 				focusX?: number | null;
 				focusY?: number | null;
 				zoom?: number | null;
@@ -41,15 +64,17 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 
 	const imageService = createImageService({
 		repository: {
+			findProductById: async () => createCatalogProductRecord(),
 			findSkuById: async () => createCatalogSkuRecord(),
 			listImages: async () => ({ data: [], total: 0 }),
 			findImageById: async () => ({
 				id: 'image-1',
+				productId: 'product-1',
 				skuId: 'sku-1',
 				imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
 				assetKey: 'products/skus/sku-1/image.png',
 				altText: 'Thumbnail',
-				type: 'thumbnail',
+				placement: 'thumbnail',
 				position: 0,
 				focusX: 0.5,
 				focusY: 0.5,
@@ -65,7 +90,7 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 			}),
 			findImageUpload: async () => ({
 				id: 'upload-1',
-				skuId: 'sku-1',
+				productId: 'product-1',
 				assetKey: 'products/skus/sku-1/image.png',
 				expiresAt: new Date(Date.now() + 60_000),
 				consumedAt: null
@@ -75,11 +100,12 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 
 				return {
 					id: 'image-1',
+					productId: 'product-1',
 					skuId: 'sku-1',
 					imageUrl: input.imageUrl,
 					assetKey: input.assetKey ?? null,
 					altText: input.altText,
-					type: input.type,
+					placement: input.placement,
 					position: 0,
 					focusX: input.focusX ?? null,
 					focusY: input.focusY ?? null,
@@ -99,11 +125,12 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 			deleteImageUpload: async () => undefined,
 			updateImageCrop: async (imageId, input) => ({
 				id: imageId,
+				productId: 'product-1',
 				skuId: 'sku-1',
 				imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
 				assetKey: 'products/skus/sku-1/image.png',
 				altText: 'Thumbnail',
-				type: 'thumbnail',
+				placement: 'thumbnail',
 				position: 0,
 				focusX: input.focusX,
 				focusY: input.focusY,
@@ -126,23 +153,24 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 		}
 	});
 
-	const image = await imageService.createImage('sku-1', {
+	const image = await imageService.createImage('product-1', {
 		uploadId: 'upload-1',
 		altText: 'Front image',
-		type: 'gallery'
+		placement: 'shared-gallery'
 	});
 
 	assert.deepEqual(createdImageInput, {
+		skuId: undefined,
 		imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
 		assetKey: 'products/skus/sku-1/image.png',
 		altText: 'Front image',
-		type: 'gallery',
+		placement: 'shared-gallery',
 		focusX: undefined,
 		focusY: undefined,
 		zoom: undefined
 	});
 	assert.equal(image.imageUrl, 'https://assets.example.com/products/skus/sku-1/image.png');
-	const focusedImage = await imageService.updateImageCrop('sku-1', 'image-1', {
+	const focusedImage = await imageService.updateImageCrop('product-1', 'image-1', {
 		focusX: 0.2,
 		focusY: 0.8,
 		zoom: 1.5
@@ -157,6 +185,7 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 test('createImageUploadTarget rejects unknown skus before generating upload URLs', async () => {
 	const imageService = createImageService({
 		repository: {
+			findProductById: async () => null,
 			findSkuById: async () => null,
 			listImages: async () => ({ data: [], total: 0 }),
 			findImageById: async () => null,
@@ -192,12 +221,12 @@ test('createImageUploadTarget rejects unknown skus before generating upload URLs
 
 	await assert.rejects(
 		() =>
-			imageService.createImageUploadTarget('missing-sku', {
+			imageService.createImageUploadTarget('missing-product', {
 				fileName: 'front.png',
 				contentType: 'image/png',
 				fileSize: 1024
 			}),
-		(error: unknown) => error instanceof AppError && error.code === 'SKU_NOT_FOUND'
+		(error: unknown) => error instanceof AppError && error.code === 'PRODUCT_NOT_FOUND'
 	);
 });
 
@@ -205,11 +234,12 @@ test('deleteImage soft deletes normally and removes the asset on force delete', 
 	const deletedAt = new Date('2026-07-01T00:00:00.000Z');
 	const imageRecord = {
 		id: 'image-1',
+		productId: 'product-1',
 		skuId: 'sku-1',
 		imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
 		assetKey: 'products/skus/sku-1/image.png',
 		altText: 'Front image',
-		type: 'gallery' as const,
+		placement: 'shared-gallery' as const,
 		position: 0,
 		focusX: null,
 		focusY: null,
@@ -223,6 +253,7 @@ test('deleteImage soft deletes normally and removes the asset on force delete', 
 	let deletedAssetKey: string | undefined;
 	const imageService = createImageService({
 		repository: {
+			findProductById: async () => createCatalogProductRecord(),
 			findSkuById: async () => createCatalogSkuRecord(),
 			listImages: async () => ({ data: [], total: 0 }),
 			findImageById: async (_skuId, _imageId, includeDeleted = false) =>
@@ -262,13 +293,13 @@ test('deleteImage soft deletes normally and removes the asset on force delete', 
 	});
 
 	assert.deepEqual(
-		await imageService.deleteImage('sku-1', 'image-1', { force: false, deleteAsset: false }),
+		await imageService.deleteImage('product-1', 'image-1', { force: false, deleteAsset: false }),
 		{ mode: 'soft', assetDeleted: false }
 	);
 	assert.equal(softDeletedId, 'image-1');
 
 	assert.deepEqual(
-		await imageService.deleteImage('sku-1', 'image-1', { force: true, deleteAsset: false }),
+		await imageService.deleteImage('product-1', 'image-1', { force: true, deleteAsset: false }),
 		{ mode: 'force', assetDeleted: true }
 	);
 	assert.equal(forceDeletedId, 'image-1');
@@ -281,6 +312,7 @@ test('pruneExpiredAssets deletes expired objects and their database records', as
 	const deletedUploadIds: string[] = [];
 	const imageService = createImageService({
 		repository: {
+			findProductById: async () => createCatalogProductRecord(),
 			findSkuById: async () => createCatalogSkuRecord(),
 			listImages: async () => ({ data: [], total: 0 }),
 			findImageById: async () => null,
@@ -299,7 +331,7 @@ test('pruneExpiredAssets deletes expired objects and their database records', as
 				throw new Error('not used');
 			},
 			listExpiredImages: async () => [
-				{ id: 'image-1', skuId: 'sku-1', assetKey: 'products/skus/sku-1/old.png' }
+				{ id: 'image-1', productId: 'product-1', assetKey: 'products/product-1/old.png' }
 			],
 			listExpiredImageUploads: async () => [
 				{ id: 'upload-1', assetKey: 'products/skus/sku-1/pending.png' }
@@ -330,7 +362,7 @@ test('pruneExpiredAssets deletes expired objects and their database records', as
 	assert.deepEqual(deletedImageIds, ['image-1']);
 	assert.deepEqual(deletedUploadIds, ['upload-1']);
 	assert.deepEqual(deletedAssetKeys, [
-		'products/skus/sku-1/old.png',
+		'products/product-1/old.png',
 		'products/skus/sku-1/pending.png'
 	]);
 });

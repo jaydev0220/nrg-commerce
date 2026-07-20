@@ -8,6 +8,6 @@ export const load: PageLoad = () =>
 		title: m.about_meta_title(),
 		description: m.about_meta_description(),
 		pageType: 'AboutPage',
-		openGraphImage: cdnUrl(CDN_ASSETS.companyStoryPhoto),
+		openGraphImage: cdnUrl(CDN_ASSETS.aboutOpenGraph),
 		openGraphImageAlt: m.about_page_title()
 	});

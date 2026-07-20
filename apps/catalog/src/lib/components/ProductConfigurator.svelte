@@ -87,6 +87,11 @@
 				<p class="mt-1 font-mono text-sm font-semibold text-text-heading">
 					{model.activeSku.skuCode}
 				</p>
+				<p class="mt-2 text-xs text-text-muted">
+					{model.activeSku.availability === 'in_stock'
+						? m.catalog_availability_in_stock()
+						: m.catalog_availability_out_of_stock()}
+				</p>
 			</div>
 			<div class="sm:text-right">
 				<p class="text-[10px] uppercase tracking-caps text-text-muted">{m.catalog_price()}</p>

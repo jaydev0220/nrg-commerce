@@ -156,7 +156,7 @@ describe('admin API security contracts', () => {
 });
 
 describe('admin API product contracts', () => {
-	it('loads an editor with all category pages and deleted images per SKU', async () => {
+	it('loads an editor with all category pages and product-owned deleted images', async () => {
 		client.requestJson.mockImplementation(async (path: string) => {
 			if (path.startsWith('/api/management/products/product-1?')) {
 				return {
@@ -173,7 +173,7 @@ describe('admin API product contracts', () => {
 			}
 			if (path.includes('/images?state=deleted')) {
 				return {
-					data: [{ id: `deleted-${path.includes('sku-1') ? '1' : '2'}` }],
+					data: [{ id: 'deleted-1' }],
 					pagination: { totalPages: 1 }
 				};
 			}
@@ -184,10 +184,7 @@ describe('admin API product contracts', () => {
 
 		expect(result.product.createdAt).toBeInstanceOf(Date);
 		expect(result.categories.map((category) => category.id)).toEqual(['category-1', 'category-2']);
-		expect(result.deletedImages).toEqual({
-			'sku-1': [{ id: 'deleted-1' }],
-			'sku-2': [{ id: 'deleted-2' }]
-		});
+		expect(result.deletedImages).toEqual([{ id: 'deleted-1' }]);
 	});
 
 	it('preserves SKU, image, and bulk product mutation contracts', async () => {
@@ -195,31 +192,32 @@ describe('admin API product contracts', () => {
 			productId: 'product-1',
 			skuCode: 'SKU-1',
 			price: 100,
+			stockQuantity: 8,
 			attributes: { size: 'large' }
 		});
 		await updateProductSku('sku-1', { price: 120 });
 		await deleteProductSku('sku-1');
-		await createImageUploadTarget('sku-1', {
+		await createImageUploadTarget('product-1', {
 			fileName: 'image.webp',
 			contentType: 'image/webp',
 			fileSize: 1024
 		});
-		await registerProductImage('sku-1', {
+		await registerProductImage('product-1', {
 			uploadId: 'upload-1',
 			altText: 'Product',
-			type: 'gallery'
+			placement: 'shared-gallery'
 		});
-		await updateProductImageCrop('sku-1', 'image-1', {
+		await updateProductImageCrop('product-1', 'image-1', {
 			focusX: 0.25,
 			focusY: 0.75,
 			zoom: 1.5
 		});
-		await deleteProductImage('sku-1', 'image-1', { force: true, deleteAsset: true });
-		await restoreProductImage('sku-1', 'image-1');
+		await deleteProductImage('product-1', 'image-1', { force: true, deleteAsset: true });
+		await restoreProductImage('product-1', 'image-1');
 		await bulkUpdateProducts({ productIds: ['product-1'], action: 'publish' });
 
 		expect(client.requestJson).toHaveBeenCalledWith(
-			'/api/management/products/skus/sku-1/images/image-1?force=true&deleteAsset=true',
+			'/api/management/products/product-1/images/image-1?force=true&deleteAsset=true',
 			{ method: 'DELETE' },
 			{}
 		);

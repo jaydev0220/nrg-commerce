@@ -26,11 +26,6 @@ enum PasskeyDeviceType {
   multiDevice
 }
 
-enum ProductImageType {
-  thumbnail
-  gallery
-}
-
 enum OrderStatus {
   pending
   confirmed
@@ -214,19 +209,23 @@ model ProductCategory {
 }
 
 model Product {
-  id            String           @id @default(uuid()) @db.Uuid
-  slug          String           @unique
-  name          String
-  nameEn        String?
-  description   String?
-  descriptionEn String?
-  categoryId    String?          @db.Uuid
-  published     Boolean          @default(false)
-  deletedAt     DateTime?        @db.Timestamptz(6)
-  createdAt     DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime         @updatedAt @db.Timestamptz(6)
-  category      ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  skus          ProductSku[]
+  id               String               @id @default(uuid()) @db.Uuid
+  slug             String               @unique
+  name             String
+  nameEn           String?
+  description      String?
+  descriptionEn    String?
+  categoryId       String?              @db.Uuid
+  thumbnailImageId String?              @unique @db.Uuid
+  published        Boolean              @default(false)
+  deletedAt        DateTime?            @db.Timestamptz(6)
+  createdAt        DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime             @updatedAt @db.Timestamptz(6)
+  category         ProductCategory?     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  thumbnailImage   ProductImage?        @relation("ProductThumbnail", fields: [thumbnailImageId], references: [id], onDelete: SetNull)
+  images           ProductImage[]       @relation("ProductImages")
+  imageUploads     ProductImageUpload[]
+  skus             ProductSku[]
 
   @@index([categoryId, published, createdAt])
   @@index([slug])
@@ -235,53 +234,55 @@ model Product {
 }
 
 model ProductSku {
-  id           String               @id @default(uuid()) @db.Uuid
-  productId    String               @db.Uuid
-  skuCode      String               @unique
-  price        Decimal              @db.Decimal(10, 2)
-  attributes   Json                 @db.JsonB
-  deletedAt    DateTime?            @db.Timestamptz(6)
-  createdAt    DateTime             @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime             @updatedAt @db.Timestamptz(6)
-  product      Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
-  images       ProductImage[]
-  imageUploads ProductImageUpload[]
-  orderItems   OrderItem[]
+  id            String         @id @default(uuid()) @db.Uuid
+  productId     String         @db.Uuid
+  skuCode       String         @unique
+  price         Decimal        @db.Decimal(10, 2)
+  stockQuantity Int            @default(0)
+  attributes    Json           @db.JsonB
+  deletedAt     DateTime?      @db.Timestamptz(6)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(6)
+  product       Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  images        ProductImage[]
+  orderItems    OrderItem[]
 
   @@index([productId, createdAt])
   @@index([deletedAt])
 }
 
 model ProductImage {
-  id        String           @id @default(uuid()) @db.Uuid
-  skuId     String           @db.Uuid
-  imageUrl  String
-  assetKey  String?
-  altText   String
-  type      ProductImageType @default(gallery)
-  position  Int              @default(0)
-  focusX    Float?
-  focusY    Float?
-  zoom      Float?
-  deletedAt DateTime?        @db.Timestamptz(6)
-  createdAt DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime         @updatedAt @db.Timestamptz(6)
-  sku       ProductSku       @relation(fields: [skuId], references: [id], onDelete: Restrict)
+  id           String      @id @default(uuid()) @db.Uuid
+  productId    String      @db.Uuid
+  skuId        String?     @db.Uuid
+  imageUrl     String
+  assetKey     String?
+  altText      String
+  position     Int         @default(0)
+  focusX       Float?
+  focusY       Float?
+  zoom         Float?
+  deletedAt    DateTime?   @db.Timestamptz(6)
+  createdAt    DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime    @updatedAt @db.Timestamptz(6)
+  product      Product     @relation("ProductImages", fields: [productId], references: [id], onDelete: Restrict)
+  sku          ProductSku? @relation(fields: [skuId], references: [id], onDelete: Restrict)
+  thumbnailFor Product?    @relation("ProductThumbnail")
 
-  @@index([skuId, type, position])
+  @@index([productId, skuId, position])
   @@index([deletedAt])
 }
 
 model ProductImageUpload {
-  id         String     @id @default(uuid()) @db.Uuid
-  skuId      String     @db.Uuid
-  assetKey   String     @unique
-  expiresAt  DateTime   @db.Timestamptz(6)
-  consumedAt DateTime?  @db.Timestamptz(6)
-  createdAt  DateTime   @default(now()) @db.Timestamptz(6)
-  sku        ProductSku @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  id         String    @id @default(uuid()) @db.Uuid
+  productId  String    @db.Uuid
+  assetKey   String    @unique
+  expiresAt  DateTime  @db.Timestamptz(6)
+  consumedAt DateTime? @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  @@index([skuId, consumedAt])
+  @@index([productId, consumedAt])
   @@index([expiresAt])
 }
 

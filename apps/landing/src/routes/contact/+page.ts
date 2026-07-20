@@ -8,6 +8,6 @@ export const load: PageLoad = () =>
 		title: m.contact_meta_title(),
 		description: m.contact_meta_description(),
 		pageType: 'ContactPage',
-		openGraphImage: cdnUrl(CDN_ASSETS.productHydrometers),
+		openGraphImage: cdnUrl(CDN_ASSETS.contactOpenGraph),
 		openGraphImageAlt: m.contact_page_title()
 	});

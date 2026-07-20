@@ -58,6 +58,7 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 			productId: string;
 			skuCode: string;
 			price: number;
+			stockQuantity: number;
 			attributes: Record<string, CatalogJsonValue>;
 		}): Promise<CatalogSkuRecord> {
 			if (await dependencies.repository.skuCodeExists(input.skuCode)) {
@@ -77,6 +78,7 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 				productId?: string;
 				skuCode?: string;
 				price?: number;
+				stockQuantity?: number;
 				attributes?: Record<string, CatalogJsonValue>;
 			}
 		): Promise<CatalogSkuRecord> {

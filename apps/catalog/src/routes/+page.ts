@@ -16,10 +16,10 @@ function catalogCdnUrl(path: string): string {
 export const load: PageLoad = ({ data }) => ({
 	...data,
 	...createSeoPageData({
-		title: m.catalog_title(),
-		description: m.catalog_description(),
+		title: m.catalog_meta_title(),
+		description: m.catalog_meta_description(),
 		pageType: 'CollectionPage',
-		openGraphImage: catalogCdnUrl('/landing/products-beakers.webp'),
+		openGraphImage: catalogCdnUrl('/og/catalog/gallery.webp'),
 		openGraphImageAlt: m.catalog_title()
 	})
 });

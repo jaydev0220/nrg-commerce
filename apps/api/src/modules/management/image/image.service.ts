@@ -7,6 +7,7 @@ import type { CatalogRepository } from '../catalog.repository.js';
 type ImageServiceDependencies = {
 	repository: Pick<
 		CatalogRepository,
+		| 'findProductById'
 		| 'findSkuById'
 		| 'listImages'
 		| 'findImageById'
@@ -36,50 +37,64 @@ function ensureImage(image: CatalogImageRecord | null): CatalogImageRecord {
 }
 
 export function createImageService(dependencies: ImageServiceDependencies) {
-	async function ensureSkuExists(skuId: string): Promise<void> {
+	async function ensureProductExists(productId: string): Promise<void> {
+		const product = await dependencies.repository.findProductById(productId, {
+			includeSkus: false,
+			includeImages: false
+		});
+		if (!product) {
+			throw new AppError(404, 'PRODUCT_NOT_FOUND', 'The requested product could not be found.');
+		}
+	}
+
+	async function ensureSkuBelongsToProduct(productId: string, skuId: string): Promise<void> {
 		const sku = await dependencies.repository.findSkuById(skuId, {
 			includeImages: false
 		});
 
-		if (!sku) {
+		if (!sku || sku.productId !== productId) {
 			throw new AppError(404, 'SKU_NOT_FOUND', 'The requested product SKU could not be found.');
 		}
 	}
 
 	return {
 		async listImages(
-			skuId: string,
+			productId: string,
 			query: {
 				page: number;
 				limit: number;
-				type?: 'thumbnail' | 'gallery';
+				placement?: 'thumbnail' | 'shared-gallery' | 'sku-gallery';
 				state: 'active' | 'deleted';
 				sort: 'position' | 'createdAt' | 'updatedAt';
 				order: 'asc' | 'desc';
 			}
 		) {
-			await ensureSkuExists(skuId);
-			return dependencies.repository.listImages(skuId, query);
+			await ensureProductExists(productId);
+			return dependencies.repository.listImages(productId, query);
 		},
 
-		async getImage(skuId: string, imageId: string): Promise<CatalogImageRecord> {
-			await ensureSkuExists(skuId);
-			return ensureImage(await dependencies.repository.findImageById(skuId, imageId));
+		async getImage(productId: string, imageId: string): Promise<CatalogImageRecord> {
+			await ensureProductExists(productId);
+			return ensureImage(await dependencies.repository.findImageById(productId, imageId));
 		},
 
 		async createImage(
-			skuId: string,
+			productId: string,
 			input: {
 				uploadId: string;
+				skuId?: string | null;
 				altText: string;
-				type: 'thumbnail' | 'gallery';
+				placement: 'thumbnail' | 'shared-gallery' | 'sku-gallery';
 				focusX?: number | null;
 				focusY?: number | null;
 				zoom?: number | null;
 			}
 		): Promise<CatalogImageRecord> {
-			await ensureSkuExists(skuId);
-			const upload = await dependencies.repository.findImageUpload(skuId, input.uploadId);
+			await ensureProductExists(productId);
+			if (input.placement === 'sku-gallery' && input.skuId) {
+				await ensureSkuBelongsToProduct(productId, input.skuId);
+			}
+			const upload = await dependencies.repository.findImageUpload(productId, input.uploadId);
 			if (!upload || upload.expiresAt <= new Date()) {
 				throw new AppError(
 					409,
@@ -87,14 +102,15 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 					'The image upload is missing or has expired. Upload the image again.'
 				);
 			}
-			const uploadedAsset = await dependencies.objectStorage.assertImageAssetExists(skuId, {
+			const uploadedAsset = await dependencies.objectStorage.assertImageAssetExists(productId, {
 				assetKey: upload.assetKey
 			});
-			const image = await dependencies.repository.consumeImageUpload(skuId, input.uploadId, {
+			const image = await dependencies.repository.consumeImageUpload(productId, input.uploadId, {
+				skuId: input.skuId,
 				imageUrl: uploadedAsset.imageUrl,
 				assetKey: uploadedAsset.assetKey,
 				altText: input.altText,
-				type: input.type,
+				placement: input.placement,
 				focusX: input.focusX,
 				focusY: input.focusY,
 				zoom: input.zoom
@@ -110,19 +126,22 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 		},
 
 		async createImageUploadTarget(
-			skuId: string,
+			productId: string,
 			input: {
 				fileName: string;
 				contentType: string;
 				fileSize: number;
 			}
 		) {
-			await ensureSkuExists(skuId);
-			const uploadTarget = await dependencies.objectStorage.createImageUploadTarget(skuId, input);
+			await ensureProductExists(productId);
+			const uploadTarget = await dependencies.objectStorage.createImageUploadTarget(
+				productId,
+				input
+			);
 			let upload: Awaited<ReturnType<CatalogRepository['createImageUpload']>>;
 			try {
 				upload = await dependencies.repository.createImageUpload({
-					skuId,
+					productId,
 					assetKey: uploadTarget.assetKey,
 					expiresAt: new Date(uploadTarget.expiresAt)
 				});
@@ -136,7 +155,7 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 		},
 
 		async deleteImage(
-			skuId: string,
+			productId: string,
 			imageId: string,
 			input: {
 				force: boolean;
@@ -146,9 +165,9 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 			mode: 'soft' | 'force';
 			assetDeleted: boolean;
 		}> {
-			await ensureSkuExists(skuId);
+			await ensureProductExists(productId);
 			const image = ensureImage(
-				await dependencies.repository.findImageById(skuId, imageId, input.force)
+				await dependencies.repository.findImageById(productId, imageId, input.force)
 			);
 
 			if (input.force) {
@@ -169,9 +188,11 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 			};
 		},
 
-		async restoreImage(skuId: string, imageId: string): Promise<CatalogImageRecord> {
-			await ensureSkuExists(skuId);
-			const image = ensureImage(await dependencies.repository.findImageById(skuId, imageId, true));
+		async restoreImage(productId: string, imageId: string): Promise<CatalogImageRecord> {
+			await ensureProductExists(productId);
+			const image = ensureImage(
+				await dependencies.repository.findImageById(productId, imageId, true)
+			);
 			if (!image.deletedAt) {
 				throw new AppError(409, 'IMAGE_NOT_DELETED', 'The product image is not deleted.');
 			}
@@ -179,13 +200,13 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 		},
 
 		async updateImageCrop(
-			skuId: string,
+			productId: string,
 			imageId: string,
 			input: { focusX: number; focusY: number; zoom: number }
 		): Promise<CatalogImageRecord> {
-			await ensureSkuExists(skuId);
-			const image = ensureImage(await dependencies.repository.findImageById(skuId, imageId));
-			if (image.type !== 'thumbnail') {
+			await ensureProductExists(productId);
+			const image = ensureImage(await dependencies.repository.findImageById(productId, imageId));
+			if (image.placement !== 'thumbnail') {
 				throw new AppError(
 					409,
 					'IMAGE_CROP_NOT_SUPPORTED',

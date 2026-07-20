@@ -8,7 +8,7 @@ import {
 	managementSkuDetailQuerySchema,
 	productImageCreateSchema,
 	productImageCropUpdateSchema,
-	productImageTypeSchema,
+	productImagePlacementSchema,
 	productImageUploadRequestSchema,
 	productCategoryUpdateSchema,
 	productCategoryDeleteQuerySchema,
@@ -36,6 +36,7 @@ test('productSkuCreateSchema requires a productId and keeps attributes as an obj
 		productId: 'c1cf3cbb-c58b-4409-a449-85b086c9089a',
 		skuCode: 'SKU-001',
 		price: '19.99',
+		stockQuantity: 8,
 		attributes: {
 			color: 'sand',
 			sizes: ['m', 'l']
@@ -43,6 +44,7 @@ test('productSkuCreateSchema requires a productId and keeps attributes as an obj
 	});
 
 	assert.equal(parsedSku.productId, 'c1cf3cbb-c58b-4409-a449-85b086c9089a');
+	assert.equal(parsedSku.stockQuantity, 8);
 	assert.deepEqual(parsedSku.attributes, {
 		color: 'sand',
 		sizes: ['m', 'l']
@@ -125,8 +127,8 @@ test('productCategoryDeleteQuerySchema validates reassignment input', () => {
 	);
 });
 
-test('productImageTypeSchema rejects removed image types', () => {
-	assert.throws(() => productImageTypeSchema.parse('detail'));
+test('productImagePlacementSchema rejects removed image placements', () => {
+	assert.throws(() => productImagePlacementSchema.parse('detail'));
 });
 
 test('managementSkuDetailQuerySchema parses includeImages flags from query strings', () => {
@@ -150,7 +152,7 @@ test('productImageCreateSchema accepts a pending upload reference', () => {
 	});
 
 	assert.equal(parsedImage.uploadId, '0189076c-4f2a-7fe1-b9fd-2d68df455401');
-	assert.equal(parsedImage.type, 'gallery');
+	assert.equal(parsedImage.placement, 'shared-gallery');
 	assert.equal(parsedImage.focusX, undefined);
 	assert.equal(parsedImage.focusY, undefined);
 	assert.equal(parsedImage.zoom, undefined);
@@ -161,10 +163,28 @@ test('productImageCreateSchema requires all crop fields together', () => {
 		productImageCreateSchema.parse({
 			uploadId: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
 			altText: 'Front product image',
-			type: 'thumbnail',
+			placement: 'thumbnail',
 			focusX: 0.25
 		})
 	);
+	assert.throws(() =>
+		productImageCreateSchema.parse({
+			uploadId: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
+			altText: 'SKU image',
+			placement: 'sku-gallery'
+		})
+	);
+});
+
+test('productSkuCreateSchema requires a non-negative stock quantity', () => {
+	const base = {
+		productId: 'c1cf3cbb-c58b-4409-a449-85b086c9089a',
+		skuCode: 'SKU-001',
+		price: 19.99,
+		attributes: {}
+	};
+	assert.throws(() => productSkuCreateSchema.parse(base));
+	assert.throws(() => productSkuCreateSchema.parse({ ...base, stockQuantity: -1 }));
 });
 
 test('productImageUploadRequestSchema accepts supported image metadata', () => {

@@ -13,7 +13,6 @@ type CategorySortField = 'name' | 'createdAt' | 'updatedAt' | 'position';
 type ProductSortField = 'name' | 'createdAt' | 'updatedAt' | 'minPrice';
 type SkuSortField = 'createdAt' | 'updatedAt' | 'skuCode' | 'price';
 type StorefrontSkuSortField = 'name' | 'price' | 'createdAt';
-type ImageSortField = 'position' | 'createdAt' | 'updatedAt';
 
 type ListCategoriesInput = {
 	search?: string;
@@ -58,14 +57,6 @@ type FindProductOptions = {
 type FindSkuOptions = {
 	includeImages: boolean;
 	publishedOnly?: boolean;
-};
-
-type ListImagesInput = {
-	type?: 'thumbnail' | 'gallery';
-	sort: ImageSortField;
-	order: 'asc' | 'desc';
-	page: number;
-	limit: number;
 };
 
 type ListCategoriesOptions = {
@@ -113,13 +104,13 @@ function mapCategoryRecord(category: {
 	};
 }
 
-function mapImageRecord(image: {
+type RawImageRecord = {
 	id: string;
-	skuId: string;
+	productId: string;
+	skuId: string | null;
 	imageUrl: string;
 	assetKey: string | null;
 	altText: string;
-	type: 'thumbnail' | 'gallery';
 	position: number;
 	focusX: number | null;
 	focusY: number | null;
@@ -127,14 +118,21 @@ function mapImageRecord(image: {
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
-}): CatalogImageRecord {
+};
+
+function mapImageRecord(
+	image: RawImageRecord,
+	thumbnailImageId?: string | null
+): CatalogImageRecord {
 	return {
 		id: image.id,
+		productId: image.productId,
 		skuId: image.skuId,
 		imageUrl: image.imageUrl,
 		assetKey: image.assetKey,
 		altText: image.altText,
-		type: image.type,
+		placement:
+			image.id === thumbnailImageId ? 'thumbnail' : image.skuId ? 'sku-gallery' : 'shared-gallery',
 		position: image.position,
 		focusX: image.focusX,
 		focusY: image.focusY,
@@ -161,25 +159,12 @@ function mapSkuRecordFromProduct(
 		productId: string;
 		skuCode: string;
 		price: { toString(): string };
+		stockQuantity: number;
 		attributes: unknown;
 		deletedAt: Date | null;
 		createdAt: Date;
 		updatedAt: Date;
-		images?: Array<{
-			id: string;
-			skuId: string;
-			imageUrl: string;
-			assetKey: string | null;
-			altText: string;
-			type: 'thumbnail' | 'gallery';
-			position: number;
-			focusX: number | null;
-			focusY: number | null;
-			zoom: number | null;
-			deletedAt: Date | null;
-			createdAt: Date;
-			updatedAt: Date;
-		}>;
+		images?: RawImageRecord[];
 	}
 ): CatalogSkuRecord {
 	return {
@@ -194,12 +179,14 @@ function mapSkuRecordFromProduct(
 		categoryId: product.categoryId,
 		categorySlug: product.category?.slug ?? null,
 		price: Number(sku.price.toString()),
+		stockQuantity: sku.stockQuantity,
+		availability: sku.stockQuantity > 0 ? 'in_stock' : 'out_of_stock',
 		published: product.published,
 		attributes: (sku.attributes ?? {}) as Record<string, CatalogJsonValue>,
 		deletedAt: sku.deletedAt,
 		createdAt: sku.createdAt,
 		updatedAt: sku.updatedAt,
-		images: sku.images?.map(mapImageRecord) ?? []
+		images: sku.images?.map((image) => mapImageRecord(image)) ?? []
 	};
 }
 
@@ -218,25 +205,12 @@ function mapSkuRecord(sku: {
 		category: { slug: string } | null;
 	};
 	price: { toString(): string };
+	stockQuantity: number;
 	attributes: unknown;
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
-	images?: Array<{
-		id: string;
-		skuId: string;
-		imageUrl: string;
-		assetKey: string | null;
-		altText: string;
-		type: 'thumbnail' | 'gallery';
-		position: number;
-		focusX: number | null;
-		focusY: number | null;
-		zoom: number | null;
-		deletedAt: Date | null;
-		createdAt: Date;
-		updatedAt: Date;
-	}>;
+	images?: RawImageRecord[];
 }): CatalogSkuRecord {
 	return mapSkuRecordFromProduct(sku.product, sku);
 }
@@ -253,33 +227,23 @@ function mapProductRecord(product: {
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
+	thumbnailImageId: string | null;
 	category: { slug: string } | null;
+	images?: RawImageRecord[];
 	skus?: Array<{
 		id: string;
 		productId: string;
 		skuCode: string;
 		price: { toString(): string };
+		stockQuantity: number;
 		attributes: unknown;
 		deletedAt: Date | null;
 		createdAt: Date;
 		updatedAt: Date;
-		images?: Array<{
-			id: string;
-			skuId: string;
-			imageUrl: string;
-			assetKey: string | null;
-			altText: string;
-			type: 'thumbnail' | 'gallery';
-			position: number;
-			focusX: number | null;
-			focusY: number | null;
-			zoom: number | null;
-			deletedAt: Date | null;
-			createdAt: Date;
-			updatedAt: Date;
-		}>;
+		images?: RawImageRecord[];
 	}>;
 }): CatalogProductRecord {
+	const thumbnail = product.images?.find((image) => image.id === product.thumbnailImageId);
 	return {
 		id: product.id,
 		slug: product.slug,
@@ -293,6 +257,8 @@ function mapProductRecord(product: {
 		deletedAt: product.deletedAt,
 		createdAt: product.createdAt,
 		updatedAt: product.updatedAt,
+		thumbnail: thumbnail ? mapImageRecord(thumbnail, product.thumbnailImageId) : null,
+		images: product.images?.map((image) => mapImageRecord(image, product.thumbnailImageId)) ?? [],
 		skus: product.skus?.map((sku) => mapSkuRecordFromProduct(product, sku)) ?? []
 	};
 }
@@ -342,18 +308,6 @@ function resolveSkuOrderBy(sort: SkuSortField | StorefrontSkuSortField, order: '
 		case 'createdAt':
 		default:
 			return { createdAt: order } as const;
-	}
-}
-
-function resolveImageOrderBy(sort: ImageSortField, order: 'asc' | 'desc') {
-	switch (sort) {
-		case 'createdAt':
-			return { createdAt: order } as const;
-		case 'updatedAt':
-			return { updatedAt: order } as const;
-		case 'position':
-		default:
-			return { position: order } as const;
 	}
 }
 
@@ -499,6 +453,14 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 						slug: true
 					}
 				},
+				...(options.includeImages
+					? {
+							images: {
+								where: { deletedAt: null },
+								orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+							}
+						}
+					: {}),
 				...(options.includeSkus
 					? {
 							skus: {
@@ -623,6 +585,14 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 							slug: true
 						}
 					},
+					...(options.includeImages
+						? {
+								images: {
+									where: { deletedAt: null },
+									orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+								}
+							}
+						: {}),
 					...(options.includeSkus
 						? {
 								skus: {
@@ -672,6 +642,14 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 							slug: true
 						}
 					},
+					...(options.includeImages
+						? {
+								images: {
+									where: { deletedAt: null },
+									orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+								}
+							}
+						: {}),
 					...(options.includeSkus
 						? {
 								skus: {
@@ -1062,6 +1040,7 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 			productId: string;
 			skuCode: string;
 			price: number;
+			stockQuantity: number;
 			attributes: Record<string, CatalogJsonValue>;
 		}): Promise<CatalogSkuRecord> {
 			const sku = await database.productSku.create({
@@ -1069,6 +1048,7 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 					productId: input.productId,
 					skuCode: input.skuCode,
 					price: input.price,
+					stockQuantity: input.stockQuantity,
 					attributes: input.attributes
 				},
 				include: {
@@ -1100,6 +1080,7 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 				productId?: string;
 				skuCode?: string;
 				price?: number;
+				stockQuantity?: number;
 				attributes?: Record<string, CatalogJsonValue>;
 			}
 		): Promise<CatalogSkuRecord> {
@@ -1111,6 +1092,7 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 					productId: input.productId,
 					skuCode: input.skuCode,
 					price: input.price,
+					stockQuantity: input.stockQuantity,
 					attributes: input.attributes
 				},
 				include: {
@@ -1170,84 +1152,6 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 			});
 
 			return count > 0;
-		},
-
-		async listImages(
-			skuId: string,
-			input: ListImagesInput
-		): Promise<PaginatedResult<CatalogImageRecord>> {
-			const where = {
-				skuId,
-				deletedAt: null,
-				...(input.type ? { type: input.type } : {})
-			};
-			const images = await database.productImage.findMany({
-				where,
-				orderBy: resolveImageOrderBy(input.sort, input.order),
-				skip: (input.page - 1) * input.limit,
-				take: input.limit
-			});
-			const total = await database.productImage.count({ where });
-
-			return {
-				data: images.map(mapImageRecord),
-				total
-			};
-		},
-
-		async findImageById(skuId: string, imageId: string): Promise<CatalogImageRecord | null> {
-			const image = await database.productImage.findFirst({
-				where: {
-					id: imageId,
-					skuId,
-					deletedAt: null
-				}
-			});
-
-			return image ? mapImageRecord(image) : null;
-		},
-
-		async createImage(
-			skuId: string,
-			input: {
-				imageUrl: string;
-				assetKey?: string;
-				altText: string;
-				type: 'thumbnail' | 'gallery';
-				position: number;
-			}
-		): Promise<CatalogImageRecord> {
-			const image = await database.productImage.create({
-				data: {
-					skuId,
-					imageUrl: input.imageUrl,
-					assetKey: input.assetKey ?? null,
-					altText: input.altText,
-					type: input.type,
-					position: input.position
-				}
-			});
-
-			return mapImageRecord(image);
-		},
-
-		async softDeleteImage(imageId: string): Promise<void> {
-			await database.productImage.update({
-				where: {
-					id: imageId
-				},
-				data: {
-					deletedAt: new Date()
-				}
-			});
-		},
-
-		async forceDeleteImage(imageId: string): Promise<void> {
-			await database.productImage.delete({
-				where: {
-					id: imageId
-				}
-			});
 		}
 	};
 }

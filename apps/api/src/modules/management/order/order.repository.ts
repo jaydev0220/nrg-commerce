@@ -1,5 +1,6 @@
 import type { DatabaseClient, OrderStatus, Prisma } from '@packages/database';
 
+import { AppError } from '../../../errors/app-error.js';
 import type { PaginatedResult } from '../../../types/catalog.js';
 import type {
 	ManagedBusinessRecord,
@@ -7,6 +8,7 @@ import type {
 	ManagedOrderRecord,
 	ManagedOrderSkuLookupRecord
 } from '../../../types/management.js';
+import { aggregateSkuQuantities, resolveInventoryAdjustment } from './order.inventory.js';
 
 type OrderSortField = 'createdAt' | 'totalAmount';
 
@@ -233,6 +235,44 @@ function resolveOrderBy(sort: OrderSortField, order: 'asc' | 'desc') {
 }
 
 export function createPrismaOrderRepository(database: DatabaseClient) {
+	const adjustInventory = async (
+		transaction: Prisma.TransactionClient,
+		items: Array<{ productSkuId?: string | null; quantity: number }>,
+		direction: 'deduct' | 'restore'
+	) => {
+		for (const [productSkuId, quantity] of aggregateSkuQuantities(items)) {
+			if (direction === 'deduct') {
+				const result = await transaction.productSku.updateMany({
+					where: { id: productSkuId, deletedAt: null, stockQuantity: { gte: quantity } },
+					data: { stockQuantity: { decrement: quantity } }
+				});
+				if (result.count !== 1) {
+					throw new AppError(409, 'INSUFFICIENT_STOCK', 'Insufficient stock for this order.');
+				}
+			} else {
+				await transaction.productSku.updateMany({
+					where: { id: productSkuId },
+					data: { stockQuantity: { increment: quantity } }
+				});
+			}
+
+			await transaction.product.updateMany({
+				where: { skus: { some: { id: productSkuId } } },
+				data: { updatedAt: new Date() }
+			});
+		}
+	};
+
+	const adjustInventoryForStatusTransition = async (
+		transaction: Prisma.TransactionClient,
+		currentStatus: OrderStatus,
+		nextStatus: OrderStatus,
+		items: Array<{ productSkuId: string | null; quantity: number }>
+	) => {
+		const direction = resolveInventoryAdjustment(currentStatus, nextStatus);
+		if (direction) await adjustInventory(transaction, items, direction);
+	};
+
 	return {
 		async listOrders(input: ListOrdersInput): Promise<PaginatedResult<ManagedOrderRecord>> {
 			const where = {
@@ -390,41 +430,44 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 		},
 
 		async createOrder(input: CreateOrderInput): Promise<ManagedOrderRecord> {
-			const order = await database.order.create({
-				data: {
-					idempotencyKey: input.idempotencyKey,
-					idempotencyFingerprint: input.idempotencyFingerprint,
-					businessId: input.businessId ?? null,
-					customerName: input.customerName ?? null,
-					customerEmail: input.customerEmail ?? null,
-					customerPhone: input.customerPhone ?? null,
-					customerAddress: input.customerAddress ?? null,
-					itemCount: input.itemCount,
-					subtotalAmount: input.subtotalAmount,
-					discountLabelId: input.discountLabelId,
-					discountLabelName: input.discountLabelName,
-					suggestedDiscountRate: input.suggestedDiscountRate,
-					discountRate: input.discountRate,
-					discountAmount: input.discountAmount,
-					totalAmount: input.totalAmount,
-					items: {
-						create: input.items.map((item) => ({
-							productSkuId: item.productSkuId ?? null,
-							skuCode: item.skuCode,
-							productName: item.productName,
-							unitPrice: item.unitPrice,
-							quantity: item.quantity,
-							lineTotal: item.lineTotal,
-							attributes: item.attributes
-						}))
+			const order = await database.$transaction(async (transaction) => {
+				await adjustInventory(transaction, input.items, 'deduct');
+				return transaction.order.create({
+					data: {
+						idempotencyKey: input.idempotencyKey,
+						idempotencyFingerprint: input.idempotencyFingerprint,
+						businessId: input.businessId ?? null,
+						customerName: input.customerName ?? null,
+						customerEmail: input.customerEmail ?? null,
+						customerPhone: input.customerPhone ?? null,
+						customerAddress: input.customerAddress ?? null,
+						itemCount: input.itemCount,
+						subtotalAmount: input.subtotalAmount,
+						discountLabelId: input.discountLabelId,
+						discountLabelName: input.discountLabelName,
+						suggestedDiscountRate: input.suggestedDiscountRate,
+						discountRate: input.discountRate,
+						discountAmount: input.discountAmount,
+						totalAmount: input.totalAmount,
+						items: {
+							create: input.items.map((item) => ({
+								productSkuId: item.productSkuId ?? null,
+								skuCode: item.skuCode,
+								productName: item.productName,
+								unitPrice: item.unitPrice,
+								quantity: item.quantity,
+								lineTotal: item.lineTotal,
+								attributes: item.attributes
+							}))
+						}
+					},
+					include: {
+						business: { include: { label: true } },
+						items: {
+							orderBy: [{ createdAt: 'asc' }]
+						}
 					}
-				},
-				include: {
-					business: { include: { label: true } },
-					items: {
-						orderBy: [{ createdAt: 'asc' }]
-					}
-				}
+				});
 			});
 
 			return mapOrder(order);
@@ -435,15 +478,27 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 			status: OrderStatus,
 			completedAt: Date | null
 		): Promise<ManagedOrderRecord> {
-			const order = await database.order.update({
-				where: { id: orderId },
-				data: { status, completedAt },
-				include: {
-					business: { include: { label: true } },
-					items: {
-						orderBy: [{ createdAt: 'asc' }]
+			const order = await database.$transaction(async (transaction) => {
+				const current = await transaction.order.findUniqueOrThrow({
+					where: { id: orderId },
+					select: { status: true, items: { select: { productSkuId: true, quantity: true } } }
+				});
+				await adjustInventoryForStatusTransition(
+					transaction,
+					current.status,
+					status,
+					current.items
+				);
+				return transaction.order.update({
+					where: { id: orderId },
+					data: { status, completedAt },
+					include: {
+						business: { include: { label: true } },
+						items: {
+							orderBy: [{ createdAt: 'asc' }]
+						}
 					}
-				}
+				});
 			});
 
 			return mapOrder(order);
@@ -461,13 +516,27 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 				customerAddress?: string | null;
 			}
 		): Promise<ManagedOrderRecord> {
-			const order = await database.order.update({
-				where: { id: orderId },
-				data: input,
-				include: {
-					business: { include: { label: true } },
-					items: { orderBy: [{ createdAt: 'asc' }] }
+			const order = await database.$transaction(async (transaction) => {
+				if (input.status !== undefined) {
+					const current = await transaction.order.findUniqueOrThrow({
+						where: { id: orderId },
+						select: { status: true, items: { select: { productSkuId: true, quantity: true } } }
+					});
+					await adjustInventoryForStatusTransition(
+						transaction,
+						current.status,
+						input.status,
+						current.items
+					);
 				}
+				return transaction.order.update({
+					where: { id: orderId },
+					data: input,
+					include: {
+						business: { include: { label: true } },
+						items: { orderBy: [{ createdAt: 'asc' }] }
+					}
+				});
 			});
 			return mapOrder(order);
 		}
