@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -10,16 +10,25 @@ async function createBuild(options = {}) {
 	const root = await mkdtemp(join(tmpdir(), 'landing-build-'));
 	const assets = join(root, '_app', 'immutable');
 	await mkdir(assets, { recursive: true });
+	await mkdir(join(root, 'en'), { recursive: true });
 	const scriptNames = options.scriptNames ?? ['app.js'];
 	for (const scriptName of scriptNames) {
 		await writeFile(join(assets, scriptName), options.scriptContent ?? 'export {};');
 	}
 
-	const modulePreloads = scriptNames
-		.map((name) => `<link rel="modulepreload" href="./_app/immutable/${name}">`)
-		.join('');
-	const html = `${modulePreloads}<main id="main-content"><h1>Rendered page</h1></main><script>start()</script>`;
-	for (const page of ['index.html', 'about.html', 'contact.html']) {
+	for (const page of [
+		'index.html',
+		'about.html',
+		'contact.html',
+		'en.html',
+		'en/about.html',
+		'en/contact.html'
+	]) {
+		const assetPrefix = page.includes('/') ? '../' : './';
+		const modulePreloads = scriptNames
+			.map((name) => `<link rel="modulepreload" href="${assetPrefix}_app/immutable/${name}">`)
+			.join('');
+		const html = `${modulePreloads}<main id="main-content"><h1>Rendered page</h1></main><script>start()</script>`;
 		await writeFile(join(root, page), options.html ?? html);
 	}
 	return root;
@@ -29,8 +38,15 @@ test('accepts rendered static pages within the JavaScript budgets', async () => 
 	const root = await createBuild();
 	const result = await verifyLandingBuild(root);
 
-	assert.equal(result.pageCount, 3);
+	assert.equal(result.pageCount, 6);
 	assert.equal(result.javascriptFileCount, 1);
+});
+
+test('rejects a build without every localized route', async () => {
+	const root = await createBuild();
+	await rm(join(root, 'en', 'contact.html'));
+
+	await assert.rejects(() => verifyLandingBuild(root), /en\/contact\.html/);
 });
 
 test('accepts visible heading text wrapped in Svelte markers and nested markup', async () => {

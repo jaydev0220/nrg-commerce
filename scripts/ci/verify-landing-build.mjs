@@ -2,7 +2,14 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const expectedPages = ['index.html', 'about.html', 'contact.html'];
+const expectedPages = [
+	'index.html',
+	'about.html',
+	'contact.html',
+	'en.html',
+	'en/about.html',
+	'en/contact.html'
+];
 const limits = {
 	javascriptFiles: 17,
 	totalJavascriptBytes: 180 * 1024,
