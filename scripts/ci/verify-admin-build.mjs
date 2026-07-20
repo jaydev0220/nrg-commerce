@@ -14,8 +14,21 @@ const expectedFiles = [
 	'products/categories.html',
 	'settings.html',
 	'staff.html',
+	'_headers',
+	'robots.txt',
 	'_worker.js'
 ];
+
+const robotDirectives = ['noindex', 'nofollow', 'noarchive', 'nosnippet', 'noimageindex'];
+
+function assertRobotDirectives(content, source) {
+	const normalizedContent = content.toLowerCase();
+	for (const directive of robotDirectives) {
+		if (!normalizedContent.includes(directive)) {
+			throw new Error(`Admin ${source} does not include the ${directive} robot directive.`);
+		}
+	}
+}
 
 async function listFiles(directory) {
 	const entries = await readdir(directory, { withFileTypes: true });
@@ -34,6 +47,21 @@ export async function verifyAdminBuild(buildDirectory, expectedApiBaseUrl) {
 	const indexHtml = await readFile(join(buildDirectory, 'index.html'), 'utf8');
 	if (!indexHtml.includes('/_app/immutable/entry/start.')) {
 		throw new Error('Admin SPA fallback does not load the SvelteKit client entry.');
+	}
+	if (!/<meta\s[^>]*name=["']robots["'][^>]*>/i.test(indexHtml)) {
+		throw new Error('Admin SPA fallback does not include robot metadata.');
+	}
+	assertRobotDirectives(indexHtml, 'SPA fallback');
+
+	const headers = await readFile(join(buildDirectory, '_headers'), 'utf8');
+	if (!/^\s*X-Robots-Tag:/im.test(headers)) {
+		throw new Error('Admin Cloudflare headers do not include X-Robots-Tag.');
+	}
+	assertRobotDirectives(headers, 'Cloudflare headers');
+
+	const robots = await readFile(join(buildDirectory, 'robots.txt'), 'utf8');
+	if (!/^\s*User-agent:\s*\*\s*$[\s\S]*^\s*Disallow:\s*\/\s*$/im.test(robots)) {
+		throw new Error('Admin robots.txt does not disallow all crawlers.');
 	}
 
 	const files = await listFiles(buildDirectory);

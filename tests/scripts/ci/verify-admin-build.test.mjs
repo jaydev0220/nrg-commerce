@@ -18,18 +18,26 @@ const expectedFiles = [
 	'products/categories.html',
 	'settings.html',
 	'staff.html',
+	'_headers',
+	'robots.txt',
 	'_worker.js'
 ];
+
+const robotDirectives = 'noindex, nofollow, noarchive, nosnippet, noimageindex';
 
 async function createBuild() {
 	const directory = await mkdtemp(join(tmpdir(), 'admin-build-'));
 	for (const path of expectedFiles) {
 		const outputPath = join(directory, path);
 		await mkdir(dirname(outputPath), { recursive: true });
-		const content =
-			path === 'index.html'
-				? '<script type="module" src="/_app/immutable/entry/start.example.js"></script>'
-				: '';
+		let content = '';
+		if (path === 'index.html') {
+			content = `<meta name="robots" content="${robotDirectives}"><script type="module" src="/_app/immutable/entry/start.example.js"></script>`;
+		} else if (path === '_headers') {
+			content = `/*\n  X-Robots-Tag: ${robotDirectives}\n`;
+		} else if (path === 'robots.txt') {
+			content = 'User-agent: *\nDisallow: /\n';
+		}
 		await writeFile(outputPath, content);
 	}
 	await mkdir(join(directory, '_app/immutable/chunks'), { recursive: true });
@@ -61,5 +69,25 @@ test('rejects a build with the wrong API base URL', async () => {
 	await assert.rejects(
 		verifyAdminBuild(directory, 'https://other-api.example.test'),
 		/expected API base URL/
+	);
+});
+
+test('rejects a build that allows robot indexing', async () => {
+	const directory = await createBuild();
+	await writeFile(join(directory, '_headers'), '/*\n  X-Robots-Tag: noindex\n');
+
+	await assert.rejects(
+		verifyAdminBuild(directory, 'https://api.example.test'),
+		/Cloudflare headers does not include the nofollow robot directive/
+	);
+});
+
+test('rejects a build that allows crawler traffic', async () => {
+	const directory = await createBuild();
+	await writeFile(join(directory, 'robots.txt'), 'User-agent: *\nDisallow:\n');
+
+	await assert.rejects(
+		verifyAdminBuild(directory, 'https://api.example.test'),
+		/robots.txt does not disallow all crawlers/
 	);
 });
