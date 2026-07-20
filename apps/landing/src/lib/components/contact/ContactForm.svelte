@@ -2,8 +2,11 @@
 	import { browser } from '$app/environment';
 	import * as m from '$lib/paraglide/messages';
 	import { page } from '$app/state';
+	import * as publicEnv from '$env/static/public';
 	import { TurnstileWidget } from '@packages/components';
 	import { submitContactRequest, type ContactRequestPayload } from '$lib/contact-request.js';
+
+	const publicEnvironment = publicEnv as Record<string, string | undefined>;
 
 	type Props = {
 		workerUrl?: string;
@@ -12,8 +15,8 @@
 	};
 
 	let {
-		workerUrl = import.meta.env['PUBLIC_CONTACT_WORKER_URL']?.trim() ?? '',
-		turnstileSiteKey = import.meta.env['PUBLIC_TURNSTILE_SITE_KEY']?.trim() ?? '',
+		workerUrl = publicEnvironment['PUBLIC_CONTACT_WORKER_URL']?.trim() ?? '',
+		turnstileSiteKey = publicEnvironment['PUBLIC_TURNSTILE_SITE_KEY']?.trim() ?? '',
 		submitRequest = submitContactRequest
 	}: Props = $props();
 

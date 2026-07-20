@@ -1,7 +1,10 @@
 <script lang="ts">
+	import * as publicEnv from '$env/static/public';
 	import * as m from '$lib/paraglide/messages';
 	import { TurnstileWidget } from '@packages/components';
 	import { submitInquiryRequest, type InquiryRequestPayload } from '$lib/inquiry-request.js';
+
+	const publicEnvironment = publicEnv as Record<string, string | undefined>;
 
 	type Props = {
 		initialSkuCode: string;
@@ -12,8 +15,8 @@
 
 	let {
 		initialSkuCode,
-		workerUrl = import.meta.env['PUBLIC_CONTACT_WORKER_URL']?.trim() ?? '',
-		turnstileSiteKey = import.meta.env['PUBLIC_TURNSTILE_SITE_KEY']?.trim() ?? '',
+		workerUrl = publicEnvironment['PUBLIC_CONTACT_WORKER_URL']?.trim() ?? '',
+		turnstileSiteKey = publicEnvironment['PUBLIC_TURNSTILE_SITE_KEY']?.trim() ?? '',
 		submitRequest = submitInquiryRequest
 	}: Props = $props();
 
