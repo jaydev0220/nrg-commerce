@@ -319,4 +319,6 @@ Run when behavior changes:
 
 ```bash
 pnpm test
+pnpm test:coverage
+pnpm test:e2e
 ```
