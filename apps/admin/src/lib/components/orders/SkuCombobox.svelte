@@ -80,7 +80,7 @@
 
 <div class="relative min-w-0">
 	<div class="relative">
-		<Search class="pointer-events-none absolute left-3 top-3 size-4 text-text-muted" />
+		<Search class="pointer-events-none absolute top-3 left-3 size-4 text-text-muted" />
 		<input
 			value={query}
 			role="combobox"
@@ -91,7 +91,7 @@
 			autocomplete="off"
 			{disabled}
 			placeholder="搜尋商品名稱或 SKU"
-			class="h-10 w-full rounded-md border border-border bg-bg-surface pl-9 pr-3 text-sm"
+			class="h-10 w-full rounded-md border border-border bg-bg-surface pr-3 pl-9 text-sm"
 			onfocus={openPicker}
 			oninput={(event) => {
 				query = (event.currentTarget as HTMLInputElement).value;

@@ -35,7 +35,7 @@
 
 <button
 	type="button"
-	class="inline-grid size-10 place-items-center rounded-md border border-border bg-bg-surface text-text-muted transition hover:border-border-strong hover:bg-bg-sunken hover:text-text-body focus:outline-none focus:ring-2 focus:ring-brand-muted"
+	class="inline-grid size-10 place-items-center rounded-md border border-border bg-bg-surface text-text-muted transition hover:border-border-strong hover:bg-bg-sunken hover:text-text-body focus:ring-2 focus:ring-brand-muted focus:outline-none"
 	aria-label="切換主題"
 	onclick={toggleTheme}
 >

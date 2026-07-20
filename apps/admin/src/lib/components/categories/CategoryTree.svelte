@@ -76,7 +76,7 @@
 
 <div class="overflow-hidden rounded-lg border border-border bg-bg-surface">
 	<div
-		class="grid grid-cols-[minmax(0,1fr)_minmax(8rem,0.55fr)_auto] gap-3 border-b border-border bg-bg-sunken px-4 py-3 text-xs font-semibold uppercase tracking-caps text-text-muted"
+		class="grid grid-cols-[minmax(0,1fr)_minmax(8rem,0.55fr)_auto] gap-3 border-b border-border bg-bg-sunken px-4 py-3 text-xs font-semibold tracking-caps text-text-muted uppercase"
 		role="row"
 	>
 		<span>分類</span>

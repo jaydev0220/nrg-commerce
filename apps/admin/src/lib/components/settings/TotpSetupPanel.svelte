@@ -58,7 +58,7 @@
 			無法掃描？顯示手動設定密鑰
 		</summary>
 		<code
-			class="mt-2 block break-all rounded-md border border-border bg-bg-surface p-3 text-xs text-text-body"
+			class="mt-2 block rounded-md border border-border bg-bg-surface p-3 text-xs break-all text-text-body"
 		>
 			{setup.secret}
 		</code>

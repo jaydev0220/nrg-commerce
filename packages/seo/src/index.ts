@@ -2,11 +2,7 @@ import type { SchemaOrgProps, SeoConfig as SveadSeoConfig } from 'svead';
 
 export type SupportedLocale = 'en' | 'zh-tw';
 export type SeoPageType =
-	| 'WebPage'
-	| 'AboutPage'
-	| 'ContactPage'
-	| 'CollectionPage'
-	| (string & {});
+	'WebPage' | 'AboutPage' | 'ContactPage' | 'CollectionPage' | (string & {});
 
 export type ResolveLocalizedUrl = (pathname: string, locale: SupportedLocale) => URL | string;
 

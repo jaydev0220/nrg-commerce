@@ -28,11 +28,11 @@
 </script>
 
 <article
-	class="group overflow-hidden rounded-lg border border-border bg-bg-surface shadow-xs transition-[transform,border-color,box-shadow] duration-base ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:shadow-sm"
+	class="group duration-base overflow-hidden rounded-lg border border-border bg-bg-surface shadow-xs transition-[transform,border-color,box-shadow] ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:shadow-sm"
 >
 	<a
 		href={resolve(href as Pathname)}
-		class="relative block aspect-square overflow-hidden bg-bg-sunken text-text-accent focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand"
+		class="relative block aspect-square overflow-hidden bg-bg-sunken text-text-accent focus:ring-2 focus:ring-brand focus:outline-none focus:ring-inset"
 	>
 		{#if view.representativeImage}
 			<img
@@ -55,7 +55,7 @@
 			</span>
 		{/if}
 		<span
-			class="absolute bottom-3 right-3 translate-y-2 rounded-md border border-border bg-bg-surface/90 px-2.5 py-1.5 text-[11px] font-semibold text-text-heading opacity-0 shadow-xs backdrop-blur transition-all duration-base group-hover:translate-y-0 group-hover:opacity-100"
+			class="duration-base absolute right-3 bottom-3 translate-y-2 rounded-md border border-border bg-bg-surface/90 px-2.5 py-1.5 text-[11px] font-semibold text-text-heading opacity-0 shadow-xs backdrop-blur transition-all group-hover:translate-y-0 group-hover:opacity-100"
 		>
 			{m.catalog_view_product()}
 		</span>
@@ -68,7 +68,7 @@
 				<span></span>
 			{/if}
 			<span
-				class="whitespace-nowrap rounded-sm bg-brand-subtle px-2 py-1 font-mono text-[10px] text-text-accent"
+				class="rounded-sm bg-brand-subtle px-2 py-1 font-mono text-[10px] whitespace-nowrap text-text-accent"
 			>
 				{view.skuCount}
 				{view.skuCount === 1 ? m.catalog_configuration() : m.catalog_configurations()}
@@ -77,7 +77,7 @@
 		<h2 class="text-xl leading-snug tracking-normal">
 			<a
 				href={resolve(href as Pathname)}
-				class="transition-colors duration-base ease-ui hover:text-text-accent"
+				class="duration-base transition-colors ease-ui hover:text-text-accent"
 			>
 				{view.name}
 			</a>
@@ -88,7 +88,7 @@
 		<div class="flex justify-end pt-3">
 			<a
 				href={resolve(href as Pathname)}
-				class="inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-xs font-semibold text-text-heading transition-[color,background-color,border-color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle hover:text-text-accent"
+				class="duration-base inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-xs font-semibold text-text-heading transition-[color,background-color,border-color,transform] ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle hover:text-text-accent"
 			>
 				{m.catalog_view_product()}
 				<ArrowRight class="size-3.5" />

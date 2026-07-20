@@ -38,12 +38,12 @@
 
 <section aria-label={galleryLabel}>
 	<div
-		class="group relative aspect-4/3 overflow-hidden rounded-lg border border-border bg-bg-sunken text-text-accent shadow-xs transition-[border-color,box-shadow,transform] duration-base ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:shadow-sm"
+		class="group duration-base relative aspect-4/3 overflow-hidden rounded-lg border border-border bg-bg-sunken text-text-accent shadow-xs transition-[border-color,box-shadow,transform] ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:shadow-sm"
 	>
 		{#if images[currentIndex]}
 			<button
 				type="button"
-				class="relative block h-full w-full cursor-zoom-in text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset"
+				class="relative block h-full w-full cursor-zoom-in text-left focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none focus-visible:ring-inset"
 				aria-label={openLabel}
 				onclick={openLightbox}
 			>
@@ -53,7 +53,7 @@
 					class="h-full w-full object-contain"
 				/>
 				<span
-					class="pointer-events-none absolute right-3 top-3 inline-grid size-9 place-items-center rounded-md border border-border bg-bg-surface/90 text-text-heading shadow-sm"
+					class="pointer-events-none absolute top-3 right-3 inline-grid size-9 place-items-center rounded-md border border-border bg-bg-surface/90 text-text-heading shadow-sm"
 					aria-hidden="true"
 				>
 					<Maximize2 class="size-4" />
@@ -81,7 +81,7 @@
 			{#each images as image, index (image.id)}
 				<button
 					type="button"
-					class={`relative aspect-4/3 overflow-hidden rounded-md border bg-bg-sunken transition-[border-color,transform,opacity] duration-base ease-ui hover:-translate-y-0.5 ${currentIndex === index ? 'border-2 border-brand' : 'border-border opacity-65 hover:border-border-accent hover:opacity-100'}`}
+					class={`duration-base relative aspect-4/3 overflow-hidden rounded-md border bg-bg-sunken transition-[border-color,transform,opacity] ease-ui hover:-translate-y-0.5 ${currentIndex === index ? 'border-2 border-brand' : 'border-border opacity-65 hover:border-border-accent hover:opacity-100'}`}
 					aria-label={image.altText}
 					aria-current={currentIndex === index ? 'true' : undefined}
 					onclick={() => onSelectImage(index)}

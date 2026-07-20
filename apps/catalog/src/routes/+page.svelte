@@ -281,7 +281,7 @@
 	></button>
 	<aside
 		bind:this={drawerElement}
-		class={`fixed inset-y-0 left-0 z-50 flex w-[min(88vw,360px)] flex-col bg-bg-surface shadow-lg transition-transform duration-slow ease-out lg:hidden ${mobileFiltersOpen ? 'translate-x-0' : '-translate-x-full'}`}
+		class={`duration-slow fixed inset-y-0 left-0 z-50 flex w-[min(88vw,360px)] flex-col bg-bg-surface shadow-lg transition-transform ease-out lg:hidden ${mobileFiltersOpen ? 'translate-x-0' : '-translate-x-full'}`}
 		aria-hidden={!mobileFiltersOpen}
 		tabindex="-1"
 		onkeydown={handleDrawerKeydown}

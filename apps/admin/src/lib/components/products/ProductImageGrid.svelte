@@ -86,7 +86,7 @@
 					/>
 					{#if image.placement === 'thumbnail'}
 						<span
-							class="absolute left-2 top-2 rounded-sm bg-bg-surface/90 px-2 py-1 text-[11px] font-semibold text-text-accent"
+							class="absolute top-2 left-2 rounded-sm bg-bg-surface/90 px-2 py-1 text-[11px] font-semibold text-text-accent"
 						>
 							縮圖
 						</span>

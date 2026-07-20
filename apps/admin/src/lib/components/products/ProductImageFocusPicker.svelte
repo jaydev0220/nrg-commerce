@@ -164,7 +164,7 @@
 <div class="space-y-3">
 	<div
 		bind:this={previewElement}
-		class={`relative aspect-square touch-none select-none overflow-hidden rounded-md border border-border bg-bg-sunken ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+		class={`relative aspect-square touch-none overflow-hidden rounded-md border border-border bg-bg-sunken select-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
 		role="group"
 		aria-label="縮圖裁切預覽"
 		onpointerdown={handlePointerDown}
@@ -182,7 +182,7 @@
 			style={`object-position: ${focusX * 100}% ${focusY * 100}%; transform: scale(${zoom}); transform-origin: ${focusX * 100}% ${focusY * 100}%;`}
 		/>
 		<span
-			class="pointer-events-none absolute left-1/2 top-1/2 size-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-brand/75 shadow-lg ring-2 ring-brand"
+			class="pointer-events-none absolute top-1/2 left-1/2 size-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-brand/75 shadow-lg ring-2 ring-brand"
 			aria-hidden="true"
 		>
 			<Crosshair class="size-full p-1 text-white" />

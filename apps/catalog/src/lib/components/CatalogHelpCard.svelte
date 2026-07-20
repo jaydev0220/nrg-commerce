@@ -17,7 +17,7 @@
 	<p class="mt-1 text-xs leading-relaxed text-text-muted">{m.catalog_help_body()}</p>
 	<a
 		href={resolve(inquiryHref)}
-		class="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-text-accent transition-transform duration-base ease-ui hover:-translate-y-0.5"
+		class="duration-base mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-text-accent transition-transform ease-ui hover:-translate-y-0.5"
 	>
 		{m.catalog_inquiry_cta()}
 	</a>

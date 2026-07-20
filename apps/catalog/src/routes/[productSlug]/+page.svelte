@@ -74,7 +74,7 @@
 	<section class="mx-auto max-w-360 px-4 py-8 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
 		<a
 			href={resolve(catalogHref)}
-			class="mb-7 inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-sm font-semibold text-text-heading shadow-xs transition-[color,background-color,border-color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle hover:text-text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+			class="duration-base mb-7 inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-sm font-semibold text-text-heading shadow-xs transition-[color,background-color,border-color,transform] ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle hover:text-text-accent focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none"
 		>
 			<ArrowLeft class="size-4" />
 			<span>{m.catalog_back()}</span>

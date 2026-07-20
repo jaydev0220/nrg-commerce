@@ -247,7 +247,7 @@
 <div class="flex min-h-screen flex-col">
 	<a
 		href={`#${skipTarget}`}
-		class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-100 focus:rounded-md focus:bg-brand focus:px-4 focus:py-2 focus:text-text-on-accent"
+		class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-100 focus:rounded-md focus:bg-brand focus:px-4 focus:py-2 focus:text-text-on-accent"
 	>
 		{page.url.pathname.includes('/products/')
 			? m.catalog_skip_to_product()

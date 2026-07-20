@@ -17,7 +17,7 @@
 	<p class="mt-2 text-sm text-text-muted">{m.catalog_empty_body()}</p>
 	<button
 		type="button"
-		class="mt-6 inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-sm font-semibold text-text-heading transition-[color,background-color,border-color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle hover:text-text-accent"
+		class="duration-base mt-6 inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-sm font-semibold text-text-heading transition-[color,background-color,border-color,transform] ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle hover:text-text-accent"
 		onclick={onReset}
 	>
 		<RotateCcw class="size-4" />

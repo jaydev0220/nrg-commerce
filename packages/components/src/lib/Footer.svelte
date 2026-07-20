@@ -52,7 +52,7 @@
 						target="_blank"
 						rel="external noopener noreferrer"
 						class="
-							inline-flex h-8 w-24 items-center justify-center rounded bg-accent-600 px-3 py-1.5 gap-1
+							inline-flex h-8 w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
 							text-xs font-medium text-text-on-accent transition-colors duration-200 hover:-translate-y-0.5 hover:bg-accent-500
 							focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:outline-none
 						"
@@ -68,7 +68,7 @@
 						target="_blank"
 						rel="external noopener noreferrer"
 						class="
-							inline-flex h-8 w-24 items-center justify-center rounded bg-accent-600 px-3 py-1.5 gap-1
+							inline-flex h-8 w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
 							text-xs font-medium text-text-on-accent transition-colors duration-200 hover:-translate-y-0.5 hover:bg-accent-500
 							focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:outline-none
 						"
@@ -129,7 +129,7 @@
 					target="_blank"
 					rel="external noopener noreferrer"
 					class="
-						inline-flex h-8 w-24 items-center justify-center rounded bg-accent-600 px-3 py-1.5 gap-1
+						inline-flex h-8 w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
 						text-xs font-medium text-text-on-accent transition-colors duration-200 hover:-translate-y-0.5 hover:bg-accent-500
 						focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:outline-none
 					"
@@ -145,7 +145,7 @@
 					target="_blank"
 					rel="external noopener noreferrer"
 					class="
-						inline-flex h-8 w-24 items-center justify-center rounded bg-accent-600 px-3 py-1.5 gap-1
+						inline-flex h-8 w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
 						text-xs font-medium text-text-on-accent transition-colors duration-200 hover:-translate-y-0.5 hover:bg-accent-500
 						focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:outline-none
 					"

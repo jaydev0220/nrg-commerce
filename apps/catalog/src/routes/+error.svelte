@@ -23,7 +23,7 @@
 	</p>
 	<div class="mt-8 flex flex-wrap justify-center gap-3">
 		<a
-			class="rounded-md bg-brand px-5 py-3 text-sm font-semibold text-text-on-accent transition-colors hover:bg-brand-strong"
+			class="hover:bg-brand-strong rounded-md bg-brand px-5 py-3 text-sm font-semibold text-text-on-accent transition-colors"
 			href={resolve(`${page.url.pathname}${page.url.search}` as Pathname)}
 		>
 			{m.catalog_error_retry()}

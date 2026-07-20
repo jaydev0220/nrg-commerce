@@ -270,7 +270,7 @@
 			<button
 				type="button"
 				bind:this={viewportElement}
-				class="relative min-h-0 w-full cursor-grab touch-none select-none overflow-hidden border-0 bg-transparent p-0 text-left active:cursor-grabbing"
+				class="relative min-h-0 w-full cursor-grab touch-none overflow-hidden border-0 bg-transparent p-0 text-left select-none active:cursor-grabbing"
 				aria-label={galleryLabel}
 				onclick={handleViewportClick}
 				onwheel={handleWheel}

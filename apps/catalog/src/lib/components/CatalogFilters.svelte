@@ -22,7 +22,7 @@
 		<div class="mb-3 flex items-center justify-between">
 			<h2 class="text-sm font-semibold text-text-heading">{m.catalog_categories()}</h2>
 			<button
-				class="rounded px-1 py-0.5 text-xs font-medium text-text-accent transition-transform duration-base ease-ui hover:-translate-y-0.5 hover:underline"
+				class="duration-base rounded px-1 py-0.5 text-xs font-medium text-text-accent transition-transform ease-ui hover:-translate-y-0.5 hover:underline"
 				type="button"
 				onclick={onReset}
 			>
@@ -32,7 +32,7 @@
 		<div class="space-y-1">
 			<button
 				type="button"
-				class={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-[color,background-color,transform] duration-base ease-ui hover:-translate-y-0.5 ${selectedCategorySlug === null ? 'bg-brand-subtle text-text-accent' : 'text-text-muted hover:bg-bg-sunken hover:text-text-heading'}`}
+				class={`duration-base flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-[color,background-color,transform] ease-ui hover:-translate-y-0.5 ${selectedCategorySlug === null ? 'bg-brand-subtle text-text-accent' : 'text-text-muted hover:bg-bg-sunken hover:text-text-heading'}`}
 				onclick={() => onCategoryChange(null)}
 			>
 				<span class="min-w-0 flex-1 truncate">{m.catalog_all_categories()}</span>
@@ -40,7 +40,7 @@
 			{#each categoryList as entry (entry.category.id)}
 				<button
 					type="button"
-					class={`flex w-full items-center gap-2 rounded-md py-2 text-left text-sm transition-[color,background-color,transform] duration-base ease-ui hover:-translate-y-0.5 ${entry.depth > 0 ? 'pl-7 pr-2' : 'px-2 font-semibold'} ${selectedCategorySlug === entry.category.slug ? 'bg-brand-subtle text-text-accent' : 'text-text-muted hover:bg-bg-sunken hover:text-text-heading'}`}
+					class={`duration-base flex w-full items-center gap-2 rounded-md py-2 text-left text-sm transition-[color,background-color,transform] ease-ui hover:-translate-y-0.5 ${entry.depth > 0 ? 'pr-2 pl-7' : 'px-2 font-semibold'} ${selectedCategorySlug === entry.category.slug ? 'bg-brand-subtle text-text-accent' : 'text-text-muted hover:bg-bg-sunken hover:text-text-heading'}`}
 					onclick={() => onCategoryChange(entry.category.slug)}
 				>
 					{#if entry.depth > 0}

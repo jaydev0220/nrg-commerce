@@ -168,12 +168,12 @@
 			onchange={(event) => applyFilters('/staff', event.currentTarget as HTMLFormElement)}
 		>
 			<label class="relative min-w-0 flex-[1_1_16rem]">
-				<Search class="pointer-events-none absolute left-3 top-3 size-4 text-text-muted" />
+				<Search class="pointer-events-none absolute top-3 left-3 size-4 text-text-muted" />
 				<input
 					name="search"
 					value={page.url.searchParams.get('search') ?? ''}
 					aria-label="搜尋人員"
-					class="h-10 w-full rounded-md border border-border bg-bg-surface pl-9 pr-3 text-sm"
+					class="h-10 w-full rounded-md border border-border bg-bg-surface pr-3 pl-9 text-sm"
 				/>
 			</label>
 			<select
@@ -244,7 +244,7 @@
 		</form>
 
 		<div class="overflow-x-auto">
-			<table class="min-w-[900px] w-full text-left text-sm">
+			<table class="w-full min-w-[900px] text-left text-sm">
 				<thead class="border-b border-border bg-bg-sunken text-xs text-text-muted">
 					<tr>
 						<th class="px-4 py-3">人員</th>
@@ -466,7 +466,7 @@
 					×
 				</button>
 			</div>
-			<code class="mt-4 block break-all rounded-md bg-bg-sunken p-3 text-sm text-text-heading">
+			<code class="mt-4 block rounded-md bg-bg-sunken p-3 text-sm break-all text-text-heading">
 				{initialPassword}
 			</code>
 			<div class="mt-4 flex justify-end gap-2">

@@ -25,8 +25,7 @@ function encodeBase64Url(buffer: ArrayBuffer): string {
 
 function mapCredentialDescriptors(
 	descriptors:
-		| Array<{ id: string; type: PublicKeyCredentialType; transports?: string[] }>
-		| undefined
+		Array<{ id: string; type: PublicKeyCredentialType; transports?: string[] }> | undefined
 ) {
 	return descriptors?.map((descriptor) => ({
 		...descriptor,

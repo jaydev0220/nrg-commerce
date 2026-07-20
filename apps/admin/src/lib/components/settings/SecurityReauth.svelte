@@ -112,7 +112,7 @@
 		>
 			<header class="flex items-start justify-between gap-4">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-caps text-text-muted">安全驗證</p>
+					<p class="text-xs font-semibold tracking-caps text-text-muted uppercase">安全驗證</p>
 					<h2
 						id="security-reauth-title"
 						class="mt-1 text-lg font-semibold text-text-heading"

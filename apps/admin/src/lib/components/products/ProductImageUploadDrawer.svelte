@@ -200,7 +200,7 @@
 								<h3 class="text-sm font-semibold text-text-heading">設定縮圖焦點</h3>
 								<p class="mt-1 text-xs text-text-muted">商品目錄會以 1:1 比例顯示這張圖片。</p>
 							</div>
-							<span class="text-xs tabular-nums text-text-muted">
+							<span class="text-xs text-text-muted tabular-nums">
 								{Math.round(focusX * 100)}%, {Math.round(focusY * 100)}%
 							</span>
 						</div>

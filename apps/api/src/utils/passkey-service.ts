@@ -20,13 +20,7 @@ type PasskeyServiceConfig = {
 };
 
 type AuthenticatorTransport =
-	| 'ble'
-	| 'cable'
-	| 'hybrid'
-	| 'internal'
-	| 'nfc'
-	| 'smart-card'
-	| 'usb';
+	'ble' | 'cable' | 'hybrid' | 'internal' | 'nfc' | 'smart-card' | 'usb';
 
 const supportedTransports = new Set<AuthenticatorTransport>([
 	'ble',

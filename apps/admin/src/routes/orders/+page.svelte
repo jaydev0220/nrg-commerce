@@ -133,12 +133,12 @@
 		>
 			<label class="relative min-w-0 flex-[1_1_16rem]">
 				<span class="sr-only">搜尋訂單</span>
-				<Search class="pointer-events-none absolute left-3 top-3 size-4 text-text-muted" />
+				<Search class="pointer-events-none absolute top-3 left-3 size-4 text-text-muted" />
 				<input
 					name="search"
 					value={page.url.searchParams.get('search') ?? ''}
 					placeholder="搜尋訂單或客戶"
-					class="h-10 w-full rounded-md border border-border bg-bg-surface pl-9 pr-3 text-sm"
+					class="h-10 w-full rounded-md border border-border bg-bg-surface pr-3 pl-9 text-sm"
 				/>
 			</label>
 			<label class="min-w-32 flex-1">
@@ -191,7 +191,7 @@
 			</a>
 		</form>
 		<div class="overflow-x-auto">
-			<table class="min-w-[980px] w-full text-left text-sm">
+			<table class="w-full min-w-[980px] text-left text-sm">
 				<thead class="border-b border-border bg-bg-sunken text-xs text-text-muted">
 					<tr>
 						<th class="px-4 py-3">訂單</th>
@@ -216,7 +216,7 @@
 							<td class="px-4 py-4 font-semibold text-text-heading">
 								NT$ {order.totalAmount.toLocaleString('zh-TW')}
 							</td>
-							<td class="whitespace-nowrap px-4 py-4 text-text-muted">
+							<td class="px-4 py-4 whitespace-nowrap text-text-muted">
 								{formatDateTime(order.createdAt)}
 							</td>
 							<td class="px-4 py-4 text-right">

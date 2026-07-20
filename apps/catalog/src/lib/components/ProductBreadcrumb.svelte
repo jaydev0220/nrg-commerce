@@ -21,7 +21,7 @@
 		>
 			<a
 				href={resolve(catalogHref as Pathname)}
-				class="transition-[color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:text-text-accent"
+				class="duration-base transition-[color,transform] ease-ui hover:-translate-y-0.5 hover:text-text-accent"
 			>
 				{catalogLabel}
 			</a>

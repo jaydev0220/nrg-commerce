@@ -129,7 +129,7 @@
 	novalidate
 >
 	<div class="mb-6">
-		<p class="font-mono text-[10px] uppercase tracking-caps text-text-accent">
+		<p class="font-mono text-[10px] tracking-caps text-text-accent uppercase">
 			{m.inquiry_eyebrow()}
 		</p>
 		<h1 class="mt-2 text-3xl tracking-tight sm:text-4xl">{m.inquiry_form_heading()}</h1>
@@ -152,7 +152,7 @@
 				required
 				aria-invalid={Boolean(errors.name)}
 				aria-describedby={errors.name ? 'inquiry-name-error' : undefined}
-				class={`w-full rounded-md border bg-bg-sunken px-3 py-2.5 text-sm text-text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${errors.name ? 'border-red-500' : 'border-border'}`}
+				class={`w-full rounded-md border bg-bg-sunken px-3 py-2.5 text-sm text-text-body focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none ${errors.name ? 'border-red-500' : 'border-border'}`}
 			/>
 			{#if errors.name}
 				<p
@@ -177,7 +177,7 @@
 				type="text"
 				bind:value={form.company}
 				autocomplete="organization"
-				class="w-full rounded-md border border-border bg-bg-sunken px-3 py-2.5 text-sm text-text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+				class="w-full rounded-md border border-border bg-bg-sunken px-3 py-2.5 text-sm text-text-body focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none"
 			/>
 		</div>
 
@@ -199,7 +199,7 @@
 				required
 				aria-invalid={Boolean(errors.email)}
 				aria-describedby={errors.email ? 'inquiry-email-error' : undefined}
-				class={`w-full rounded-md border bg-bg-sunken px-3 py-2.5 text-sm text-text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${errors.email ? 'border-red-500' : 'border-border'}`}
+				class={`w-full rounded-md border bg-bg-sunken px-3 py-2.5 text-sm text-text-body focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none ${errors.email ? 'border-red-500' : 'border-border'}`}
 			/>
 			{#if errors.email}
 				<p
@@ -225,7 +225,7 @@
 				bind:value={form.phone}
 				autocomplete="tel"
 				inputmode="tel"
-				class="w-full rounded-md border border-border bg-bg-sunken px-3 py-2.5 text-sm text-text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+				class="w-full rounded-md border border-border bg-bg-sunken px-3 py-2.5 text-sm text-text-body focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none"
 			/>
 		</div>
 	</div>
@@ -244,7 +244,7 @@
 			bind:value={skuCode}
 			autocomplete="off"
 			placeholder={m.inquiry_sku_placeholder()}
-			class="w-full rounded-md border border-border bg-bg-sunken px-3 py-2.5 font-mono text-sm text-text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+			class="w-full rounded-md border border-border bg-bg-sunken px-3 py-2.5 font-mono text-sm text-text-body focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none"
 		/>
 	</div>
 
@@ -265,7 +265,7 @@
 			placeholder={m.inquiry_message_placeholder()}
 			aria-invalid={Boolean(errors.message)}
 			aria-describedby={errors.message ? 'inquiry-message-error' : undefined}
-			class={`w-full resize-y rounded-md border bg-bg-sunken px-3 py-2.5 text-sm leading-relaxed text-text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${errors.message ? 'border-red-500' : 'border-border'}`}></textarea>
+			class={`w-full resize-y rounded-md border bg-bg-sunken px-3 py-2.5 text-sm leading-relaxed text-text-body focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none ${errors.message ? 'border-red-500' : 'border-border'}`}></textarea>
 		{#if errors.message}
 			<p
 				id="inquiry-message-error"
@@ -301,7 +301,7 @@
 		<button
 			type="submit"
 			disabled={isSubmitting}
-			class="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-brand px-4 py-3 text-sm font-semibold text-text-on-accent transition-[background-color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-text-muted"
+			class="duration-base inline-flex min-h-11 w-full items-center justify-center rounded-md bg-brand px-4 py-3 text-sm font-semibold text-text-on-accent transition-[background-color,transform] ease-ui hover:-translate-y-0.5 hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-text-muted"
 		>
 			{isSubmitting ? m.inquiry_submitting() : m.inquiry_submit()}
 		</button>

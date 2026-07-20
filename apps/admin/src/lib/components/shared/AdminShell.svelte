@@ -191,7 +191,7 @@
 				<span class="block truncate text-xs text-text-muted lg:block">內部管理</span>
 			</div>
 			<span
-				class="rounded-full border border-border-accent bg-brand-subtle px-2 py-1 text-[0.68rem] font-semibold uppercase tracking-caps text-text-accent"
+				class="rounded-full border border-border-accent bg-brand-subtle px-2 py-1 text-[0.68rem] font-semibold tracking-caps text-text-accent uppercase"
 			>
 				管理端
 			</span>
@@ -252,7 +252,7 @@
 			class="sticky top-0 z-20 flex min-h-16 items-center justify-between gap-4 border-b border-border bg-bg-page/90 px-4 py-3 backdrop-blur md:px-5"
 		>
 			<div class="min-w-0">
-				<span class="block text-xs font-semibold uppercase tracking-caps text-text-muted">
+				<span class="block text-xs font-semibold tracking-caps text-text-muted uppercase">
 					內部系統
 				</span>
 				<h1 class="truncate text-xl font-bold tracking-normal text-text-heading">
@@ -272,7 +272,7 @@
 </div>
 
 <div
-	class="fixed inset-x-0 bottom-0 z-50 flex min-h-[calc(3.75rem+env(safe-area-inset-bottom))] items-center justify-between gap-3 rounded-t-xl border border-b-0 border-border bg-bg-surface px-3 pb-[calc(0.55rem+env(safe-area-inset-bottom))] pt-2 shadow-lg md:hidden"
+	class="fixed inset-x-0 bottom-0 z-50 flex min-h-[calc(3.75rem+env(safe-area-inset-bottom))] items-center justify-between gap-3 rounded-t-xl border border-b-0 border-border bg-bg-surface px-3 pt-2 pb-[calc(0.55rem+env(safe-area-inset-bottom))] shadow-lg md:hidden"
 	aria-label="行動版導覽列"
 >
 	<div
@@ -306,7 +306,7 @@
 	<div
 		id="mobile-drawer"
 		bind:this={drawerElement}
-		class="fixed inset-x-0 bottom-0 z-70 max-h-[min(82vh,42rem)] overflow-auto rounded-t-xl border border-b-0 border-border bg-bg-surface px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-lg md:hidden"
+		class="fixed inset-x-0 bottom-0 z-70 max-h-[min(82vh,42rem)] overflow-auto rounded-t-xl border border-b-0 border-border bg-bg-surface px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-lg md:hidden"
 		aria-label="行動版導覽抽屜"
 		role="dialog"
 		aria-modal="true"

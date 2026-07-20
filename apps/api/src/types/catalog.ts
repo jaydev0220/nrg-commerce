@@ -1,10 +1,5 @@
 export type CatalogJsonValue =
-	| string
-	| number
-	| boolean
-	| null
-	| CatalogJsonValue[]
-	| { [key: string]: CatalogJsonValue };
+	string | number | boolean | null | CatalogJsonValue[] | { [key: string]: CatalogJsonValue };
 
 export type CatalogImageRecord = {
 	id: string;

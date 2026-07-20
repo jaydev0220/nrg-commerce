@@ -46,8 +46,7 @@ test('listLogs injects the current time so expired rows are excluded by the repo
 
 test('recordAuditLog creates an expiring audit record with default info severity', async () => {
 	let createInput:
-		| Parameters<Parameters<typeof createLogService>[0]['repository']['createLog']>[0]
-		| undefined;
+		Parameters<Parameters<typeof createLogService>[0]['repository']['createLog']>[0] | undefined;
 	const logService = createLogService({
 		repository: {
 			listLogs: async () => ({ data: [], total: 0 }),
@@ -106,8 +105,7 @@ test('recordAuditLog creates an expiring audit record with default info severity
 
 test('recordRequestLog creates a sanitized expiring request record', async () => {
 	let createInput:
-		| Parameters<Parameters<typeof createLogService>[0]['repository']['createLog']>[0]
-		| undefined;
+		Parameters<Parameters<typeof createLogService>[0]['repository']['createLog']>[0] | undefined;
 	const logService = createLogService({
 		repository: {
 			listLogs: async () => ({ data: [], total: 0 }),

@@ -54,7 +54,7 @@
 			</div>
 			<div>
 				<p class="text-xs text-text-muted">請求</p>
-				<p class="mt-1 break-all text-sm text-text-heading">
+				<p class="mt-1 text-sm break-all text-text-heading">
 					{detail.method ?? ''}
 					{detail.path ?? ''}
 					{detail.statusCode ?? ''}
@@ -62,11 +62,11 @@
 			</div>
 			<div>
 				<p class="text-xs text-text-muted">請求識別碼</p>
-				<p class="mt-1 break-all text-sm text-text-heading">{detail.requestId ?? '無'}</p>
+				<p class="mt-1 text-sm break-all text-text-heading">{detail.requestId ?? '無'}</p>
 			</div>
 			<div>
 				<p class="text-xs text-text-muted">關聯資料</p>
-				<p class="mt-1 break-all text-sm text-text-heading">
+				<p class="mt-1 text-sm break-all text-text-heading">
 					{detail.entityType ?? ''}
 					{detail.entityId ?? ''}
 				</p>

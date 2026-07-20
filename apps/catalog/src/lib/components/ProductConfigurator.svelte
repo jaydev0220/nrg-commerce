@@ -44,7 +44,7 @@
 		aria-labelledby="spec-selector-title"
 	>
 		<div>
-			<p class="font-mono text-[10px] uppercase tracking-caps text-text-accent">
+			<p class="font-mono text-[10px] tracking-caps text-text-accent uppercase">
 				{m.catalog_configure_label()}
 			</p>
 			<h2
@@ -66,7 +66,7 @@
 								role="radio"
 								aria-checked={option.selected}
 								disabled={!option.available}
-								class={`min-h-10 rounded-md border px-3 py-2 text-left font-mono text-xs font-semibold transition-[color,background-color,border-color,transform,opacity] duration-base ease-ui ${option.selected ? 'border-brand bg-brand text-text-on-accent shadow-xs' : 'border-border-strong bg-bg-surface text-text-body hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle'} ${option.available ? '' : 'cursor-not-allowed opacity-35'}`}
+								class={`duration-base min-h-10 rounded-md border px-3 py-2 text-left font-mono text-xs font-semibold transition-[color,background-color,border-color,transform,opacity] ease-ui ${option.selected ? 'border-brand bg-brand text-text-on-accent shadow-xs' : 'border-border-strong bg-bg-surface text-text-body hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle'} ${option.available ? '' : 'cursor-not-allowed opacity-35'}`}
 								onclick={() => onSelectOption(group.key, option.value)}
 							>
 								{option.label}
@@ -81,7 +81,7 @@
 	<div class="mt-8 rounded-lg border border-border-accent bg-bg-accent p-5">
 		<div class="grid gap-5 sm:grid-cols-2">
 			<div>
-				<p class="text-[10px] uppercase tracking-caps text-text-muted">
+				<p class="text-[10px] tracking-caps text-text-muted uppercase">
 					{m.catalog_selected_sku()}
 				</p>
 				<p class="mt-1 font-mono text-sm font-semibold text-text-heading">
@@ -94,7 +94,7 @@
 				</p>
 			</div>
 			<div class="sm:text-right">
-				<p class="text-[10px] uppercase tracking-caps text-text-muted">{m.catalog_price()}</p>
+				<p class="text-[10px] tracking-caps text-text-muted uppercase">{m.catalog_price()}</p>
 				<p class="mt-1 font-mono text-3xl font-semibold text-text-heading">
 					{formatMoney(locale, model.activeSku.price)}
 				</p>
@@ -102,7 +102,7 @@
 		</div>
 		<a
 			href={resolve(inquiryHref as Pathname)}
-			class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand px-4 py-3 text-sm font-semibold text-text-on-accent transition-[color,background-color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+			class="duration-base mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand px-4 py-3 text-sm font-semibold text-text-on-accent transition-[color,background-color,transform] ease-ui hover:-translate-y-0.5 hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none"
 		>
 			<Send class="size-4" />
 			{m.catalog_inquiry_cta()}

@@ -56,12 +56,12 @@
 		>
 			<label class="relative min-w-0 flex-[1_1_16rem]">
 				<span class="sr-only">請求識別碼</span>
-				<Search class="pointer-events-none absolute left-3 top-3 size-4 text-text-muted" />
+				<Search class="pointer-events-none absolute top-3 left-3 size-4 text-text-muted" />
 				<input
 					name="requestId"
 					value={page.url.searchParams.get('requestId') ?? ''}
 					placeholder="搜尋請求識別碼"
-					class="h-10 w-full rounded-md border border-border bg-bg-surface pl-9 pr-3 text-sm"
+					class="h-10 w-full rounded-md border border-border bg-bg-surface pr-3 pl-9 text-sm"
 				/>
 			</label>
 			<label class="min-w-32 flex-1">
@@ -118,7 +118,7 @@
 			</a>
 		</form>
 		<div class="overflow-x-auto">
-			<table class="min-w-[900px] w-full text-left text-sm">
+			<table class="w-full min-w-[900px] text-left text-sm">
 				<thead class="border-b border-border bg-bg-sunken text-xs text-text-muted">
 					<tr>
 						<th class="px-4 py-3">時間</th>
@@ -131,7 +131,7 @@
 				<tbody class="divide-y divide-border">
 					{#each data.logs as log (log.id)}
 						<tr>
-							<td class="whitespace-nowrap px-4 py-4 text-text-muted">{log.time}</td>
+							<td class="px-4 py-4 whitespace-nowrap text-text-muted">{log.time}</td>
 							<td class="px-4 py-4">
 								<Badge tone={levelTone(log.level)}>{localizeAdminLabel(log.level)}</Badge>
 							</td>

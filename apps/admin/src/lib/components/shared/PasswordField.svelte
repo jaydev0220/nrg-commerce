@@ -37,7 +37,7 @@
 	/>
 	<button
 		type="button"
-		class="absolute right-1 top-1/2 inline-grid size-8 -translate-y-1/2 cursor-pointer place-items-center rounded-md text-text-muted hover:bg-bg-sunken hover:text-text-body"
+		class="absolute top-1/2 right-1 inline-grid size-8 -translate-y-1/2 cursor-pointer place-items-center rounded-md text-text-muted hover:bg-bg-sunken hover:text-text-body"
 		aria-label={visible ? '隱藏密碼' : '顯示密碼'}
 		aria-pressed={visible}
 		title={visible ? '隱藏密碼' : '顯示密碼'}

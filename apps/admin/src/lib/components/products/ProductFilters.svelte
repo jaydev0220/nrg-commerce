@@ -13,12 +13,12 @@
 	onchange={(event) => applyFilters('/products', event.currentTarget as HTMLFormElement)}
 >
 	<label class="relative min-w-0 flex-[1_1_16rem]">
-		<Search class="pointer-events-none absolute left-3 top-3 size-4 text-text-muted" />
+		<Search class="pointer-events-none absolute top-3 left-3 size-4 text-text-muted" />
 		<input
 			name="search"
 			value={page.url.searchParams.get('search') ?? ''}
 			aria-label="搜尋商品"
-			class="h-10 w-full rounded-md border border-border bg-bg-surface pl-9 pr-3 text-sm"
+			class="h-10 w-full rounded-md border border-border bg-bg-surface pr-3 pl-9 text-sm"
 		/>
 	</label>
 	<select

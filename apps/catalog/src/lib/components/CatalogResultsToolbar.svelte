@@ -38,7 +38,7 @@
 		<button
 			bind:this={drawerTriggerElement}
 			type="button"
-			class="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-bg-surface px-3 text-sm font-medium text-text-body shadow-xs transition-[color,background-color,border-color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-bg-accent lg:hidden"
+			class="duration-base inline-flex h-10 items-center gap-2 rounded-md border border-border bg-bg-surface px-3 text-sm font-medium text-text-body shadow-xs transition-[color,background-color,border-color,transform] ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-bg-accent lg:hidden"
 			onclick={onOpenFilters}
 		>
 			<SlidersHorizontal class="size-4" />
@@ -47,7 +47,7 @@
 		<label class="flex items-center gap-2">
 			<span class="hidden text-xs text-text-muted sm:inline">{m.catalog_sort_by()}</span>
 			<select
-				class="h-10 rounded-md border-border bg-bg-surface py-0 pl-3 pr-8 text-sm font-medium text-text-body shadow-xs transition-[color,background-color,border-color,transform] duration-base ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-bg-accent focus:border-border-accent focus:ring-2 focus:ring-brand"
+				class="duration-base h-10 rounded-md border-border bg-bg-surface py-0 pr-8 pl-3 text-sm font-medium text-text-body shadow-xs transition-[color,background-color,border-color,transform] ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-bg-accent focus:border-border-accent focus:ring-2 focus:ring-brand"
 				value={sort}
 				onchange={(event) =>
 					onSortChange((event.currentTarget as HTMLSelectElement).value as CatalogSort)}

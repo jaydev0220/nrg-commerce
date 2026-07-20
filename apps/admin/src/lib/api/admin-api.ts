@@ -68,11 +68,7 @@ export type ManagedPasskey = {
 };
 
 export type SecurityAction =
-	| 'add_totp'
-	| 'remove_totp'
-	| 'add_passkey'
-	| 'rename_passkey'
-	| 'remove_passkey';
+	'add_totp' | 'remove_totp' | 'add_passkey' | 'rename_passkey' | 'remove_passkey';
 
 export type SecurityReauthMethod = 'password' | 'authenticator' | 'passkey';
 

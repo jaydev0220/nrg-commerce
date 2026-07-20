@@ -239,13 +239,13 @@
 				onchange={(event) => applyFilters('/businesses', event.currentTarget as HTMLFormElement)}
 			>
 				<label class="relative min-w-0 flex-[1_1_16rem]">
-					<Search class="pointer-events-none absolute left-3 top-3 size-4 text-text-muted" />
+					<Search class="pointer-events-none absolute top-3 left-3 size-4 text-text-muted" />
 					<span class="sr-only">搜尋企業</span>
 					<input
 						name="search"
 						value={page.url.searchParams.get('search') ?? ''}
 						placeholder="搜尋企業名稱"
-						class="h-10 w-full rounded-md border border-border bg-bg-surface pl-9 pr-3 text-sm"
+						class="h-10 w-full rounded-md border border-border bg-bg-surface pr-3 pl-9 text-sm"
 					/>
 				</label>
 				<label class="min-w-36 flex-1">
@@ -329,7 +329,7 @@
 			{/if}
 
 			<div class="overflow-x-auto">
-				<table class="min-w-[760px] w-full text-left text-sm">
+				<table class="w-full min-w-[760px] text-left text-sm">
 					<thead class="border-b border-border bg-bg-sunken text-xs text-text-muted">
 						<tr>
 							<th class="w-12 px-4 py-3">
@@ -380,7 +380,7 @@
 											{business.label.name}
 										</span>{:else}未分類{/if}
 								</td>
-								<td class="whitespace-nowrap px-4 py-4 text-text-muted">
+								<td class="px-4 py-4 whitespace-nowrap text-text-muted">
 									{new Intl.DateTimeFormat('zh-TW', {
 										dateStyle: 'medium',
 										timeStyle: 'short',
