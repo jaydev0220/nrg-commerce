@@ -10,7 +10,6 @@ async function createBuild(options = {}) {
 	const root = await mkdtemp(join(tmpdir(), 'landing-build-'));
 	const assets = join(root, '_app', 'immutable');
 	await mkdir(assets, { recursive: true });
-	await mkdir(join(root, 'en'), { recursive: true });
 	const scriptNames = options.scriptNames ?? ['app.js'];
 	for (const scriptName of scriptNames) {
 		await writeFile(join(assets, scriptName), options.scriptContent ?? 'export {};');
@@ -18,13 +17,14 @@ async function createBuild(options = {}) {
 
 	for (const page of [
 		'index.html',
-		'about.html',
-		'contact.html',
-		'en.html',
-		'en/about.html',
-		'en/contact.html'
+		'about/index.html',
+		'contact/index.html',
+		'en/index.html',
+		'en/about/index.html',
+		'en/contact/index.html'
 	]) {
-		const assetPrefix = page.includes('/') ? '../' : './';
+		await mkdir(join(root, ...page.split('/').slice(0, -1)), { recursive: true });
+		const assetPrefix = '../'.repeat(page.split('/').length - 1) || './';
 		const modulePreloads = scriptNames
 			.map((name) => `<link rel="modulepreload" href="${assetPrefix}_app/immutable/${name}">`)
 			.join('');
@@ -44,9 +44,9 @@ test('accepts rendered static pages within the JavaScript budgets', async () => 
 
 test('rejects a build without every localized route', async () => {
 	const root = await createBuild();
-	await rm(join(root, 'en', 'contact.html'));
+	await rm(join(root, 'en', 'contact', 'index.html'));
 
-	await assert.rejects(() => verifyLandingBuild(root), /en\/contact\.html/);
+	await assert.rejects(() => verifyLandingBuild(root), /en\/contact\/index\.html/);
 });
 
 test('accepts visible heading text wrapped in Svelte markers and nested markup', async () => {

@@ -4,11 +4,11 @@ import { pathToFileURL } from 'node:url';
 
 const expectedPages = [
 	'index.html',
-	'about.html',
-	'contact.html',
-	'en.html',
-	'en/about.html',
-	'en/contact.html'
+	'about/index.html',
+	'contact/index.html',
+	'en/index.html',
+	'en/about/index.html',
+	'en/contact/index.html'
 ];
 const limits = {
 	javascriptFiles: 17,
