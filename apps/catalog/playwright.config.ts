@@ -9,7 +9,7 @@ export default defineConfig({
 		},
 		{
 			command:
-				'pnpm build && pnpm exec wrangler dev .svelte-kit/cloudflare/_worker.js --port 4175 --var PUBLIC_API_BASE_URL:http://127.0.0.1:4174',
+				'pnpm build && pnpm exec wrangler dev .svelte-kit/cloudflare/_worker.js --port 4175 --inspector-port 9231 --var PUBLIC_API_BASE_URL:http://127.0.0.1:4174',
 			port: 4175
 		}
 	],
