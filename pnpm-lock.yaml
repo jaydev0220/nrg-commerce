@@ -616,6 +616,9 @@ importers:
       '@lucide/svelte':
         specifier: catalog:svelte
         version: 1.20.0(svelte@5.56.3(@typescript-eslint/types@8.61.1))
+      '@packages/assets':
+        specifier: workspace:*
+        version: link:../../packages/assets
       '@packages/components':
         specifier: workspace:*
         version: link:../../packages/components
@@ -779,6 +782,9 @@ importers:
       '@lucide/svelte':
         specifier: catalog:svelte
         version: 1.20.0(svelte@5.56.3(@typescript-eslint/types@8.61.1))
+      '@packages/assets':
+        specifier: workspace:*
+        version: link:../../packages/assets
       '@packages/components':
         specifier: workspace:*
         version: link:../../packages/components
@@ -881,6 +887,45 @@ importers:
       vitest-browser-svelte:
         specifier: catalog:test
         version: 2.1.1(svelte@5.56.3(@typescript-eslint/types@8.61.1))(vitest@4.1.9)
+
+  packages/assets:
+    devDependencies:
+      '@eslint/js':
+        specifier: catalog:lint
+        version: 10.0.1(eslint@10.5.0(jiti@2.7.0))
+      '@packages/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@packages/prettier-config':
+        specifier: workspace:*
+        version: link:../prettier-config
+      '@packages/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.1
+      eslint:
+        specifier: catalog:lint
+        version: 10.5.0(jiti@2.7.0)
+      eslint-config-prettier:
+        specifier: catalog:lint
+        version: 10.1.8(eslint@10.5.0(jiti@2.7.0))
+      globals:
+        specifier: catalog:lint
+        version: 17.6.0
+      prettier:
+        specifier: catalog:lint
+        version: 3.8.4
+      tsx:
+        specifier: 'catalog:'
+        version: 4.22.4
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      typescript-eslint:
+        specifier: catalog:lint
+        version: 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
 
   packages/components:
     dependencies:

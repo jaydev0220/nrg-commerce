@@ -1,6 +1,6 @@
+import { assetUrl, LANDING_ASSETS } from '$lib/assets';
 import * as m from '$lib/paraglide/messages';
 import { createSeoPageData } from '@packages/seo';
-import { CDN_ASSETS, cdnUrl } from '$lib/utils/cdn';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = () =>
@@ -8,6 +8,6 @@ export const load: PageLoad = () =>
 		title: m.home_meta_title(),
 		description: m.home_meta_description(),
 		pageType: 'WebPage',
-		openGraphImage: cdnUrl(CDN_ASSETS.brandingOpenGraph),
+		openGraphImage: assetUrl(LANDING_ASSETS.brandingOpenGraph),
 		openGraphImageAlt: m.home_meta_title()
 	});

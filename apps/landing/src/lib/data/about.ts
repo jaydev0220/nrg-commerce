@@ -1,8 +1,8 @@
 import * as m from '$lib/paraglide/messages';
-import { CDN_ASSETS, cdnUrl } from '$lib/utils/cdn';
+import { assetUrl, LANDING_ASSETS } from '$lib/assets';
 
 export const storyImage = {
-	src: cdnUrl(CDN_ASSETS.companyStoryPhoto),
+	src: assetUrl(LANDING_ASSETS.companyStoryPhoto),
 	alt: 'Company Photo'
 };
 

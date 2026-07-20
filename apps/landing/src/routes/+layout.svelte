@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import type { Pathname } from '$app/types';
 	import { PUBLIC_SITE_URL } from '$env/static/public';
+	import { assetUrl, LANDING_ASSETS, SHARED_ASSETS } from '$lib/assets';
 	import { Footer, Navbar, type CtaConfig, type NavLinkItem } from '@packages/components';
 	import {
 		buildAlternateLinks,
@@ -23,7 +24,6 @@
 		type Locale
 	} from '$lib/paraglide/runtime';
 	import { theme } from '$lib/state/theme.svelte';
-	import { CDN_ASSETS, cdnUrl } from '$lib/utils/cdn';
 	import { Head, SchemaOrg } from 'svead';
 	import './layout.css';
 
@@ -36,7 +36,7 @@
 		title: m.home_meta_title(),
 		description: m.home_meta_description(),
 		pageType: 'WebPage',
-		openGraphImage: cdnUrl(CDN_ASSETS.productBeakers),
+		openGraphImage: assetUrl(LANDING_ASSETS.productBeakers),
 		openGraphImageAlt: m.home_meta_title()
 	}).seo;
 	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
@@ -71,7 +71,7 @@
 			locale,
 			siteOrigin,
 			resolveLocalizedUrl: resolveLandingSeoUrl,
-			logoUrl: cdnUrl(CDN_ASSETS.logoLight),
+			logoUrl: assetUrl(SHARED_ASSETS.logoLight),
 			organization,
 			sameAs: socialLinks.map((social) => social.href).filter(Boolean),
 			breadcrumbItems:
@@ -129,12 +129,12 @@
 <svelte:head>
 	<link
 		rel="icon"
-		href={cdnUrl(CDN_ASSETS.favicon)}
+		href={assetUrl(SHARED_ASSETS.favicon)}
 		type="image/x-icon"
 	/>
 	<link
 		rel="apple-touch-icon"
-		href={cdnUrl(CDN_ASSETS.favicon)}
+		href={assetUrl(SHARED_ASSETS.favicon)}
 	/>
 	<meta
 		name="theme-color"

@@ -1,17 +1,7 @@
-import { PUBLIC_CDN_BASE_URL } from '$env/static/public';
+import { assetUrl, CATALOG_ASSETS } from '$lib/assets';
 import * as m from '$lib/paraglide/messages';
 import { createSeoPageData } from '@packages/seo';
 import type { PageLoad } from './$types';
-
-const cdnBaseUrl = PUBLIC_CDN_BASE_URL.trim();
-
-function catalogCdnUrl(path: string): string {
-	if (!cdnBaseUrl) {
-		return path;
-	}
-
-	return new URL(path, cdnBaseUrl).toString();
-}
 
 export const load: PageLoad = ({ data }) => ({
 	...data,
@@ -19,7 +9,7 @@ export const load: PageLoad = ({ data }) => ({
 		title: m.catalog_meta_title(),
 		description: m.catalog_meta_description(),
 		pageType: 'CollectionPage',
-		openGraphImage: catalogCdnUrl('/og/catalog/gallery.webp'),
+		openGraphImage: assetUrl(CATALOG_ASSETS.galleryOpenGraph),
 		openGraphImageAlt: m.catalog_title()
 	})
 });

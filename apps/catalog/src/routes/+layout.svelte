@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import {
-		PUBLIC_CDN_BASE_URL,
 		PUBLIC_COOKIE_DOMAIN,
 		PUBLIC_FACEBOOK_URL,
 		PUBLIC_HOME_URL,
@@ -9,6 +8,7 @@
 	} from '$env/static/public';
 	import { page } from '$app/state';
 	import type { Pathname } from '$app/types';
+	import { assetUrl, CATALOG_ASSETS, SHARED_ASSETS } from '$lib/assets';
 	import * as m from '$lib/paraglide/messages';
 	import {
 		deLocalizeUrl,
@@ -31,7 +31,6 @@
 	import './layout.css';
 
 	const THEME_COOKIE_NAME = 'theme';
-	const cdnBaseUrl = PUBLIC_CDN_BASE_URL.trim();
 	const THEME_COOKIE_DOMAIN = PUBLIC_COOKIE_DOMAIN.trim();
 	const THEME_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 	const facebookUrl = PUBLIC_FACEBOOK_URL.trim();
@@ -51,7 +50,7 @@
 		title: m.catalog_meta_title(),
 		description: m.catalog_meta_description(),
 		pageType: 'CollectionPage',
-		openGraphImage: catalogCdnUrl('/og/catalog/gallery.webp'),
+		openGraphImage: assetUrl(CATALOG_ASSETS.galleryOpenGraph),
 		openGraphImageAlt: m.catalog_title()
 	}).seo;
 	const ctaConfig: CtaConfig = $derived({
@@ -91,7 +90,7 @@
 			locale: seoLocale,
 			siteOrigin: page.url.origin,
 			resolveLocalizedUrl: resolveCatalogSeoUrl,
-			logoUrl: catalogCdnUrl('/logo-light.svg'),
+			logoUrl: assetUrl(SHARED_ASSETS.logoLight),
 			organization,
 			sameAs: [facebookUrl, lineUrl].filter(Boolean),
 			breadcrumbItems:
@@ -109,14 +108,6 @@
 		page.data['productStructuredData'] as SchemaOrgProps['schema'] | undefined
 	);
 	const robotsContent = $derived(page.url.search ? 'noindex,follow' : 'index,follow');
-
-	function catalogCdnUrl(path: string): string {
-		if (!cdnBaseUrl) {
-			return path;
-		}
-
-		return new URL(path, cdnBaseUrl).toString();
-	}
 
 	function getLocalizedLandingHref(nextLocale: Locale): string {
 		if (!homeUrl) {
