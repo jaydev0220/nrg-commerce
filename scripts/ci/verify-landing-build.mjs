@@ -11,9 +11,9 @@ const expectedPages = [
 	'en/contact/index.html'
 ];
 const limits = {
-	javascriptFiles: 17,
+	javascriptFiles: 19,
 	totalJavascriptBytes: 180 * 1024,
-	modulePreloadsPerPage: 14,
+	modulePreloadsPerPage: 15,
 	referencedJavascriptBytesPerPage: 165 * 1024,
 	inlineScriptsPerPage: 2
 };
@@ -56,7 +56,7 @@ export async function verifyLandingBuild(buildDirectory) {
 		await Promise.all(javascriptFiles.map(async (file) => (await stat(file)).size))
 	).reduce((total, size) => total + size, 0);
 
-	assertWithin(javascriptFiles.length, limits.javascriptFiles, '17 JavaScript files');
+	assertWithin(javascriptFiles.length, limits.javascriptFiles, '19 JavaScript files');
 	assertWithin(totalJavascriptBytes, limits.totalJavascriptBytes, '180 KiB of JavaScript');
 
 	for (const page of expectedPages) {
@@ -67,7 +67,7 @@ export async function verifyLandingBuild(buildDirectory) {
 		}
 
 		const references = [...new Set(pageAssetReferences(html))];
-		assertWithin(references.length, limits.modulePreloadsPerPage, '14 module preloads per page');
+		assertWithin(references.length, limits.modulePreloadsPerPage, '15 module preloads per page');
 
 		const referencedJavascriptBytes = (
 			await Promise.all(

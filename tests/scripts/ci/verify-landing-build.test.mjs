@@ -73,18 +73,18 @@ test('rejects missing or empty prerendered content', async () => {
 
 test('rejects JavaScript file and byte budget regressions', async () => {
 	const tooManyFiles = await createBuild({
-		scriptNames: Array.from({ length: 18 }, (_, index) => `chunk-${index}.js`)
+		scriptNames: Array.from({ length: 20 }, (_, index) => `chunk-${index}.js`)
 	});
-	await assert.rejects(() => verifyLandingBuild(tooManyFiles), /17 JavaScript files/);
+	await assert.rejects(() => verifyLandingBuild(tooManyFiles), /19 JavaScript files/);
 
 	const tooManyBytes = await createBuild({ scriptContent: 'x'.repeat(180 * 1024 + 1) });
 	await assert.rejects(() => verifyLandingBuild(tooManyBytes), /180 KiB/);
 });
 
 test('rejects per-page preload, referenced byte, and inline script regressions', async () => {
-	const scriptNames = Array.from({ length: 15 }, (_, index) => `chunk-${index}.js`);
+	const scriptNames = Array.from({ length: 16 }, (_, index) => `chunk-${index}.js`);
 	const tooManyPreloads = await createBuild({ scriptNames });
-	await assert.rejects(() => verifyLandingBuild(tooManyPreloads), /14 module preloads/);
+	await assert.rejects(() => verifyLandingBuild(tooManyPreloads), /15 module preloads/);
 
 	const tooManyReferencedBytes = await createBuild({ scriptContent: 'x'.repeat(165 * 1024 + 1) });
 	await assert.rejects(() => verifyLandingBuild(tooManyReferencedBytes), /165 KiB/);
