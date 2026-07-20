@@ -16,7 +16,7 @@ const config = {
 	kit: {
 		adapter: adapter(),
 		prerender: {
-			entries: ['*', '/en', '/en/about', '/en/contact'],
+			entries: ['*', '/en/', '/en/about/', '/en/contact/'],
 			handleHttpError: ({ path, status, message }) => {
 				if (
 					status === 404 &&
