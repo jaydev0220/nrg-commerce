@@ -196,7 +196,7 @@ jobs:
       - name: Deploy admin Worker
         if: needs.changes.outputs.admin == 'true'
         working-directory: apps/admin
-        run: pnpm exec wrangler deploy --keep-vars --domain "$ADMIN_DOMAIN"
+        run: pnpm exec wrangler deploy --keep-vars --domain "$ADMIN_DOMAIN" --var "PUBLIC_API_BASE_URL:$ADMIN_API_BASE_URL"
 
       - name: Validate contact Worker environment
         if: needs.changes.outputs.contact == 'true'
