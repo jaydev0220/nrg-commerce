@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/public';
+import { PUBLIC_API_BASE_URL } from '$env/static/public';
 
 type ApiErrorPayload = {
 	error?: {
@@ -313,6 +313,6 @@ export function createAdminApiClient(options: ClientOptions) {
 }
 
 export const adminApiClient = createAdminApiClient({
-	baseUrl: env['PUBLIC_API_BASE_URL'] || 'http://localhost:3000',
+	baseUrl: PUBLIC_API_BASE_URL || 'http://localhost:3000',
 	fetch: (...args) => globalThis.fetch(...args)
 });

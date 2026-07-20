@@ -7,13 +7,18 @@ const api = vi.hoisted(() => ({
 
 vi.mock('$lib/api/admin-api', () => api);
 
-const { load } = await import('./+layout');
+const { load, prerender, ssr } = await import('./+layout');
 
 function event(path: string) {
 	return { url: new URL(`http://localhost${path}`) } as never;
 }
 
 describe('admin client layout', () => {
+	it('uses prerendered client shells without runtime SSR', () => {
+		expect(prerender).toBe(true);
+		expect(ssr).toBe(false);
+	});
+
 	it('redirects an unauthenticated protected route to login', async () => {
 		api.getOptionalCurrentStaff.mockResolvedValueOnce(null);
 

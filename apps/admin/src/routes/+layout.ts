@@ -4,6 +4,7 @@ import { getAuthState, getOptionalCurrentStaff, refreshCurrentSession } from '$l
 import type { LayoutLoad } from './$types';
 
 export const ssr = false;
+export const prerender = true;
 
 export const load: LayoutLoad = async ({ url }) => {
 	const isLoginRoute = url.pathname.startsWith('/login');

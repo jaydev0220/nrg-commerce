@@ -5,8 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build",
-		"preview": "vite preview",
+		"build": "wrangler types && vite build",
+		"preview": "wrangler dev .svelte-kit/cloudflare/_worker.js --port 4173 --inspector-port 9230",
 		"prepare": "svelte-kit sync",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -15,7 +15,8 @@
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
 		"test:watch": "vitest",
-		"test:e2e": "playwright test"
+		"test:e2e": "playwright test",
+		"types": "wrangler types"
 	},
 	"devDependencies": {
 		"@eslint/js": "catalog:lint",
@@ -26,7 +27,7 @@
 		"@packages/styles": "workspace:*",
 		"@packages/tsconfig": "workspace:*",
 		"@playwright/test": "catalog:test",
-		"@sveltejs/adapter-node": "catalog:svelte",
+		"@sveltejs/adapter-cloudflare": "catalog:svelte",
 		"@sveltejs/kit": "catalog:svelte",
 		"@sveltejs/vite-plugin-svelte": "catalog:svelte",
 		"@tailwindcss/vite": "catalog:svelte",
@@ -50,7 +51,8 @@
 		"typescript-eslint": "catalog:lint",
 		"vite": "catalog:svelte",
 		"vitest": "catalog:test",
-		"vitest-browser-svelte": "catalog:test"
+		"vitest-browser-svelte": "catalog:test",
+		"wrangler": "catalog:svelte"
 	},
 	"dependencies": {
 		"qrcode": "catalog:"

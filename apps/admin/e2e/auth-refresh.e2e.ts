@@ -1,5 +1,28 @@
 import { expect, test } from '@playwright/test';
 
+test('serves the SPA shell for a dynamic product editor deep link', async ({ page }) => {
+	await page.route('**/api/**', async (route) => {
+		const pathname = new URL(route.request().url()).pathname;
+		if (pathname === '/api/auth/me') {
+			await route.fulfill({
+				status: 401,
+				json: { error: { code: 'UNAUTHENTICATED', message: 'Unauthenticated' } }
+			});
+			return;
+		}
+		if (pathname === '/api/auth/state') {
+			await route.fulfill({ json: { status: 'unauthenticated' } });
+			return;
+		}
+		await route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND' } } });
+	});
+
+	const response = await page.goto('/products/deep-link-product');
+
+	expect(response?.status()).toBe(200);
+	await expect(page).toHaveURL(/\/login\?reason=session-expired$/);
+});
+
 test('two tabs share one refresh and both finish their protected loads', async ({ context }) => {
 	let authenticated = false;
 	let expiredRequestCount = 0;
