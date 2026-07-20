@@ -16,6 +16,7 @@ on:
           - landing
           - catalog
           - contact
+          - admin
 
 permissions:
   contents: read
@@ -33,6 +34,7 @@ jobs:
       landing: ${{ steps.targets.outputs.landing }}
       catalog: ${{ steps.targets.outputs.catalog }}
       contact: ${{ steps.targets.outputs.contact }}
+      admin: ${{ steps.targets.outputs.admin }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -118,6 +120,9 @@ jobs:
       - name: Build all workspaces
         run: pnpm build
 
+      - name: Verify admin Worker output
+        run: node scripts/ci/verify-admin-build.mjs apps/admin/.svelte-kit/cloudflare "$PUBLIC_API_BASE_URL"
+
       - name: Verify prerendered landing output
         run: node scripts/ci/verify-landing-build.mjs apps/landing/build
 
@@ -128,7 +133,7 @@ jobs:
     name: Deploy Cloudflare Workers
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      (needs.changes.outputs.contact == 'true' || needs.changes.outputs.catalog == 'true')
+      (needs.changes.outputs.contact == 'true' || needs.changes.outputs.catalog == 'true' || needs.changes.outputs.admin == 'true')
     needs: [changes, validate]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -140,13 +145,14 @@ jobs:
       LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
       CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
       CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
+      ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
       CATALOG_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
+      ADMIN_API_BASE_URL: ${{ vars.ADMIN_API_BASE_URL }}
       CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
       COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
       FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
       LINE_URL: ${{ vars.LINE_URL }}
       TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
-      PUBLIC_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
       PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
       PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
       PUBLIC_CONTACT_WORKER_URL: https://${{ vars.CONTACT_DOMAIN }}
@@ -173,6 +179,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate admin environment
+        if: needs.changes.outputs.admin == 'true'
+        run: node scripts/ci/production-env.mjs admin
+
+      - name: Build admin Worker
+        if: needs.changes.outputs.admin == 'true'
+        env:
+          PUBLIC_API_BASE_URL: ${{ vars.ADMIN_API_BASE_URL }}
+        run: pnpm --filter @apps/admin build
+
+      - name: Verify admin Worker output
+        if: needs.changes.outputs.admin == 'true'
+        run: node scripts/ci/verify-admin-build.mjs apps/admin/.svelte-kit/cloudflare "$ADMIN_API_BASE_URL"
+
+      - name: Deploy admin Worker
+        if: needs.changes.outputs.admin == 'true'
+        working-directory: apps/admin
+        run: pnpm exec wrangler deploy --keep-vars --domain "$ADMIN_DOMAIN"
+
       - name: Validate contact Worker environment
         if: needs.changes.outputs.contact == 'true'
         run: node scripts/ci/production-env.mjs contact
@@ -188,6 +213,8 @@ jobs:
 
       - name: Build catalog Worker
         if: needs.changes.outputs.catalog == 'true'
+        env:
+          PUBLIC_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
         run: pnpm --filter @apps/catalog build
 
       - name: Deploy catalog Worker

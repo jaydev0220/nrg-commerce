@@ -1,7 +1,7 @@
 import { appendFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-const targetNames = ['landing', 'catalog', 'contact'];
+const targetNames = ['landing', 'catalog', 'contact', 'admin'];
 
 const allTargetPaths = [
 	'.github/',
@@ -17,6 +17,7 @@ const allTargetPaths = [
 ];
 
 const targetPaths = {
+	admin: ['apps/admin/', 'packages/schemas/', 'packages/styles/'],
 	landing: [
 		'apps/landing/',
 		'packages/components/',

@@ -7,7 +7,9 @@ const validEnvironment = {
 	LANDING_SITE_URL: 'https://www.example.com',
 	CATALOG_DOMAIN: 'catalog.example.com',
 	CONTACT_DOMAIN: 'contact.example.com',
+	ADMIN_DOMAIN: 'admin.example.com',
 	CATALOG_API_BASE_URL: 'https://api.example.com',
+	ADMIN_API_BASE_URL: 'https://api.example.com',
 	CDN_BASE_URL: 'https://cdn.example.com',
 	COOKIE_DOMAIN: 'example.com',
 	FACEBOOK_URL: 'https://www.facebook.com/example',
@@ -55,6 +57,15 @@ test('validates the contact domain and its smoke-test origin', () => {
 	});
 });
 
+test('validates admin API and Cloudflare deployment values', () => {
+	assert.deepEqual(validateProductionEnvironment('admin', validEnvironment), {
+		adminDomain: 'admin.example.com',
+		adminApiBaseUrl: 'https://api.example.com',
+		cloudflareAccountId: 'account-id',
+		cloudflareApiToken: 'api-token'
+	});
+});
+
 test('reports missing values by name without exposing configured values', () => {
 	assert.throws(
 		() => validateProductionEnvironment('contact', { CONTACT_DOMAIN: 'contact.example.com' }),
@@ -91,5 +102,13 @@ test('rejects insecure production URLs and domains containing paths', () => {
 				LANDING_SITE_URL: 'https://www.example.com/'
 			}),
 		/LANDING_SITE_URL/
+	);
+	assert.throws(
+		() =>
+			validateProductionEnvironment('admin', {
+				...validEnvironment,
+				ADMIN_API_BASE_URL: 'https://api.example.com/management'
+			}),
+		/ADMIN_API_BASE_URL/
 	);
 });

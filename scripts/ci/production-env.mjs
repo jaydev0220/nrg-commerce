@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
 
-const targets = new Set(['landing', 'catalog', 'contact']);
+const targets = new Set(['landing', 'catalog', 'contact', 'admin']);
 
 function required(environment, name, errors) {
 	const value = environment[name]?.trim();
@@ -102,10 +102,18 @@ export function validateProductionEnvironment(target, environment) {
 			turnstileSiteKey: values.turnstileSiteKey,
 			...cloudflare(environment, errors)
 		};
-	} else {
+	} else if (target === 'contact') {
 		result = {
 			landingSiteUrl: secureUrl(environment, 'LANDING_SITE_URL', errors, { rootOnly: true }),
 			contactDomain: domain(environment, 'CONTACT_DOMAIN', errors),
+			...cloudflare(environment, errors)
+		};
+	} else {
+		result = {
+			adminDomain: domain(environment, 'ADMIN_DOMAIN', errors),
+			adminApiBaseUrl: secureUrl(environment, 'ADMIN_API_BASE_URL', errors, {
+				rootOnly: true
+			}),
 			...cloudflare(environment, errors)
 		};
 	}
