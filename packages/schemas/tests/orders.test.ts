@@ -42,6 +42,14 @@ test('orderCreateSchema requires consumer name and phone and validates phone for
 	assert.throws(() =>
 		orderCreateSchema.parse({
 			businessId: null,
+			customerName: null,
+			customerPhone: '+886 912 345 678',
+			items: [orderItem]
+		})
+	);
+	assert.throws(() =>
+		orderCreateSchema.parse({
+			businessId: null,
 			customerName: 'Walk-in Buyer',
 			customerPhone: null,
 			items: [orderItem]

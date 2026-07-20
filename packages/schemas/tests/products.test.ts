@@ -90,6 +90,7 @@ test('storefrontSkuListQuerySchema parses attribute filters from JSON strings', 
 		featured: true
 	});
 	assert.equal(parsedQuery.includeImages, true);
+	assert.throws(() => storefrontSkuListQuerySchema.parse({ attributes: 'not-json' }));
 });
 
 test('productCategoryUpdateSchema requires at least one field', () => {
@@ -159,6 +160,24 @@ test('productImageCreateSchema accepts a pending upload reference', () => {
 });
 
 test('productImageCreateSchema requires all crop fields together', () => {
+	assert.deepEqual(
+		productImageCreateSchema.parse({
+			uploadId: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
+			altText: 'Thumbnail image',
+			placement: 'thumbnail',
+			focusX: 0.25,
+			focusY: 0.75,
+			zoom: 1.5
+		}),
+		{
+			uploadId: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
+			altText: 'Thumbnail image',
+			placement: 'thumbnail',
+			focusX: 0.25,
+			focusY: 0.75,
+			zoom: 1.5
+		}
+	);
 	assert.throws(() =>
 		productImageCreateSchema.parse({
 			uploadId: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
@@ -173,6 +192,44 @@ test('productImageCreateSchema requires all crop fields together', () => {
 			altText: 'SKU image',
 			placement: 'sku-gallery'
 		})
+	);
+	assert.equal(
+		productImageCreateSchema.parse({
+			uploadId: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
+			altText: 'SKU image',
+			placement: 'sku-gallery',
+			skuId: '0189076c-4f2a-7fe1-b9fd-2d68df455402'
+		}).skuId,
+		'0189076c-4f2a-7fe1-b9fd-2d68df455402'
+	);
+	assert.throws(() =>
+		productImageCreateSchema.parse({
+			uploadId: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
+			altText: 'Shared image',
+			placement: 'shared-gallery',
+			skuId: '0189076c-4f2a-7fe1-b9fd-2d68df455402'
+		})
+	);
+	assert.throws(() =>
+		productImageCreateSchema.parse({
+			uploadId: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
+			altText: 'Shared image',
+			placement: 'shared-gallery',
+			focusX: 0.25,
+			focusY: 0.75,
+			zoom: 1.5
+		})
+	);
+});
+
+test('productImageCropUpdateSchema validates the persisted crop range', () => {
+	assert.deepEqual(productImageCropUpdateSchema.parse({ focusX: 0.25, focusY: 0.75, zoom: 1.5 }), {
+		focusX: 0.25,
+		focusY: 0.75,
+		zoom: 1.5
+	});
+	assert.throws(() =>
+		productImageCropUpdateSchema.parse({ focusX: 0.25, focusY: 0.75, zoom: 3.1 })
 	);
 });
 
@@ -222,15 +279,6 @@ test('storefront product query schemas parse include flags from query strings', 
 		sort: 'minPrice'
 	});
 
-	test('productImageCropUpdateSchema validates the persisted crop range', () => {
-		assert.deepEqual(
-			productImageCropUpdateSchema.parse({ focusX: 0.25, focusY: 0.75, zoom: 1.5 }),
-			{ focusX: 0.25, focusY: 0.75, zoom: 1.5 }
-		);
-		assert.throws(() =>
-			productImageCropUpdateSchema.parse({ focusX: 0.25, focusY: 0.75, zoom: 3.1 })
-		);
-	});
 	const detailQuery = storefrontProductDetailQuerySchema.parse({
 		includeSkus: 'true',
 		includeImages: 'true'
