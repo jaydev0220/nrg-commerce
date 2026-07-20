@@ -212,6 +212,25 @@
 {/if}
 
 <svelte:head>
+	<link
+		rel="icon"
+		href={assetUrl(SHARED_ASSETS.favicon)}
+		type="image/x-icon"
+	/>
+	<link
+		rel="apple-touch-icon"
+		href={assetUrl(SHARED_ASSETS.favicon)}
+	/>
+	<meta
+		name="theme-color"
+		media="(prefers-color-scheme: light)"
+		content="#f8f7f5"
+	/>
+	<meta
+		name="theme-color"
+		media="(prefers-color-scheme: dark)"
+		content="#131110"
+	/>
 	<meta
 		name="robots"
 		content={robotsContent}
