@@ -24,25 +24,36 @@ test('app-only changes affect only their deployment target', () => {
 		landing: true,
 		catalog: false,
 		contact: false,
-		admin: false
+		admin: false,
+		api: false
 	});
 	assert.deepEqual(determineAffectedTargets(['apps/catalog/src/routes/+page.svelte']), {
 		landing: false,
 		catalog: true,
 		contact: false,
-		admin: false
+		admin: false,
+		api: false
 	});
 	assert.deepEqual(determineAffectedTargets(['apps/contact-worker/src/index.ts']), {
 		landing: false,
 		catalog: false,
 		contact: true,
-		admin: false
+		admin: false,
+		api: false
 	});
 	assert.deepEqual(determineAffectedTargets(['apps/admin/src/routes/+page.svelte']), {
 		landing: false,
 		catalog: false,
 		contact: false,
-		admin: true
+		admin: true,
+		api: false
+	});
+	assert.deepEqual(determineAffectedTargets(['apps/api/src/routes/index.ts']), {
+		landing: false,
+		catalog: false,
+		contact: false,
+		admin: false,
+		api: true
 	});
 });
 
@@ -51,19 +62,29 @@ test('shared package changes affect each dependent deployment', () => {
 		landing: true,
 		catalog: true,
 		contact: false,
-		admin: false
+		admin: false,
+		api: false
 	});
 	assert.deepEqual(determineAffectedTargets(['packages/schemas/src/common.ts']), {
 		landing: true,
 		catalog: true,
 		contact: true,
-		admin: true
+		admin: true,
+		api: true
 	});
 	assert.deepEqual(determineAffectedTargets(['packages/styles/shared.css']), {
 		landing: true,
 		catalog: true,
 		contact: false,
-		admin: true
+		admin: true,
+		api: false
+	});
+	assert.deepEqual(determineAffectedTargets(['packages/database/src/client.ts']), {
+		landing: false,
+		catalog: false,
+		contact: false,
+		admin: false,
+		api: true
 	});
 });
 
@@ -79,17 +100,19 @@ test('root tooling changes affect all deployment targets', () => {
 			landing: true,
 			catalog: true,
 			contact: true,
-			admin: true
+			admin: true,
+			api: true
 		});
 	}
 });
 
-test('unrelated local application changes do not trigger production deployment', () => {
-	assert.deepEqual(determineAffectedTargets(['apps/api/src/routes/index.ts']), {
+test('docker context changes affect only the API image', () => {
+	assert.deepEqual(determineAffectedTargets(['.dockerignore']), {
 		landing: false,
 		catalog: false,
 		contact: false,
-		admin: false
+		admin: false,
+		api: true
 	});
 });
 
@@ -98,18 +121,28 @@ test('manual targets override changed paths', () => {
 		landing: true,
 		catalog: true,
 		contact: true,
-		admin: true
+		admin: true,
+		api: true
 	});
 	assert.deepEqual(determineAffectedTargets([], 'catalog'), {
 		landing: false,
 		catalog: true,
 		contact: false,
-		admin: false
+		admin: false,
+		api: false
 	});
 	assert.deepEqual(determineAffectedTargets([], 'admin'), {
 		landing: false,
 		catalog: false,
 		contact: false,
-		admin: true
+		admin: true,
+		api: false
+	});
+	assert.deepEqual(determineAffectedTargets([], 'api'), {
+		landing: false,
+		catalog: false,
+		contact: false,
+		admin: false,
+		api: true
 	});
 });

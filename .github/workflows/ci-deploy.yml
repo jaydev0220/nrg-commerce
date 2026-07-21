@@ -17,6 +17,7 @@ on:
           - catalog
           - contact
           - admin
+          - api
 
 permissions:
   contents: read
@@ -35,6 +36,7 @@ jobs:
       catalog: ${{ steps.targets.outputs.catalog }}
       contact: ${{ steps.targets.outputs.contact }}
       admin: ${{ steps.targets.outputs.admin }}
+      api: ${{ steps.targets.outputs.api }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -221,6 +223,81 @@ jobs:
         if: needs.changes.outputs.catalog == 'true'
         working-directory: apps/catalog
         run: pnpm exec wrangler deploy --keep-vars --domain "$CATALOG_DOMAIN" --var "PUBLIC_API_BASE_URL:$CATALOG_API_BASE_URL"
+
+  build-api-image:
+    name: Build API container
+    if: github.event_name == 'pull_request' && needs.changes.outputs.api == 'true'
+    needs: [changes, validate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build API image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+  publish-api-image:
+    name: Publish API container
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.changes.outputs.api == 'true'
+    needs: [changes, validate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    environment:
+      name: production
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/jaydev0220/nrg-commerce-api
+          tags: |
+            type=raw,value=${{ github.sha }}
+            type=raw,value=latest
+
+      - name: Build and publish API image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+          provenance: mode=max
+          sbom: true
 
   deploy-landing:
     name: Deploy landing to GitHub Pages
