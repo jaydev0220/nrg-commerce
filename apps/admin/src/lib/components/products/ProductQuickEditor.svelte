@@ -55,7 +55,7 @@
 			checked={product.published}
 			class="size-4"
 		/>
-		商品已上架
+		上架商品
 	</label>
 	<div class="flex justify-end gap-2 md:col-span-2">
 		<button
