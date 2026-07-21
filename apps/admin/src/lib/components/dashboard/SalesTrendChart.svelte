@@ -20,24 +20,36 @@
 		business: '企業客戶',
 		consumer: '一般消費者'
 	};
-	let activePoint = $state<{ key: DashboardTrendSeries['key']; index: number } | null>(null);
+	const seriesOrder = ['total', 'business', 'consumer'] as const;
+	type ActiveBucket = { index: number; label: string; timestamp: number };
+
+	let activeBucket = $state<ActiveBucket | null>(null);
 
 	const pointCount = $derived(trend.series[0]?.points.length ?? 0);
 	const maxValue = $derived(
 		Math.max(1, ...trend.series.flatMap((series) => series.points.map((point) => point.value)))
 	);
 	const activeTrend = $derived.by(() => {
-		if (!activePoint) return null;
-		const series = trend.series.find((entry) => entry.key === activePoint?.key);
-		const point = series?.points[activePoint.index];
-		if (!series || !point) return null;
+		if (!activeBucket) return null;
+
 		return {
-			...point,
-			seriesLabel: seriesLabels[series.key],
-			x: chartX(activePoint.index),
-			y: chartY(point.value)
+			...activeBucket,
+			x: chartX(activeBucket.index),
+			values: seriesOrder.map((key) => ({
+				key,
+				value: trend.series
+					.find((series) => series.key === key)
+					?.points.find((point) => point.startAt.getTime() === activeBucket?.timestamp)?.value
+			}))
 		};
 	});
+	const tooltipAlignment = $derived(
+		activeTrend?.index === 0
+			? 'translate-x-0'
+			: activeTrend?.index === pointCount - 1
+				? '-translate-x-full'
+				: '-translate-x-1/2'
+	);
 
 	function chartX(index: number): number {
 		return plotLeft + (index / Math.max(pointCount - 1, 1)) * (plotRight - plotLeft);
@@ -58,6 +70,22 @@
 			maximumFractionDigits: 0
 		}).format(value);
 	}
+
+	function activateBucket(index: number, label: string, startAt: Date): void {
+		activeBucket = { index, label, timestamp: startAt.getTime() };
+	}
+
+	function bucketAccessibleLabel(label: string, startAt: Date): string {
+		const timestamp = startAt.getTime();
+		const values = seriesOrder.map((key) => {
+			const value = trend.series
+				.find((series) => series.key === key)
+				?.points.find((point) => point.startAt.getTime() === timestamp)?.value;
+			return `${seriesLabels[key]} ${value === undefined ? '無資料' : formatMoney(value)}`;
+		});
+
+		return `${label}，${values.join('，')}`;
+	}
 </script>
 
 <div class="mb-2 flex flex-wrap gap-x-4 gap-y-2 text-xs text-text-muted">
@@ -76,13 +104,31 @@
 	<div class="relative min-w-[60rem]">
 		{#if activeTrend}
 			<div
-				class="pointer-events-none absolute z-10 w-44 -translate-x-1/2 -translate-y-full rounded-md border border-border bg-bg-surface px-3 py-2 shadow-sm"
-				style={`left: ${(activeTrend.x / chartWidth) * 100}%; top: ${Math.max(activeTrend.y - 8, 32)}px;`}
+				id="sales-trend-tooltip"
+				class={`pointer-events-none absolute top-2 z-10 w-52 rounded-md border border-border bg-bg-surface px-3 py-2 shadow-sm ${tooltipAlignment}`}
+				style={`left: ${(activeTrend.x / chartWidth) * 100}%;`}
+				role="tooltip"
 			>
 				<p class="text-xs font-semibold text-text-muted">{activeTrend.label}</p>
-				<p class="mt-1 text-sm font-semibold text-text-heading">{activeTrend.seriesLabel}</p>
-				<p class="text-sm text-text-heading">{formatMoney(activeTrend.value)}</p>
-				<p class="mt-1 text-xs text-text-muted">{formatDateTime(activeTrend.startAt)}</p>
+				<dl class="mt-2 space-y-1.5">
+					{#each activeTrend.values as item (item.key)}
+						<div class="flex items-center justify-between gap-4 text-sm">
+							<dt class="inline-flex items-center gap-2 text-text-muted">
+								<span
+									class="size-2.5 shrink-0 rounded-full"
+									style={`background: ${seriesColors[item.key]}`}
+								></span>
+								{seriesLabels[item.key]}
+							</dt>
+							<dd class="font-medium text-text-heading">
+								{item.value === undefined ? '—' : formatMoney(item.value)}
+							</dd>
+						</div>
+					{/each}
+				</dl>
+				<p class="mt-2 text-xs text-text-muted">
+					{formatDateTime(new Date(activeTrend.timestamp))}
+				</p>
 			</div>
 		{/if}
 		<svg
@@ -136,11 +182,14 @@
 					type="button"
 					class="absolute size-8 -translate-x-1/2 -translate-y-1/2 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
 					style={`left: ${(chartX(index) / chartWidth) * 100}%; top: ${chartY(point.value)}px;`}
-					onmouseenter={() => (activePoint = { key: series.key, index })}
-					onmouseleave={() => (activePoint = null)}
-					onfocus={() => (activePoint = { key: series.key, index })}
-					onblur={() => (activePoint = null)}
-					aria-label={`${seriesLabels[series.key]} ${point.label} ${formatMoney(point.value)}`}
+					onmouseenter={() => activateBucket(index, point.label, point.startAt)}
+					onmouseleave={() => (activeBucket = null)}
+					onfocus={() => activateBucket(index, point.label, point.startAt)}
+					onblur={() => (activeBucket = null)}
+					aria-label={bucketAccessibleLabel(point.label, point.startAt)}
+					aria-describedby={activeTrend?.timestamp === point.startAt.getTime()
+						? 'sales-trend-tooltip'
+						: undefined}
 				></button>
 			{/each}
 		{/each}
