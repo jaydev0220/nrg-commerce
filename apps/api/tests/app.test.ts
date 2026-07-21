@@ -15,6 +15,8 @@ function createTestConfig() {
 		nodeEnv: 'test' as const,
 		logLevel: 'fatal' as const,
 		port: 0,
+		databaseUrl: 'postgresql://postgres:postgres@localhost:5432/nrg_commerce',
+		databaseMaxConnections: 10,
 		trustProxy: false,
 		corsOrigins: ['http://localhost:4173'],
 		bodyLimit: '64kb',

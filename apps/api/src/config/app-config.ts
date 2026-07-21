@@ -4,6 +4,8 @@ import type { LogLevel } from '@packages/database';
 export type AppConfig = {
 	nodeEnv: string;
 	port: number;
+	databaseUrl: string;
+	databaseMaxConnections: number;
 	trustProxy: boolean;
 	corsOrigins: string[];
 	bodyLimit: string;
@@ -37,6 +39,31 @@ export type AppConfig = {
 	storefrontCacheMaxEntries: number;
 };
 
+const fallbackDatabaseUrl = 'postgresql://postgres:postgres@localhost:5432/nrg_commerce';
+const productionRequiredVariables = [
+	'DATABASE_URL',
+	'CORS_ORIGINS',
+	'ACCESS_TOKEN_SECRET',
+	'REFRESH_TOKEN_SECRET',
+	'PENDING_TOKEN_SECRET',
+	'DATA_ENCRYPTION_SECRET',
+	'WEBAUTHN_RP_ID',
+	'WEBAUTHN_RP_NAME',
+	'WEBAUTHN_ORIGIN',
+	'R2_ACCOUNT_ID',
+	'R2_BUCKET_NAME',
+	'R2_ACCESS_KEY_ID',
+	'R2_SECRET_ACCESS_KEY',
+	'R2_PUBLIC_BASE_URL'
+] as const;
+
+const productionSecretVariables = [
+	'ACCESS_TOKEN_SECRET',
+	'REFRESH_TOKEN_SECRET',
+	'PENDING_TOKEN_SECRET',
+	'DATA_ENCRYPTION_SECRET'
+] as const;
+
 function readBoolean(value: string | undefined, fallback: boolean): boolean {
 	if (value === undefined) {
 		return fallback;
@@ -58,6 +85,21 @@ function readNumber(value: string | undefined, fallback: number): number {
 function readPositiveInteger(value: string | undefined, fallback: number): number {
 	const parsedValue = readNumber(value, fallback);
 	return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
+}
+
+function readConfiguredPositiveInteger(
+	value: string | undefined,
+	fallback: number,
+	variableName: string
+): number {
+	if (value === undefined) return fallback;
+
+	const parsedValue = Number(value);
+	if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
+		throw new Error(`${variableName} must be a positive integer.`);
+	}
+
+	return parsedValue;
 }
 
 function readStringArray(value: string | undefined, fallback: string[]): string[] {
@@ -96,6 +138,88 @@ function readSameSite(
 	return fallback;
 }
 
+function isLocalHostname(hostname: string): boolean {
+	return (
+		hostname === 'localhost' ||
+		hostname.endsWith('.localhost') ||
+		hostname === '127.0.0.1' ||
+		hostname === '::1'
+	);
+}
+
+function isProductionHttpsUrl(value: string): boolean {
+	try {
+		const url = new URL(value);
+		return (
+			url.protocol === 'https:' && !url.username && !url.password && !isLocalHostname(url.hostname)
+		);
+	} catch {
+		return false;
+	}
+}
+
+function isProductionHttpsOrigin(value: string): boolean {
+	if (!isProductionHttpsUrl(value)) return false;
+
+	return new URL(value).origin === value;
+}
+
+function isProductionRpId(value: string): boolean {
+	try {
+		const url = new URL(`https://${value}`);
+		return url.hostname === value && url.origin === `https://${value}` && !isLocalHostname(value);
+	} catch {
+		return false;
+	}
+}
+
+function validateProductionConfig(environment: NodeJS.ProcessEnv, config: AppConfig): void {
+	const missingVariables = productionRequiredVariables.filter(
+		(variableName) => !environment[variableName]?.trim()
+	);
+	if (missingVariables.length > 0) {
+		throw new Error(`Production configuration is missing: ${missingVariables.join(', ')}.`);
+	}
+
+	const weakSecrets = productionSecretVariables.filter(
+		(variableName) => (environment[variableName]?.length ?? 0) < 32
+	);
+	if (weakSecrets.length > 0) {
+		throw new Error(
+			`Production secrets must contain at least 32 characters: ${weakSecrets.join(', ')}.`
+		);
+	}
+
+	const secretValues = productionSecretVariables.map((variableName) => environment[variableName]);
+	if (new Set(secretValues).size !== secretValues.length) {
+		throw new Error('Production auth and encryption secrets must be pairwise distinct.');
+	}
+
+	if (!config.cookieSecure) {
+		throw new Error('COOKIE_SECURE must be true in production.');
+	}
+
+	if (!/^postgres(?:ql)?:\/\//u.test(config.databaseUrl)) {
+		throw new Error('DATABASE_URL must use the postgres or postgresql protocol in production.');
+	}
+
+	if (config.corsOrigins.length === 0 || !config.corsOrigins.every(isProductionHttpsOrigin)) {
+		throw new Error('CORS_ORIGINS must contain only non-local HTTPS origins in production.');
+	}
+
+	if (!isProductionRpId(config.webauthnRpId)) {
+		throw new Error('WEBAUTHN_RP_ID must be a non-local hostname in production.');
+	}
+
+	if (!isProductionHttpsOrigin(config.webauthnOrigin)) {
+		throw new Error('WEBAUTHN_ORIGIN must be a non-local HTTPS URL in production.');
+	}
+
+	if (!isProductionHttpsUrl(config.r2PublicBaseUrl)) {
+		throw new Error('R2_PUBLIC_BASE_URL must be a non-local HTTPS URL in production.');
+	}
+}
+
 export function readAppConfig(environment: NodeJS.ProcessEnv = process.env): AppConfig {
 	const nodeEnv = environment['NODE_ENV'] ?? 'development';
 	const cookieSecure = readBoolean(environment['COOKIE_SECURE'], nodeEnv === 'production');
@@ -106,9 +230,15 @@ export function readAppConfig(environment: NodeJS.ProcessEnv = process.env): App
 	if (cookieSameSite === 'none' && !cookieSecure) {
 		throw new Error('COOKIE_SECURE must be true when COOKIE_SAME_SITE is none.');
 	}
-	return {
+	const config: AppConfig = {
 		nodeEnv,
 		port: readNumber(environment['PORT'], 3000),
+		databaseUrl: environment['DATABASE_URL'] ?? fallbackDatabaseUrl,
+		databaseMaxConnections: readConfiguredPositiveInteger(
+			environment['DATABASE_MAX_CONNECTIONS'],
+			10,
+			'DATABASE_MAX_CONNECTIONS'
+		),
 		trustProxy: readBoolean(environment['TRUST_PROXY'], false),
 		corsOrigins: readStringArray(environment['CORS_ORIGINS'], [
 			'http://localhost:4173',
@@ -147,6 +277,10 @@ export function readAppConfig(environment: NodeJS.ProcessEnv = process.env): App
 		storefrontCacheTtlSeconds: readPositiveInteger(environment['STOREFRONT_CACHE_TTL_SECONDS'], 60),
 		storefrontCacheMaxEntries: readPositiveInteger(environment['STOREFRONT_CACHE_MAX_ENTRIES'], 500)
 	};
+
+	if (nodeEnv === 'production') validateProductionConfig(environment, config);
+
+	return config;
 }
 
 export function deriveEncryptionKey(secret: string): Buffer {

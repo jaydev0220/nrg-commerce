@@ -51,7 +51,10 @@ type AppDependencies = {
 
 export function createApp(dependencies: AppDependencies = {}) {
 	const config = dependencies.config ?? readAppConfig();
-	const database = getDatabaseClient();
+	const database = getDatabaseClient({
+		connectionString: config.databaseUrl,
+		maxConnections: config.databaseMaxConnections
+	});
 	const authRepository = createPrismaAuthRepository(database);
 	const staffRepository = createPrismaStaffRepository(database);
 	const logRepository = createPrismaLogRepository(database);
