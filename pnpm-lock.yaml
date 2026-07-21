@@ -227,6 +227,9 @@ catalogs:
     '@types/qrcode':
       specifier: 1.5.5
       version: 1.5.5
+    esbuild:
+      specifier: ^0.28.1
+      version: 0.28.1
     node:
       specifier: runtime:^24.18.0
       version: 24.18.0
@@ -528,12 +531,12 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: catalog:express
         version: 3.1090.0
-      '@packages/database':
-        specifier: workspace:*
-        version: link:../../packages/database
-      '@packages/schemas':
-        specifier: workspace:*
-        version: link:../../packages/schemas
+      '@prisma/adapter-pg':
+        specifier: catalog:db
+        version: 7.8.0
+      '@prisma/client':
+        specifier: catalog:db
+        version: 7.8.0(prisma@7.8.0(@types/react@19.2.17)(magicast@0.5.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3))(typescript@6.0.3)
       '@simplewebauthn/server':
         specifier: catalog:express
         version: 13.3.2
@@ -561,19 +564,31 @@ importers:
       otplib:
         specifier: catalog:express
         version: 13.4.1
+      pg:
+        specifier: catalog:db
+        version: 8.22.0
       pino:
         specifier: catalog:express
         version: 9.14.0
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
     devDependencies:
       '@eslint/js':
         specifier: catalog:lint
         version: 10.0.1(eslint@10.7.0(jiti@2.7.0))
+      '@packages/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@packages/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
       '@packages/prettier-config':
         specifier: workspace:*
         version: link:../../packages/prettier-config
+      '@packages/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
       '@packages/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
@@ -586,6 +601,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      esbuild:
+        specifier: 'catalog:'
+        version: 0.28.1
       eslint:
         specifier: catalog:lint
         version: 10.7.0(jiti@2.7.0)

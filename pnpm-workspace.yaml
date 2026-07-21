@@ -8,6 +8,7 @@ catalogMode: strict
 
 catalog:
   '@types/node': ^24.13.3
+  esbuild: ^0.28.1
   '@types/qrcode': 1.5.5
   node: runtime:^24.18.0
   qrcode: 1.5.4

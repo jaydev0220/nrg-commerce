@@ -3,10 +3,13 @@
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
+	"files": [
+		"build"
+	],
 	"scripts": {
 		"dev": "tsx watch src/index.ts",
-		"build": "tsc --project tsconfig.json",
-		"start": "node build/src/index.js",
+		"build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node24 --packages=external --sourcemap --alias:@packages/database=../../packages/database/src/index.ts --alias:@packages/schemas=../../packages/schemas/src/index.ts --outfile=build/index.js",
+		"start": "node --enable-source-maps build/index.js",
 		"check": "tsc --noEmit --project tsconfig.json",
 		"format": "prettier --ignore-path ../../.prettierignore --write .",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
@@ -16,8 +19,8 @@
 	"dependencies": {
 		"@aws-sdk/client-s3": "catalog:express",
 		"@aws-sdk/s3-request-presigner": "catalog:express",
-		"@packages/database": "workspace:*",
-		"@packages/schemas": "workspace:*",
+		"@prisma/adapter-pg": "catalog:db",
+		"@prisma/client": "catalog:db",
 		"@simplewebauthn/server": "catalog:express",
 		"argon2": "catalog:express",
 		"cookie": "catalog:express",
@@ -27,18 +30,23 @@
 		"helmet": "catalog:express",
 		"jose": "catalog:express",
 		"otplib": "catalog:express",
-		"pino": "catalog:express"
+		"pg": "catalog:db",
+		"pino": "catalog:express",
+		"zod": "catalog:"
 	},
 	"devDependencies": {
 		"@eslint/js": "catalog:lint",
+		"@packages/database": "workspace:*",
 		"@packages/eslint-config": "workspace:*",
 		"@packages/prettier-config": "workspace:*",
+		"@packages/schemas": "workspace:*",
 		"@packages/tsconfig": "workspace:*",
 		"@types/cors": "catalog:express",
 		"@types/express": "catalog:express",
 		"@types/node": "catalog:",
 		"eslint": "catalog:lint",
 		"eslint-config-prettier": "catalog:lint",
+		"esbuild": "catalog:",
 		"globals": "catalog:lint",
 		"prettier": "catalog:lint",
 		"tsx": "catalog:",
