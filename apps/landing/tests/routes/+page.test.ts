@@ -13,5 +13,5 @@ test('creates root page SEO data with the branding image', async () => {
 	expect(data.seo.pageType).toBe('WebPage');
 	expect(data.seo.title).toBeTruthy();
 	expect(data.seo.description).toBeTruthy();
-	expect(data.seo.openGraphImage).toBe('https://cdn.example.test/og/branding.webp');
+	expect(data.seo.openGraphImage).toBe('https://cdn.example.test/og/landing/branding.webp');
 });

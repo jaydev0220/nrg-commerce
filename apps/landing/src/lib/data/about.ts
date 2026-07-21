@@ -1,10 +1,4 @@
 import * as m from '$lib/paraglide/messages';
-import { assetUrl, LANDING_ASSETS } from '$lib/assets';
-
-export const storyImage = {
-	src: assetUrl(LANDING_ASSETS.companyStoryPhoto),
-	alt: 'Company Photo'
-};
 
 export const milestones = [
 	{ id: '1970', year: () => m.milestone_1970(), description: () => m.milestone_1970_desc() },
