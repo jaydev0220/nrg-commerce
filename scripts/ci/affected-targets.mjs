@@ -1,7 +1,7 @@
 import { appendFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-const targetNames = ['landing', 'catalog', 'contact', 'admin', 'api'];
+const targetNames = ['landing', 'catalog', 'contact', 'admin', 'api', 'infrastructure'];
 
 const allTargetPaths = [
 	'.github/',
@@ -33,7 +33,8 @@ const targetPaths = {
 		'packages/seo/',
 		'packages/styles/'
 	],
-	contact: ['apps/contact-worker/', 'packages/schemas/']
+	contact: ['apps/contact-worker/', 'packages/schemas/'],
+	infrastructure: ['infra/']
 };
 
 function matches(path, patterns) {

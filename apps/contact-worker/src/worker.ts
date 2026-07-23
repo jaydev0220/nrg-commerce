@@ -6,7 +6,7 @@ import {
 	type ZodType
 } from '@packages/schemas';
 
-import { buildRequestEmail, type OutgoingEmail } from './email.js';
+import { createQueuedDelivery, type QueuedDelivery } from './delivery.js';
 
 const MAX_BODY_BYTES = 16 * 1024;
 
@@ -37,13 +37,14 @@ export type WorkerLogEntry = {
 };
 
 export type WorkerDependencies = {
+	rateLimit(key: string): Promise<{ success: boolean }>;
 	verifyTurnstile(input: {
 		secret: string;
 		token: string;
 		remoteIp?: string;
 		requestId: string;
 	}): Promise<TurnstileVerification>;
-	sendEmail(message: OutgoingEmail): Promise<void>;
+	enqueueDelivery(delivery: QueuedDelivery): Promise<void>;
 	log(entry: WorkerLogEntry): void;
 	createRequestId(): string;
 	now(): number;
@@ -54,7 +55,8 @@ class RequestError extends Error {
 		readonly status: number,
 		readonly code: string,
 		message: string,
-		readonly details?: Array<{ path: string; message: string }>
+		readonly details?: Array<{ path: string; message: string }>,
+		readonly headers?: HeadersInit
 	) {
 		super(message);
 	}
@@ -82,9 +84,11 @@ function jsonResponse(
 	payload: unknown,
 	status: number,
 	origin: string,
-	requestId: string
+	requestId: string,
+	additionalHeaders?: HeadersInit
 ): Response {
 	const headers = corsHeaders(origin, requestId);
+	for (const [name, value] of new Headers(additionalHeaders)) headers.set(name, value);
 	headers.set('Content-Type', 'application/json; charset=utf-8');
 	headers.set('Cache-Control', 'no-store');
 	return new Response(JSON.stringify(payload), { status, headers });
@@ -136,6 +140,10 @@ function validateOrigin(request: Request, config: WorkerConfig): string {
 	return origin;
 }
 
+function isJsonMediaType(contentType: string | null): boolean {
+	return contentType?.split(';', 1)[0]?.trim().toLowerCase() === 'application/json';
+}
+
 async function processRequest(
 	request: Request,
 	config: WorkerConfig,
@@ -154,8 +162,25 @@ async function processRequest(
 	if (request.method !== 'POST') {
 		throw new RequestError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.');
 	}
-	if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) {
+	if (!isJsonMediaType(request.headers.get('Content-Type'))) {
 		throw new RequestError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Content-Type must be application/json.');
+	}
+
+	const remoteIp = request.headers.get('CF-Connecting-IP')?.trim() || undefined;
+	let rateLimitResult: { success: boolean };
+	try {
+		rateLimitResult = await dependencies.rateLimit(`${route.kind}:${remoteIp ?? 'unknown'}`);
+	} catch {
+		throw new RequestError(
+			503,
+			'RATE_LIMIT_UNAVAILABLE',
+			'Request could not be accepted at this time.'
+		);
+	}
+	if (!rateLimitResult.success) {
+		throw new RequestError(429, 'RATE_LIMITED', 'Too many requests. Try again later.', undefined, {
+			'Retry-After': '60'
+		});
 	}
 
 	const parsed = route.schema.safeParse(await readBoundedJson(request));
@@ -176,7 +201,7 @@ async function processRequest(
 		verification = await dependencies.verifyTurnstile({
 			secret: config.turnstileSecret,
 			token: parsed.data.turnstileToken,
-			remoteIp: request.headers.get('CF-Connecting-IP') ?? undefined,
+			remoteIp,
 			requestId
 		});
 	} catch {
@@ -194,11 +219,20 @@ async function processRequest(
 		throw new RequestError(403, 'VERIFICATION_FAILED', 'Human verification failed.');
 	}
 
-	const message = buildRequestEmail(route.kind, parsed.data, config);
+	const delivery = createQueuedDelivery(
+		route.kind,
+		parsed.data,
+		requestId,
+		new Date(dependencies.now())
+	);
 	try {
-		await dependencies.sendEmail(message);
+		await dependencies.enqueueDelivery(delivery);
 	} catch {
-		throw new RequestError(502, 'DELIVERY_FAILED', 'Request could not be delivered.');
+		throw new RequestError(
+			503,
+			'DELIVERY_UNAVAILABLE',
+			'Request could not be accepted for delivery.'
+		);
 	}
 
 	return jsonResponse({ ok: true }, 202, origin, requestId);
@@ -233,15 +267,15 @@ export async function handleRequest(
 				requestId
 			};
 			if (origin && config.allowedOrigins.has(origin)) {
-				return jsonResponse(payload, status, origin, requestId);
+				return jsonResponse(payload, status, origin, requestId, error.headers);
 			}
+			const headers = new Headers(error.headers);
+			headers.set('Content-Type', 'application/json; charset=utf-8');
+			headers.set('Cache-Control', 'no-store');
+			headers.set('X-Request-Id', requestId);
 			return new Response(JSON.stringify(payload), {
 				status,
-				headers: {
-					'Content-Type': 'application/json; charset=utf-8',
-					'Cache-Control': 'no-store',
-					'X-Request-Id': requestId
-				}
+				headers
 			});
 		}
 

@@ -24,6 +24,35 @@ type CreateOrderResult = Awaited<ReturnType<OrderRepository['createOrder']>> & {
 	reused?: boolean;
 };
 
+type CreateOrderItem =
+	| {
+			productSkuId: string;
+			quantity: number;
+	  }
+	| {
+			productSkuId?: undefined;
+			skuCode: string;
+			productName: string;
+			unitPrice: number;
+			quantity: number;
+			attributes: Prisma.InputJsonValue;
+	  };
+
+type ResolvedOrderItem = {
+	productSkuId?: string;
+	skuCode: string;
+	productName: string;
+	unitPrice: number;
+	quantity: number;
+	attributes: Prisma.InputJsonValue;
+};
+
+function isCatalogOrderItem(
+	item: CreateOrderItem
+): item is Extract<CreateOrderItem, { productSkuId: string }> {
+	return typeof item.productSkuId === 'string';
+}
+
 function canonicalize(value: unknown): unknown {
 	if (Array.isArray(value)) return value.map(canonicalize);
 	if (value && typeof value === 'object') {
@@ -46,8 +75,33 @@ function isUniqueConstraintError(error: unknown): boolean {
 	return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'P2002');
 }
 
-function roundMoney(value: number): number {
+const maxMoneyMinorUnits = 9_999_999_999n;
+
+function roundRate(value: number): number {
 	return Math.round(value * 100) / 100;
+}
+
+function toMinorUnits(value: number): bigint {
+	const minorUnits = Math.round(value * 100);
+	if (!Number.isSafeInteger(minorUnits) || minorUnits < 0) {
+		throw new AppError(
+			400,
+			'ORDER_AMOUNT_OUT_OF_RANGE',
+			'An order amount is outside the supported range.'
+		);
+	}
+	return BigInt(minorUnits);
+}
+
+function fromMinorUnits(value: bigint): number {
+	if (value < 0n || value > maxMoneyMinorUnits) {
+		throw new AppError(
+			400,
+			'ORDER_AMOUNT_OUT_OF_RANGE',
+			'An order amount is outside the supported range.'
+		);
+	}
+	return Number(value) / 100;
 }
 
 function resolveDiscountRate(value: number | undefined, suggestedRate: number | null): number {
@@ -59,7 +113,7 @@ function resolveDiscountRate(value: number | undefined, suggestedRate: number | 
 			'The discount rate must be between 0 and 100 percent.'
 		);
 	}
-	return roundMoney(rate);
+	return roundRate(rate);
 }
 
 function ensureOrder<T>(order: T | null): T {
@@ -112,14 +166,7 @@ export function createOrderService(dependencies: OrderServiceDependencies) {
 			customerPhone?: string | null;
 			customerAddress?: string | null;
 			discountRate?: number;
-			items: Array<{
-				productSkuId?: string;
-				skuCode: string;
-				productName: string;
-				unitPrice: number;
-				quantity: number;
-				attributes: Prisma.InputJsonValue;
-			}>;
+			items: CreateOrderItem[];
 		}): Promise<CreateOrderResult> {
 			const idempotencyKey = input.idempotencyKey ?? randomUUID();
 			const requestFingerprint = fingerprint({ ...input, idempotencyKey: undefined });
@@ -151,12 +198,16 @@ export function createOrderService(dependencies: OrderServiceDependencies) {
 				}
 			}
 
+			const skuSnapshots = new Map<
+				string,
+				NonNullable<Awaited<ReturnType<OrderRepository['findSkuById']>>>
+			>();
 			for (const item of input.items) {
-				if (!item.productSkuId) {
-					continue;
-				}
+				if (!isCatalogOrderItem(item)) continue;
 
-				const sku = await dependencies.repository.findSkuById(item.productSkuId);
+				const sku =
+					skuSnapshots.get(item.productSkuId) ??
+					(await dependencies.repository.findSkuById(item.productSkuId));
 
 				if (!sku) {
 					throw new AppError(
@@ -165,20 +216,47 @@ export function createOrderService(dependencies: OrderServiceDependencies) {
 						'One or more referenced product SKUs could not be found.'
 					);
 				}
+				skuSnapshots.set(item.productSkuId, sku);
 			}
 
-			const items = input.items.map((item) => ({
-				...item,
-				lineTotal: roundMoney(item.unitPrice * item.quantity)
-			}));
+			const resolvedItems: ResolvedOrderItem[] = input.items.map((item) => {
+				if (!isCatalogOrderItem(item)) return item;
+				const sku = skuSnapshots.get(item.productSkuId);
+				if (!sku) throw new Error('Validated product SKU snapshot is missing.');
+				return {
+					productSkuId: sku.id,
+					skuCode: sku.skuCode,
+					productName: sku.productName,
+					unitPrice: sku.price,
+					quantity: item.quantity,
+					attributes: sku.attributes
+				};
+			});
+			const itemCalculations = resolvedItems.map((item) => {
+				const lineTotalMinorUnits = toMinorUnits(item.unitPrice) * BigInt(item.quantity);
+				return {
+					item: {
+						...item,
+						lineTotal: fromMinorUnits(lineTotalMinorUnits)
+					},
+					lineTotalMinorUnits
+				};
+			});
+			const items = itemCalculations.map(({ item }) => item);
 			const itemCount = items.reduce((total, item) => total + item.quantity, 0);
-			const subtotalAmount = roundMoney(items.reduce((total, item) => total + item.lineTotal, 0));
+			const subtotalMinorUnits = itemCalculations.reduce(
+				(total, item) => total + item.lineTotalMinorUnits,
+				0n
+			);
+			const subtotalAmount = fromMinorUnits(subtotalMinorUnits);
 			const suggestedDiscountRate = business?.label?.deletedAt
 				? null
 				: (business?.label?.discountRate ?? null);
 			const discountRate = resolveDiscountRate(input.discountRate, suggestedDiscountRate);
-			const discountAmount = roundMoney(subtotalAmount * (discountRate / 100));
-			const totalAmount = roundMoney(subtotalAmount - discountAmount);
+			const discountBasisPoints = BigInt(Math.round(discountRate * 100));
+			const discountMinorUnits = (subtotalMinorUnits * discountBasisPoints + 5_000n) / 10_000n;
+			const discountAmount = fromMinorUnits(discountMinorUnits);
+			const totalAmount = fromMinorUnits(subtotalMinorUnits - discountMinorUnits);
 
 			try {
 				return {
@@ -218,19 +296,7 @@ export function createOrderService(dependencies: OrderServiceDependencies) {
 			orderId: string,
 			status: Parameters<OrderRepository['updateOrderStatus']>[1]
 		) {
-			const existingOrder = ensureOrder(await dependencies.repository.findOrderById(orderId));
-			const completedAt =
-				status === 'completed'
-					? existingOrder.status === 'completed'
-						? existingOrder.completedAt
-						: new Date()
-					: null;
-			const order = await dependencies.repository.updateOrderStatus(orderId, status, completedAt);
-
-			return {
-				order,
-				previousStatus: existingOrder.status
-			};
+			return dependencies.repository.updateOrderStatus(orderId, status);
 		},
 
 		async updateOrder(
@@ -260,19 +326,7 @@ export function createOrderService(dependencies: OrderServiceDependencies) {
 					'The requested business record could not be found.'
 				);
 			}
-			const completedAt =
-				input.status === undefined
-					? undefined
-					: input.status === 'completed'
-						? existingOrder.status === 'completed'
-							? existingOrder.completedAt
-							: new Date()
-						: null;
-			const order = await dependencies.repository.updateOrder(orderId, {
-				...input,
-				completedAt
-			});
-			return { order, previousStatus: existingOrder.status };
+			return dependencies.repository.updateOrder(orderId, input);
 		}
 	};
 }

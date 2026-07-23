@@ -1,19 +1,24 @@
-import { basename, extname } from 'node:path';
-
 import {
 	DeleteObjectCommand,
+	GetObjectCommand,
 	HeadObjectCommand,
 	PutObjectCommand,
 	S3Client
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { productImageContentTypeValues, productImageMaxFileSize } from '@packages/schemas';
+import sharp from 'sharp';
 
 import { AppError } from '../errors/app-error.js';
+
+const maxImagePixels = 40_000_000;
+const maxImageDimension = 12_000;
+const normalizedContentType = 'image/webp';
 
 type R2ObjectStorageConfig = {
 	accountId: string;
 	bucketName: string;
+	uploadBucketName: string;
 	accessKeyId: string;
 	secretAccessKey: string;
 	publicBaseUrl: string;
@@ -21,11 +26,24 @@ type R2ObjectStorageConfig = {
 	uploadUrlTtlSeconds: number;
 };
 
+type ObjectBody = {
+	transformToByteArray(): Promise<Uint8Array>;
+};
+
+type ObjectStorageResponse =
+	| {
+			ContentType?: string;
+			ContentLength?: number;
+	  }
+	| {
+			Body?: ObjectBody;
+	  }
+	| undefined;
+
 type S3ClientLike = {
 	send(
-		command: HeadObjectCommand
-	): Promise<{ ContentType?: string; ContentLength?: number } | undefined>;
-	send(command: DeleteObjectCommand): Promise<unknown>;
+		command: HeadObjectCommand | GetObjectCommand | PutObjectCommand | DeleteObjectCommand
+	): Promise<ObjectStorageResponse>;
 };
 
 type SignUrl = (
@@ -39,6 +57,7 @@ type SignUrl = (
 type ObjectStorageDependencies = {
 	s3Client?: S3ClientLike;
 	signUrl?: SignUrl;
+	normalizeImage?: (input: Uint8Array) => Promise<Uint8Array>;
 	now?: () => Date;
 	createId?: () => string;
 };
@@ -49,19 +68,21 @@ type ImageUploadRequest = {
 	fileSize: number;
 };
 
-type UploadedImageAsset = {
+type PromotedImageAsset = {
 	assetKey: string;
 	imageUrl: string;
-	contentType: string | null;
+	contentType: typeof normalizedContentType;
+};
+
+const uploadExtensions: Record<(typeof productImageContentTypeValues)[number], string> = {
+	'image/avif': '.avif',
+	'image/jpeg': '.jpg',
+	'image/png': '.png',
+	'image/webp': '.webp'
 };
 
 function trimTrailingSlash(value: string): string {
 	return value.endsWith('/') ? value.slice(0, -1) : value;
-}
-
-function sanitizeFileExtension(fileName: string): string {
-	const extension = extname(basename(fileName)).toLowerCase();
-	return extension.replace(/[^a-z0-9.]/g, '');
 }
 
 function buildProductAssetPrefix(assetKeyPrefix: string, productId: string): string {
@@ -87,6 +108,140 @@ function isNotFoundError(error: unknown): boolean {
 	return candidate.name === 'NotFound' || candidate.$metadata?.httpStatusCode === 404;
 }
 
+function invalidImageError(): AppError {
+	return new AppError(
+		422,
+		'INVALID_IMAGE_ASSET',
+		'The uploaded asset is not a valid supported image.'
+	);
+}
+
+export async function normalizeProductImage(input: Uint8Array): Promise<Uint8Array> {
+	try {
+		const image = sharp(input, {
+			animated: false,
+			failOn: 'error',
+			limitInputPixels: maxImagePixels,
+			sequentialRead: true
+		});
+		const metadata = await image.metadata();
+		const width = metadata.width ?? 0;
+		const height = metadata.height ?? 0;
+
+		if (
+			width <= 0 ||
+			height <= 0 ||
+			width > maxImageDimension ||
+			height > maxImageDimension ||
+			width * height > maxImagePixels ||
+			(metadata.pages ?? 1) !== 1
+		) {
+			throw invalidImageError();
+		}
+
+		const normalized = await image
+			.rotate()
+			.webp({ effort: 4, quality: 88, smartSubsample: true })
+			.toBuffer();
+
+		if (normalized.byteLength <= 0 || normalized.byteLength > productImageMaxFileSize) {
+			throw new AppError(
+				422,
+				'IMAGE_ASSET_TOO_LARGE',
+				'The normalized image exceeds the maximum allowed file size.'
+			);
+		}
+
+		return normalized;
+	} catch (error) {
+		if (error instanceof AppError) throw error;
+		throw invalidImageError();
+	}
+}
+
+function validatePendingMetadata(response: ObjectStorageResponse): number {
+	const contentType = response && 'ContentType' in response ? response.ContentType : undefined;
+	const contentLength =
+		response && 'ContentLength' in response ? response.ContentLength : undefined;
+
+	if (
+		!contentType ||
+		!productImageContentTypeValues.includes(
+			contentType as (typeof productImageContentTypeValues)[number]
+		)
+	) {
+		throw invalidImageError();
+	}
+	if (
+		contentLength === undefined ||
+		contentLength <= 0 ||
+		contentLength > productImageMaxFileSize
+	) {
+		throw new AppError(
+			422,
+			'IMAGE_ASSET_TOO_LARGE',
+			'The uploaded image exceeds the maximum allowed file size.'
+		);
+	}
+
+	return contentLength;
+}
+
+async function readPendingImage(
+	s3Client: S3ClientLike,
+	bucketName: string,
+	assetKey: string
+): Promise<Uint8Array> {
+	const contentLength = validatePendingMetadata(
+		await s3Client.send(new HeadObjectCommand({ Bucket: bucketName, Key: assetKey }))
+	);
+	const response = await s3Client.send(new GetObjectCommand({ Bucket: bucketName, Key: assetKey }));
+	const body =
+		response && 'Body' in response ? await response.Body?.transformToByteArray() : undefined;
+
+	if (!body || body.byteLength !== contentLength) throw invalidImageError();
+	return body;
+}
+
+async function writePublicImage(
+	s3Client: S3ClientLike,
+	bucketName: string,
+	assetKey: string,
+	body: Uint8Array
+): Promise<void> {
+	await s3Client.send(
+		new PutObjectCommand({
+			Bucket: bucketName,
+			Key: assetKey,
+			Body: body,
+			ContentLength: body.byteLength,
+			ContentType: normalizedContentType,
+			CacheControl: 'public, max-age=31536000, immutable'
+		})
+	);
+}
+
+async function handlePromotionError(
+	error: unknown,
+	purgeInvalidUpload: () => Promise<void>
+): Promise<never> {
+	if (
+		error instanceof AppError &&
+		(error.code === 'INVALID_IMAGE_ASSET' || error.code === 'IMAGE_ASSET_TOO_LARGE')
+	) {
+		await purgeInvalidUpload().catch(() => undefined);
+		throw error;
+	}
+	if (isNotFoundError(error)) {
+		throw new AppError(
+			422,
+			'IMAGE_ASSET_NOT_FOUND',
+			'The referenced uploaded image asset could not be found.'
+		);
+	}
+	throw error;
+}
+
 export function createR2ObjectStorage(
 	config: R2ObjectStorageConfig,
 	dependencies: ObjectStorageDependencies = {}
@@ -104,17 +259,33 @@ export function createR2ObjectStorage(
 	const signUrl =
 		dependencies.signUrl ??
 		((client, command, options) => getSignedUrl(client as S3Client, command, options));
+	const normalizeImage = dependencies.normalizeImage ?? normalizeProductImage;
 	const now = dependencies.now ?? (() => new Date());
 	const createId = dependencies.createId ?? (() => crypto.randomUUID());
 
+	async function deleteObject(bucketName: string, assetKey: string): Promise<void> {
+		try {
+			await s3Client.send(
+				new DeleteObjectCommand({
+					Bucket: bucketName,
+					Key: assetKey
+				})
+			);
+		} catch (error) {
+			if (!isNotFoundError(error)) throw error;
+		}
+	}
+
 	return {
 		async createImageUploadTarget(productId: string, input: ImageUploadRequest) {
+			const contentType = input.contentType as (typeof productImageContentTypeValues)[number];
+			const extension = uploadExtensions[contentType];
 			const assetKeyPrefix = buildProductAssetPrefix(config.assetKeyPrefix, productId);
-			const assetKey = `${assetKeyPrefix}/${createId()}${sanitizeFileExtension(input.fileName)}`;
+			const assetKey = `${assetKeyPrefix}/${createId()}${extension}`;
 			const uploadUrl = await signUrl(
 				s3Client,
 				new PutObjectCommand({
-					Bucket: config.bucketName,
+					Bucket: config.uploadBucketName,
 					Key: assetKey,
 					ContentType: input.contentType,
 					ContentLength: input.fileSize
@@ -127,7 +298,6 @@ export function createR2ObjectStorage(
 			return {
 				method: 'PUT' as const,
 				assetKey,
-				imageUrl: buildPublicUrl(config.publicBaseUrl, assetKey),
 				uploadUrl,
 				headers: {
 					'Content-Type': input.contentType
@@ -136,10 +306,10 @@ export function createR2ObjectStorage(
 			};
 		},
 
-		async assertImageAssetExists(
+		async promoteImageAsset(
 			productId: string,
 			input: { assetKey: string }
-		): Promise<UploadedImageAsset> {
+		): Promise<PromotedImageAsset> {
 			const assetKeyPrefix = `${buildProductAssetPrefix(config.assetKeyPrefix, productId)}/`;
 
 			if (!input.assetKey.startsWith(assetKeyPrefix)) {
@@ -151,72 +321,29 @@ export function createR2ObjectStorage(
 			}
 
 			try {
-				const object = await s3Client.send(
-					new HeadObjectCommand({
-						Bucket: config.bucketName,
-						Key: input.assetKey
-					})
-				);
-				const contentType = object?.ContentType ?? null;
-				const contentLength = object?.ContentLength ?? null;
-
-				if (
-					!contentType ||
-					!productImageContentTypeValues.includes(
-						contentType as (typeof productImageContentTypeValues)[number]
-					)
-				) {
-					throw new AppError(
-						422,
-						'INVALID_IMAGE_ASSET',
-						'The uploaded asset is not a valid image object.'
-					);
-				}
-				if (
-					contentLength === null ||
-					contentLength <= 0 ||
-					contentLength > productImageMaxFileSize
-				) {
-					throw new AppError(
-						422,
-						'IMAGE_ASSET_TOO_LARGE',
-						'The uploaded image exceeds the maximum allowed file size.'
-					);
-				}
+				const body = await readPendingImage(s3Client, config.uploadBucketName, input.assetKey);
+				const normalizedBody = await normalizeImage(body);
+				const publicAssetKey = `${assetKeyPrefix}${createId()}.webp`;
+				await writePublicImage(s3Client, config.bucketName, publicAssetKey, normalizedBody);
 
 				return {
-					assetKey: input.assetKey,
-					imageUrl: buildPublicUrl(config.publicBaseUrl, input.assetKey),
-					contentType
+					assetKey: publicAssetKey,
+					imageUrl: buildPublicUrl(config.publicBaseUrl, publicAssetKey),
+					contentType: normalizedContentType
 				};
 			} catch (error) {
-				if (error instanceof AppError) {
-					throw error;
-				}
-
-				if (isNotFoundError(error)) {
-					throw new AppError(
-						422,
-						'IMAGE_ASSET_NOT_FOUND',
-						'The referenced uploaded image asset could not be found.'
-					);
-				}
-
-				throw error;
+				return handlePromotionError(error, () =>
+					deleteObject(config.uploadBucketName, input.assetKey)
+				);
 			}
 		},
 
 		async deleteImageAsset(assetKey: string): Promise<void> {
-			try {
-				await s3Client.send(
-					new DeleteObjectCommand({
-						Bucket: config.bucketName,
-						Key: assetKey
-					})
-				);
-			} catch (error) {
-				if (!isNotFoundError(error)) throw error;
-			}
+			await deleteObject(config.bucketName, assetKey);
+		},
+
+		async deleteImageUploadAsset(assetKey: string): Promise<void> {
+			await deleteObject(config.uploadBucketName, assetKey);
 		}
 	};
 }

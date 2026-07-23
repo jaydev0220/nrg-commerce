@@ -18,6 +18,19 @@ export const authCookieNames = {
 	securityReauth: 'admin_security_reauth_token'
 } as const;
 
+export const secureAuthCookieNames = {
+	access: '__Host-admin_access_token',
+	refresh: '__Host-admin_refresh_token',
+	pending: '__Host-admin_mfa_pending_token',
+	setup: '__Host-admin_mfa_setup_token',
+	ceremony: '__Host-admin_passkey_ceremony_token',
+	securityReauth: '__Host-admin_security_reauth_token'
+} as const;
+
+export function resolveAuthCookieNames(secure: boolean) {
+	return secure ? secureAuthCookieNames : authCookieNames;
+}
+
 type AuthResult = AuthSuccessResult | AuthMfaChallengeResult | AuthMfaSetupRequiredResult;
 
 type AuthCookieOptions = {
@@ -63,6 +76,7 @@ export function getPublicTotpSetup(result: TOTPSetupResult) {
 }
 
 export function createAuthCookieManager(options: AuthCookieOptions) {
+	const cookieNames = resolveAuthCookieNames(options.secure);
 	const baseOptions = baseCookieOptions(options);
 	const accessOptions = { ...baseOptions, maxAge: options.accessMaxAgeSeconds * 1_000 };
 	const refreshOptions = { ...baseOptions, maxAge: options.refreshMaxAgeSeconds * 1_000 };
@@ -73,94 +87,94 @@ export function createAuthCookieManager(options: AuthCookieOptions) {
 	}
 
 	function clearAuthFlowCookies(response: Response): void {
-		clearCookie(response, authCookieNames.pending);
-		clearCookie(response, authCookieNames.setup);
-		clearCookie(response, authCookieNames.ceremony);
-		clearCookie(response, authCookieNames.securityReauth);
+		clearCookie(response, cookieNames.pending);
+		clearCookie(response, cookieNames.setup);
+		clearCookie(response, cookieNames.ceremony);
+		clearCookie(response, cookieNames.securityReauth);
 	}
 
 	return {
 		applyAuthResult(response: Response, result: AuthResult): void {
 			clearAuthFlowCookies(response);
 			if (result.status === 'authenticated') {
-				response.cookie(authCookieNames.access, result.accessToken, accessOptions);
-				response.cookie(authCookieNames.refresh, result.refreshToken, refreshOptions);
+				response.cookie(cookieNames.access, result.accessToken, accessOptions);
+				response.cookie(cookieNames.refresh, result.refreshToken, refreshOptions);
 				return;
 			}
-			clearCookie(response, authCookieNames.access);
-			clearCookie(response, authCookieNames.refresh);
+			clearCookie(response, cookieNames.access);
+			clearCookie(response, cookieNames.refresh);
 			if (result.status === 'mfa_required') {
-				response.cookie(authCookieNames.pending, result.pendingToken, flowOptions);
+				response.cookie(cookieNames.pending, result.pendingToken, flowOptions);
 				return;
 			}
-			response.cookie(authCookieNames.setup, result.setupToken, flowOptions);
+			response.cookie(cookieNames.setup, result.setupToken, flowOptions);
 		},
 
 		setCeremonyToken(response: Response, ceremonyToken: string): void {
-			response.cookie(authCookieNames.ceremony, ceremonyToken, flowOptions);
+			response.cookie(cookieNames.ceremony, ceremonyToken, flowOptions);
 		},
 
 		setSetupToken(response: Response, setupToken: string): void {
-			response.cookie(authCookieNames.setup, setupToken, flowOptions);
+			response.cookie(cookieNames.setup, setupToken, flowOptions);
 		},
 
 		setSecurityReauthToken(response: Response, token: string): void {
-			response.cookie(authCookieNames.securityReauth, token, flowOptions);
+			response.cookie(cookieNames.securityReauth, token, flowOptions);
 		},
 
 		clearCeremonyToken(response: Response): void {
-			clearCookie(response, authCookieNames.ceremony);
+			clearCookie(response, cookieNames.ceremony);
 		},
 
 		clearSetupToken(response: Response): void {
-			clearCookie(response, authCookieNames.setup);
+			clearCookie(response, cookieNames.setup);
 		},
 
 		clearSecurityReauthToken(response: Response): void {
-			clearCookie(response, authCookieNames.securityReauth);
+			clearCookie(response, cookieNames.securityReauth);
 		},
 
 		clearSession(response: Response): void {
-			clearCookie(response, authCookieNames.access);
-			clearCookie(response, authCookieNames.refresh);
+			clearCookie(response, cookieNames.access);
+			clearCookie(response, cookieNames.refresh);
 			clearAuthFlowCookies(response);
 		},
 
 		readAccessToken(request: Request): string | null {
-			return readCookie(request, authCookieNames.access);
+			return readCookie(request, cookieNames.access);
 		},
 
 		readRefreshToken(request: Request): string | null {
-			return readCookie(request, authCookieNames.refresh);
+			return readCookie(request, cookieNames.refresh);
 		},
 
 		readPendingToken(request: Request): string | null {
-			return readCookie(request, authCookieNames.pending);
+			return readCookie(request, cookieNames.pending);
 		},
 
 		readSetupToken(request: Request): string | null {
-			return readCookie(request, authCookieNames.setup);
+			return readCookie(request, cookieNames.setup);
 		},
 
 		readCeremonyToken(request: Request): string | null {
-			return readCookie(request, authCookieNames.ceremony);
+			return readCookie(request, cookieNames.ceremony);
 		},
 
 		readSecurityReauthToken(request: Request): string | null {
-			return readCookie(request, authCookieNames.securityReauth);
+			return readCookie(request, cookieNames.securityReauth);
 		},
 
 		readFlowState(request: Request, includeAccess = true) {
-			if (includeAccess && readCookie(request, authCookieNames.access)) {
+			if (includeAccess && readCookie(request, cookieNames.access)) {
 				return { status: 'authenticated' as const };
 			}
-			if (readCookie(request, authCookieNames.setup)) {
+			if (readCookie(request, cookieNames.setup)) {
 				return {
 					status: 'mfa_setup_required' as const,
 					availableMethods: ['authenticator', 'passkey'] as const
 				};
 			}
-			if (readCookie(request, authCookieNames.refresh)) {
+			if (readCookie(request, cookieNames.refresh)) {
 				return { status: 'refresh_required' as const };
 			}
 			return { status: 'unauthenticated' as const };

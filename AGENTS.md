@@ -251,7 +251,7 @@ Keep test files the same structure as src.
 - **Framework:** Svelte 5
 - **Styling:** Tailwind CSS 4
 - **i18n:** Paraglide JS
-- **Deployment:** GitHub Pages via `@sveltejs/adapter-static`
+- **Deployment:** Cloudflare Workers Static Assets via `@sveltejs/adapter-cloudflare`
 
 #### `apps/admin`
 

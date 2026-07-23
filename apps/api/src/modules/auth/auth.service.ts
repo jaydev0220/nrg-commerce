@@ -14,13 +14,23 @@ import type {
 	AuthStaffRecord,
 	AuthSuccessResult,
 	MfaSetupTokenPayload,
+	PasskeyCredentialRecord,
 	PasskeyOptionsResult,
 	PasskeyRegistrationInput,
 	PendingAuthPayload,
 	SecurityAction,
 	SecurityReauthMethod,
+	TotpCredentialRecord,
 	TOTPSetupResult
 } from '../../types/auth.js';
+
+const dummyPasswordHash =
+	'$argon2id$v=19$m=19456,p=1,t=2$gXLP+LXnmT1+Z0lDIPfe7Q$cgzFwafM+BkZ/fT9mgmIlOtPP5+dSKcjV979/3dx2n8';
+const passwordAttemptPolicy = {
+	windowMilliseconds: 15 * 60 * 1000,
+	maxAttempts: 5,
+	blockMilliseconds: 15 * 60 * 1000
+} as const;
 
 type AuthServiceDependencies = {
 	repository: Pick<
@@ -35,11 +45,14 @@ type AuthServiceDependencies = {
 		| 'revokeSessionForStaff'
 		| 'listSessions'
 		| 'findTotpCredential'
+		| 'recordFailedPasswordAttempt'
+		| 'clearFailedPasswordAttempts'
+		| 'consumeTotpTimeStep'
 		| 'updateMfaPreference'
 		| 'upsertTotpCredential'
 		| 'deleteTotpCredential'
 		| 'createPasskeyCredential'
-		| 'updatePasskeyCredentialCounter'
+		| 'consumePasskeyAuthentication'
 		| 'listPasskeyCredentials'
 		| 'findPasskeyCredentialByCredentialId'
 		| 'updatePasswordHash'
@@ -126,6 +139,27 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 	const sessionAbsoluteTtlSeconds = dependencies.sessionAbsoluteTtlSeconds ?? 2_592_000;
 	const initialSessionTtlSeconds = Math.min(sessionTtlSeconds, sessionAbsoluteTtlSeconds);
 
+	async function verifyStoredTotp(
+		staffId: string,
+		credential: TotpCredentialRecord,
+		code: string
+	): Promise<boolean> {
+		const result = await dependencies.totpService.verifyCodeWithTimeStep(
+			dependencies.totpService.decryptSecret(credential.secretEncrypted),
+			code,
+			credential.digits,
+			credential.period,
+			credential.lastUsedTimeStep
+		);
+		if (!result.valid) return false;
+
+		return dependencies.repository.consumeTotpTimeStep(
+			staffId,
+			result.timeStep,
+			dependencies.now()
+		);
+	}
+
 	async function finishPasskeyAuthentication(
 		challenge: string,
 		credential: Parameters<PasskeyService['finishAuthentication']>[1],
@@ -140,6 +174,30 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 				requireUserVerification
 			);
 		} catch {
+			throw new AppError(
+				401,
+				'PASSKEY_VERIFICATION_FAILED',
+				'The passkey authentication could not be verified.'
+			);
+		}
+	}
+
+	async function claimPasskeyAuthentication(
+		storedCredential: PasskeyCredentialRecord,
+		counter: number
+	): Promise<void> {
+		const now = dependencies.now();
+		const lastUsedAt = new Date(
+			Math.max(now.getTime(), (storedCredential.lastUsedAt?.getTime() ?? -1) + 1)
+		);
+		const claimed = await dependencies.repository.consumePasskeyAuthentication({
+			credentialId: storedCredential.credentialId,
+			expectedCounter: storedCredential.counter,
+			expectedLastUsedAt: storedCredential.lastUsedAt,
+			counter,
+			lastUsedAt
+		});
+		if (!claimed) {
 			throw new AppError(
 				401,
 				'PASSKEY_VERIFICATION_FAILED',
@@ -352,22 +410,53 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 			userAgent: string | null;
 			ipAddress: string | null;
 		}): Promise<AuthSuccessResult | AuthMfaChallengeResult | AuthMfaSetupRequiredResult> {
-			const staff = ensureActiveStaff(await dependencies.repository.findStaffByEmail(input.email));
-
-			if (!staff.passwordHash) {
+			const candidate = await dependencies.repository.findStaffByEmail(input.email);
+			if (!candidate || !isStaffActive(candidate) || !candidate.passwordHash) {
+				await dependencies.passwordHasher.verify(input.password, dummyPasswordHash);
 				throw new AppError(401, 'INVALID_CREDENTIALS', 'Authentication failed.');
+			}
+			const staff = candidate;
+			const passwordHash = candidate.passwordHash;
+			const attemptedAt = dependencies.now();
+
+			if (staff.authBlockedUntil && staff.authBlockedUntil > attemptedAt) {
+				throw new AppError(
+					429,
+					'AUTHENTICATION_TEMPORARILY_BLOCKED',
+					'Authentication is temporarily unavailable. Try again later.'
+				);
 			}
 
 			const isValidPassword = await dependencies.passwordHasher.verify(
 				input.password,
-				staff.passwordHash
+				passwordHash
 			);
 
 			if (!isValidPassword) {
+				const failure = await dependencies.repository.recordFailedPasswordAttempt(
+					staff.id,
+					attemptedAt,
+					passwordAttemptPolicy
+				);
+				if (failure.authBlockedUntil && failure.authBlockedUntil > attemptedAt) {
+					throw new AppError(
+						429,
+						'AUTHENTICATION_TEMPORARILY_BLOCKED',
+						'Authentication is temporarily unavailable. Try again later.'
+					);
+				}
 				throw new AppError(401, 'INVALID_CREDENTIALS', 'Authentication failed.');
 			}
 
-			if (dependencies.passwordHasher.needsRehash?.(staff.passwordHash)) {
+			if (!(await dependencies.repository.clearFailedPasswordAttempts(staff.id, attemptedAt))) {
+				throw new AppError(
+					429,
+					'AUTHENTICATION_TEMPORARILY_BLOCKED',
+					'Authentication is temporarily unavailable. Try again later.'
+				);
+			}
+
+			if (dependencies.passwordHasher.needsRehash?.(passwordHash)) {
 				await dependencies.repository.updatePasswordHash(
 					staff.id,
 					await dependencies.passwordHasher.hash(input.password)
@@ -412,15 +501,7 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 				);
 			}
 
-			const secret = dependencies.totpService.decryptSecret(credential.secretEncrypted);
-			const isValidCode = await dependencies.totpService.verifyCode(
-				secret,
-				input.code,
-				credential.digits,
-				credential.period
-			);
-
-			if (!isValidCode) {
+			if (!(await verifyStoredTotp(staff.id, credential, input.code))) {
 				throw new AppError(401, 'INVALID_TOTP_CODE', 'The provided one-time password is invalid.');
 			}
 
@@ -432,30 +513,11 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 			});
 		},
 
-		async beginPasskeyLogin(email?: string): Promise<PasskeyOptionsResult> {
-			const staff = email
-				? ensureActiveStaff(await dependencies.repository.findStaffByEmail(email))
-				: null;
-			const credentials = staff
-				? await dependencies.repository.listPasskeyCredentials(staff.id)
-				: [];
-
-			if (staff && credentials.length === 0) {
-				throw new AppError(
-					404,
-					'PASSKEY_NOT_FOUND',
-					'No passkey is registered for this staff account.'
-				);
-			}
-
-			const options = await dependencies.passkeyService.beginAuthentication(
-				credentials,
-				'required'
-			);
+		async beginPasskeyLogin(): Promise<PasskeyOptionsResult> {
+			const options = await dependencies.passkeyService.beginAuthentication([], 'required');
 			const ceremonyToken = await dependencies.tokenService.issueCeremonyToken({
 				type: 'ceremony',
 				purpose: 'passkey_login',
-				...(staff ? { staffId: staff.id } : {}),
 				challenge: options.challenge,
 				primaryFactor: 'passkey'
 			});
@@ -514,10 +576,9 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 				);
 			}
 
-			await dependencies.repository.updatePasskeyCredentialCounter(
-				storedCredential.credentialId,
-				verification.authenticationInfo.newCounter,
-				dependencies.now()
+			await claimPasskeyAuthentication(
+				storedCredential,
+				verification.authenticationInfo.newCounter
 			);
 
 			return issueAuthenticatedSession(staff, {
@@ -614,10 +675,9 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 				);
 			}
 
-			await dependencies.repository.updatePasskeyCredentialCounter(
-				storedCredential.credentialId,
-				verification.authenticationInfo.newCounter,
-				dependencies.now()
+			await claimPasskeyAuthentication(
+				storedCredential,
+				verification.authenticationInfo.newCounter
 			);
 
 			return issueAuthenticatedSession(staff, {
@@ -880,46 +940,43 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 				);
 			}
 
-			const isValidCode = await dependencies.totpService.verifyCode(
+			const verification = await dependencies.totpService.verifyCodeWithTimeStep(
 				claims.secret,
 				code,
 				claims.digits,
 				claims.period
 			);
 
-			if (!isValidCode) {
+			if (!verification.valid) {
 				throw new AppError(401, 'INVALID_TOTP_CODE', 'The provided one-time password is invalid.');
 			}
+			const verifiedAt = dependencies.now();
 
 			await dependencies.repository.upsertTotpCredential({
 				staffId,
 				secretEncrypted: dependencies.totpService.encryptSecret(claims.secret),
 				digits: claims.digits,
 				period: claims.period,
-				verifiedAt: dependencies.now()
+				verifiedAt,
+				lastUsedAt: verifiedAt,
+				lastUsedTimeStep: verification.timeStep
 			});
 		},
 
 		async removeTotp(staffId: string): Promise<{ sessionsRevoked: boolean }> {
-			const staff = ensureActiveStaff(await dependencies.repository.findStaffById(staffId));
-			if (staff.totpCredentialCount === 1 && staff.passkeyCredentialCount === 0) {
+			ensureActiveStaff(await dependencies.repository.findStaffById(staffId));
+			const result = await dependencies.repository.deleteTotpCredential(staffId);
+			if (result === 'not_found') {
+				throw new AppError(404, 'TOTP_NOT_FOUND', 'The authenticator could not be found.');
+			}
+			if (result === 'mfa_required') {
 				throw new AppError(
 					409,
 					'MFA_METHOD_REQUIRED',
 					'Add another MFA method before removing the current one.'
 				);
 			}
-			await dependencies.repository.deleteTotpCredential(staffId);
-			const hasRemainingPasskey = staff.passkeyCredentialCount > 0;
-			await dependencies.repository.updateMfaPreference(staffId, {
-				preferredMfaMethod: hasRemainingPasskey ? 'passkey' : null
-			});
-
-			if (hasRemainingPasskey) return { sessionsRevoked: false };
-			for (const session of await dependencies.repository.listSessions(staffId)) {
-				if (!session.revokedAt) await dependencies.repository.revokeSession(session.id);
-			}
-			return { sessionsRevoked: true };
+			return { sessionsRevoked: false };
 		},
 
 		async beginPasskeyRegistration(
@@ -1021,14 +1078,9 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 			const credential = await dependencies.repository.findTotpCredential(staff.id);
 			if (!credential)
 				throw new AppError(409, 'MFA_NOT_CONFIGURED', 'No authenticator is configured.');
-			const isValid = await dependencies.totpService.verifyCode(
-				dependencies.totpService.decryptSecret(credential.secretEncrypted),
-				input.code,
-				credential.digits,
-				credential.period
-			);
-			if (!isValid)
+			if (!(await verifyStoredTotp(staff.id, credential, input.code))) {
 				throw new AppError(401, 'INVALID_TOTP_CODE', 'The one-time password is invalid.');
+			}
 			return dependencies.tokenService.issueCeremonyToken({
 				type: 'ceremony',
 				purpose: 'security_reauth',
@@ -1117,11 +1169,7 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 					'The passkey could not be verified.'
 				);
 			}
-			await dependencies.repository.updatePasskeyCredentialCounter(
-				credential.credentialId,
-				verification.authenticationInfo.newCounter,
-				dependencies.now()
-			);
+			await claimPasskeyAuthentication(credential, verification.authenticationInfo.newCounter);
 			return dependencies.tokenService.issueCeremonyToken({
 				type: 'ceremony',
 				purpose: 'security_reauth',
@@ -1206,38 +1254,22 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 		},
 
 		async removePasskey(staffId: string, passkeyId: string): Promise<{ sessionsRevoked: boolean }> {
-			const staff = ensureActiveStaff(await dependencies.repository.findStaffById(staffId));
+			ensureActiveStaff(await dependencies.repository.findStaffById(staffId));
 			if (!dependencies.repository.deletePasskeyCredential) {
 				throw new AppError(501, 'NOT_IMPLEMENTED', 'Passkey removal is not available.');
 			}
-			const credentials = await dependencies.repository.listPasskeyCredentials(staffId);
-			if (!credentials.some((credential) => credential.id === passkeyId)) {
+			const result = await dependencies.repository.deletePasskeyCredential(staffId, passkeyId);
+			if (result === 'not_found') {
 				throw new AppError(404, 'PASSKEY_NOT_FOUND', 'The passkey could not be found.');
 			}
-			if (credentials.length === 1 && staff.totpCredentialCount === 0) {
+			if (result === 'mfa_required') {
 				throw new AppError(
 					409,
 					'MFA_METHOD_REQUIRED',
 					'Add another MFA method before removing the current one.'
 				);
 			}
-			const deleted = await dependencies.repository.deletePasskeyCredential(staffId, passkeyId);
-			if (!deleted) throw new AppError(404, 'PASSKEY_NOT_FOUND', 'The passkey could not be found.');
-			const hasRemainingPasskey = credentials.length > 1;
-			const hasRemainingTotp = staff.totpCredentialCount > 0;
-			if (hasRemainingPasskey || hasRemainingTotp) {
-				await dependencies.repository.updateMfaPreference(staffId, {
-					preferredMfaMethod: hasRemainingPasskey ? 'passkey' : 'authenticator'
-				});
-				return { sessionsRevoked: false };
-			}
-			await dependencies.repository.updateMfaPreference(staffId, {
-				preferredMfaMethod: null
-			});
-			for (const session of await dependencies.repository.listSessions(staffId)) {
-				if (!session.revokedAt) await dependencies.repository.revokeSession(session.id);
-			}
-			return { sessionsRevoked: true };
+			return { sessionsRevoked: false };
 		},
 
 		async changePassword(input: {
@@ -1333,23 +1365,26 @@ export function createAuthService(dependencies: AuthServiceDependencies) {
 				);
 			}
 
-			const isValidCode = await dependencies.totpService.verifyCode(
+			const verification = await dependencies.totpService.verifyCodeWithTimeStep(
 				claims.secret,
 				input.code,
 				claims.digits,
 				claims.period
 			);
 
-			if (!isValidCode) {
+			if (!verification.valid) {
 				throw new AppError(401, 'INVALID_TOTP_CODE', 'The provided one-time password is invalid.');
 			}
+			const verifiedAt = dependencies.now();
 
 			await dependencies.repository.upsertTotpCredential({
 				staffId: staff.id,
 				secretEncrypted: dependencies.totpService.encryptSecret(claims.secret),
 				digits: claims.digits,
 				period: claims.period,
-				verifiedAt: dependencies.now()
+				verifiedAt,
+				lastUsedAt: verifiedAt,
+				lastUsedTimeStep: verification.timeStep
 			});
 
 			return finalizeMfaSetup(staff.id, 'authenticator', {

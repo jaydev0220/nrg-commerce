@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import contactWorker from '../src/index.js';
+import {
+	createQueuedDelivery,
+	deliverQueuedMessage,
+	type DeliveryLogEntry,
+	type DeliveryMessage,
+	type QueuedDelivery
+} from '../src/delivery.js';
 import type { OutgoingEmail } from '../src/email.js';
 import type { WorkerDependencies, WorkerLogEntry } from '../src/worker.js';
 import { handleRequest } from '../src/worker.js';
@@ -56,22 +63,23 @@ function emptyRequest(path: string): Request {
 
 function dependencies(overrides: Partial<WorkerDependencies> = {}): {
 	dependencies: WorkerDependencies;
-	messages: OutgoingEmail[];
+	deliveries: QueuedDelivery[];
 	logs: WorkerLogEntry[];
 } {
-	const messages: OutgoingEmail[] = [];
+	const deliveries: QueuedDelivery[] = [];
 	const logs: WorkerLogEntry[] = [];
 	return {
-		messages,
+		deliveries,
 		logs,
 		dependencies: {
+			rateLimit: async () => ({ success: true }),
 			verifyTurnstile: async ({ token }) => ({
 				success: true,
 				action: token,
 				hostname: 'www.example.com'
 			}),
-			sendEmail: async (message) => {
-				messages.push(message);
+			enqueueDelivery: async (delivery) => {
+				deliveries.push(delivery);
 			},
 			log: (entry) => logs.push(entry),
 			createRequestId: () => 'request-123',
@@ -95,6 +103,8 @@ function runtimeEnv(
 ): Parameters<typeof contactWorker.fetch>[1] {
 	return {
 		EMAIL: { send: vi.fn(async () => undefined) },
+		CONTACT_QUEUE: { send: vi.fn(async () => undefined) },
+		CONTACT_RATE_LIMITER: { limit: vi.fn(async () => ({ success: true })) },
 		CONTACT_SENDER_EMAIL: 'contact@example.com',
 		CONTACT_RECIPIENT_EMAIL: 'sales@example.com',
 		TURNSTILE_SECRET_KEY: 'turnstile-secret',
@@ -109,6 +119,16 @@ function fetchEntrypoint(
 ): Promise<Response> {
 	return contactWorker.fetch(
 		incomingRequest as unknown as Parameters<typeof contactWorker.fetch>[0],
+		env
+	);
+}
+
+function queueEntrypoint(
+	messages: DeliveryMessage[],
+	env: Parameters<typeof contactWorker.fetch>[1]
+): Promise<void> {
+	return contactWorker.queue(
+		{ messages } as unknown as Parameters<typeof contactWorker.queue>[0],
 		env
 	);
 }
@@ -132,7 +152,7 @@ describe('contact Worker request handler', () => {
 		expect(response.headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
 		expect(response.headers.get('Access-Control-Allow-Methods')).toBe('POST, OPTIONS');
 		expect(response.headers.get('Vary')).toBe('Origin');
-		expect(harness.messages).toHaveLength(0);
+		expect(harness.deliveries).toHaveLength(0);
 	});
 
 	it.each([
@@ -164,11 +184,50 @@ describe('contact Worker request handler', () => {
 			config,
 			harness.dependencies
 		);
+		const prefixMediaResponse = await handleRequest(
+			request('/contact', validContact, { contentType: 'application/json-malicious' }),
+			config,
+			harness.dependencies
+		);
 
 		expect(routeResponse.status).toBe(404);
 		expect(methodResponse.status).toBe(405);
 		expect(mediaResponse.status).toBe(415);
-		expect(harness.messages).toHaveLength(0);
+		expect(prefixMediaResponse.status).toBe(415);
+		expect(harness.deliveries).toHaveLength(0);
+	});
+
+	it('rate limits requests before parsing or Turnstile verification', async () => {
+		const verifyTurnstile = vi.fn(async () => ({ success: true }));
+		const rateLimit = vi.fn(async () => ({ success: false }));
+		const harness = dependencies({ rateLimit, verifyTurnstile });
+		const response = await handleRequest(
+			request('/contact', validContact, {
+				headers: { 'CF-Connecting-IP': '203.0.113.8' }
+			}),
+			config,
+			harness.dependencies
+		);
+
+		expect(response.status).toBe(429);
+		expect(response.headers.get('Retry-After')).toBe('60');
+		expect((await errorPayload(response)).error.code).toBe('RATE_LIMITED');
+		expect(rateLimit).toHaveBeenCalledWith('contact:203.0.113.8');
+		expect(verifyTurnstile).not.toHaveBeenCalled();
+		expect(harness.deliveries).toHaveLength(0);
+	});
+
+	it('fails closed when the rate limiter is unavailable', async () => {
+		const harness = dependencies({
+			rateLimit: async () => {
+				throw new Error('binding unavailable');
+			}
+		});
+		const response = await handleRequest(request('/contact'), config, harness.dependencies);
+
+		expect(response.status).toBe(503);
+		expect((await errorPayload(response)).error.code).toBe('RATE_LIMIT_UNAVAILABLE');
+		expect(harness.deliveries).toHaveLength(0);
 	});
 
 	it('rejects an empty or malformed JSON body', async () => {
@@ -242,7 +301,7 @@ describe('contact Worker request handler', () => {
 
 		expect(response.status).toBe(403);
 		expect((await errorPayload(response)).error.code).toBe('VERIFICATION_FAILED');
-		expect(harness.messages).toHaveLength(0);
+		expect(harness.deliveries).toHaveLength(0);
 	});
 
 	it('returns a generic gateway error when Turnstile is unavailable', async () => {
@@ -257,10 +316,10 @@ describe('contact Worker request handler', () => {
 		expect(response.status).toBe(502);
 		expect(response.headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
 		expect(payload.error.code).toBe('VERIFICATION_UNAVAILABLE');
-		expect(harness.messages).toHaveLength(0);
+		expect(harness.deliveries).toHaveLength(0);
 	});
 
-	it('sends a safe contact email and returns 202', async () => {
+	it('enqueues a contact request without retaining its verification token', async () => {
 		const harness = dependencies();
 		const response = await handleRequest(
 			request('/contact', { ...validContact, message: '<script>alert(1)</script>' }),
@@ -271,16 +330,22 @@ describe('contact Worker request handler', () => {
 		expect(response.status).toBe(202);
 		expect(await response.json()).toEqual({ ok: true });
 		expect(response.headers.get('X-Request-Id')).toBe('request-123');
-		expect(harness.messages).toHaveLength(1);
-		expect(harness.messages[0]?.replyTo).toBe('ada@example.com');
-		const sender = harness.messages[0]?.from;
-		expect(typeof sender === 'string' ? sender : sender?.email).toBe('contact@example.com');
-		expect(harness.messages[0]?.text).toMatch(/<script>alert\(1\)<\/script>/);
-		expect(harness.messages[0]?.html).not.toMatch(/<script>/);
-		expect(harness.messages[0]?.html).toMatch(/&lt;script&gt;/);
+		expect(harness.deliveries).toHaveLength(1);
+		const delivery = harness.deliveries[0];
+		expect(delivery).toMatchObject({
+			version: 1,
+			kind: 'contact',
+			requestId: 'request-123',
+			submittedAt: new Date(100).toISOString(),
+			request: {
+				email: 'ada@example.com',
+				message: '<script>alert(1)</script>'
+			}
+		});
+		expect(delivery?.request).not.toHaveProperty('turnstileToken');
 	});
 
-	it('sends inquiry fields and strips line breaks from the subject', async () => {
+	it('enqueues inquiry fields for asynchronous delivery', async () => {
 		const harness = dependencies();
 		const response = await handleRequest(
 			request('/inquiry', {
@@ -295,36 +360,202 @@ describe('contact Worker request handler', () => {
 		);
 
 		expect(response.status).toBe(202);
-		expect(harness.messages).toHaveLength(1);
-		expect(harness.messages[0]?.subject).not.toMatch(/[\r\n]/);
-		expect(harness.messages[0]?.subject).toMatch(/inquiry - SKU-1/);
-		expect(harness.messages[0]?.text).toMatch(/Product SKU:\nSKU-1/);
+		expect(harness.deliveries).toHaveLength(1);
+		expect(harness.deliveries[0]).toMatchObject({
+			kind: 'inquiry',
+			request: { skuCode: 'SKU-1\r\nBcc: attacker@example.com' }
+		});
 	});
 
-	it('returns a generic delivery failure and writes metadata-only duration logs', async () => {
+	it('returns a generic queue failure and writes metadata-only duration logs', async () => {
 		const times = [100, 145];
 		const harness = dependencies({
-			sendEmail: async () => {
-				throw new Error('provider included ada@example.com');
+			enqueueDelivery: async () => {
+				throw new Error('queue included ada@example.com');
 			},
 			now: () => times.shift() ?? 145
 		});
 		const response = await handleRequest(request('/contact'), config, harness.dependencies);
 		const payload = await errorPayload(response);
 
-		expect(response.status).toBe(502);
-		expect(payload.error.code).toBe('DELIVERY_FAILED');
+		expect(response.status).toBe(503);
+		expect(payload.error.code).toBe('DELIVERY_UNAVAILABLE');
 		expect(harness.logs).toEqual([
 			{
 				requestId: 'request-123',
 				route: '/contact',
 				method: 'POST',
-				status: 502,
-				outcome: 'DELIVERY_FAILED',
+				status: 503,
+				outcome: 'DELIVERY_UNAVAILABLE',
 				durationMs: 45
 			}
 		]);
 		expect(JSON.stringify(harness.logs)).not.toMatch(/ada@example\.com|specifications/);
+	});
+
+	it('returns a generic internal error with CORS for unexpected failures', async () => {
+		const times = [100, Number.NaN, 145];
+		const harness = dependencies({
+			now: () => times.shift() ?? 145
+		});
+		const response = await handleRequest(request('/contact'), config, harness.dependencies);
+		const payload = await errorPayload(response);
+
+		expect(response.status).toBe(500);
+		expect(response.headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
+		expect(payload.error.code).toBe('INTERNAL_ERROR');
+		expect(JSON.stringify(payload)).not.toMatch(/invalid time|rangeerror/i);
+		expect(harness.logs).toEqual([
+			expect.objectContaining({
+				status: 500,
+				outcome: 'INTERNAL_ERROR',
+				durationMs: 45
+			})
+		]);
+	});
+
+	it('omits CORS headers from unexpected failures after the origin is removed', async () => {
+		const incoming = request('/contact');
+		const times = [100, Number.NaN, 145];
+		const allowedOrigins = {
+			has: (origin: string) => {
+				incoming.headers.delete('Origin');
+				return origin === allowedOrigin;
+			}
+		} as unknown as ReadonlySet<string>;
+		const harness = dependencies({
+			now: () => times.shift() ?? 145
+		});
+		const response = await handleRequest(
+			incoming,
+			{ ...config, allowedOrigins },
+			harness.dependencies
+		);
+
+		expect(response.status).toBe(500);
+		expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+		expect((await errorPayload(response)).error.code).toBe('INTERNAL_ERROR');
+	});
+});
+
+const queuedRequestId = '00000000-0000-4000-8000-000000000001';
+
+function deliveryMessage(body: unknown): {
+	message: DeliveryMessage;
+	ack: ReturnType<typeof vi.fn>;
+	retry: ReturnType<typeof vi.fn>;
+} {
+	const ack = vi.fn();
+	const retry = vi.fn();
+	return {
+		message: { id: 'message-123', body, attempts: 1, ack, retry },
+		ack,
+		retry
+	};
+}
+
+describe('contact delivery consumer', () => {
+	it('sends and acknowledges a schema-valid contact message', async () => {
+		const queued = createQueuedDelivery(
+			'contact',
+			{ ...validContact, message: '<script>alert(1)</script>' },
+			queuedRequestId,
+			new Date('2026-07-21T00:00:00.000Z')
+		);
+		const harness = deliveryMessage(queued);
+		const sent: OutgoingEmail[] = [];
+		const logs: DeliveryLogEntry[] = [];
+
+		await deliverQueuedMessage(harness.message, config, {
+			sendEmail: async (email) => {
+				sent.push(email);
+			},
+			log: (entry) => logs.push(entry)
+		});
+
+		expect(harness.ack).toHaveBeenCalledOnce();
+		expect(harness.retry).not.toHaveBeenCalled();
+		expect(sent).toHaveLength(1);
+		expect(sent[0]?.replyTo).toBe('ada@example.com');
+		expect(sent[0]?.html).not.toMatch(/<script>/);
+		expect(sent[0]?.html).toMatch(/&lt;script&gt;/);
+		expect(logs).toEqual([
+			{
+				event: 'contact_delivery',
+				requestId: queuedRequestId,
+				messageId: 'message-123',
+				attempts: 1,
+				outcome: 'DELIVERED'
+			}
+		]);
+	});
+
+	it('sanitizes inquiry data when constructing the delivered email', async () => {
+		const queued = createQueuedDelivery(
+			'inquiry',
+			{
+				turnstileToken: 'inquiry',
+				name: 'Grace Hopper',
+				email: 'grace@example.com',
+				skuCode: 'SKU-1\r\nBcc: attacker@example.com',
+				message: 'Please quote 100 units.'
+			},
+			queuedRequestId,
+			new Date('2026-07-21T00:00:00.000Z')
+		);
+		const harness = deliveryMessage(queued);
+		const sent: OutgoingEmail[] = [];
+
+		await deliverQueuedMessage(harness.message, config, {
+			sendEmail: async (email) => {
+				sent.push(email);
+			},
+			log: () => undefined
+		});
+
+		expect(sent[0]?.subject).not.toMatch(/[\r\n]/);
+		expect(sent[0]?.subject).toMatch(/inquiry - SKU-1 Bcc: attacker@example\.com/);
+		expect(sent[0]?.text).toMatch(/Product SKU:\nSKU-1/);
+	});
+
+	it('retries provider failures without logging request content', async () => {
+		const queued = createQueuedDelivery(
+			'contact',
+			validContact,
+			queuedRequestId,
+			new Date('2026-07-21T00:00:00.000Z')
+		);
+		const harness = deliveryMessage(queued);
+		const logs: DeliveryLogEntry[] = [];
+
+		await deliverQueuedMessage(harness.message, config, {
+			sendEmail: async () => {
+				throw new Error('provider included ada@example.com');
+			},
+			log: (entry) => logs.push(entry)
+		});
+
+		expect(harness.ack).not.toHaveBeenCalled();
+		expect(harness.retry).toHaveBeenCalledOnce();
+		expect(logs[0]?.outcome).toBe('DELIVERY_FAILED');
+		expect(JSON.stringify(logs)).not.toMatch(/ada@example\.com|specifications/);
+	});
+
+	it('retries malformed queue payloads without parsing request data', async () => {
+		const harness = deliveryMessage({ requestId: 'not-a-uuid', email: 'ada@example.com' });
+		const sendEmail = vi.fn(async () => undefined);
+		const logs: DeliveryLogEntry[] = [];
+
+		await deliverQueuedMessage(harness.message, config, {
+			sendEmail,
+			log: (entry) => logs.push(entry)
+		});
+
+		expect(sendEmail).not.toHaveBeenCalled();
+		expect(harness.ack).not.toHaveBeenCalled();
+		expect(harness.retry).toHaveBeenCalledOnce();
+		expect(logs[0]).toMatchObject({ requestId: 'unknown', outcome: 'INVALID_MESSAGE' });
+		expect(JSON.stringify(logs)).not.toMatch(/ada@example\.com/);
 	});
 });
 
@@ -344,7 +575,10 @@ describe('contact Worker entrypoint', () => {
 		vi.stubGlobal('fetch', siteverify);
 		const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
 		const emailSend = vi.fn(async () => undefined);
-		const env = runtimeEnv({ EMAIL: { send: emailSend } });
+		const queueSend = vi
+			.fn<(delivery: QueuedDelivery) => Promise<void>>()
+			.mockResolvedValue(undefined);
+		const env = runtimeEnv({ EMAIL: { send: emailSend }, CONTACT_QUEUE: { send: queueSend } });
 		const incoming = request('/contact', validContact, {
 			headers: { 'CF-Connecting-IP': '203.0.113.10' }
 		});
@@ -365,7 +599,10 @@ describe('contact Worker entrypoint', () => {
 			idempotency_key: response.headers.get('X-Request-Id')
 		});
 		expect(init?.signal).toBeInstanceOf(AbortSignal);
-		expect(emailSend).toHaveBeenCalledOnce();
+		expect(queueSend).toHaveBeenCalledOnce();
+		expect(emailSend).not.toHaveBeenCalled();
+		const queued = queueSend.mock.calls[0]?.[0];
+		expect(queued?.request).not.toHaveProperty('turnstileToken');
 		expect(info).toHaveBeenCalledWith(
 			expect.objectContaining({
 				event: 'contact_request',
@@ -387,15 +624,15 @@ describe('contact Worker entrypoint', () => {
 	])('maps Turnstile %s to a metadata-only gateway error', async (_label, turnstileResponse) => {
 		vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(turnstileResponse));
 		const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		const emailSend = vi.fn(async () => undefined);
+		const queueSend = vi.fn(async () => undefined);
 		const response = await fetchEntrypoint(
 			request('/contact'),
-			runtimeEnv({ EMAIL: { send: emailSend } })
+			runtimeEnv({ CONTACT_QUEUE: { send: queueSend } })
 		);
 
 		expect(response.status).toBe(502);
 		expect((await errorPayload(response)).error.code).toBe('VERIFICATION_UNAVAILABLE');
-		expect(emailSend).not.toHaveBeenCalled();
+		expect(queueSend).not.toHaveBeenCalled();
 		expect(error).toHaveBeenCalledWith(
 			expect.objectContaining({
 				event: 'contact_request',
@@ -420,6 +657,56 @@ describe('contact Worker entrypoint', () => {
 		expect(timeout).toHaveBeenCalledWith(5000);
 	});
 
+	it('delivers queued messages through the runtime bindings and logs success', async () => {
+		const queued = createQueuedDelivery(
+			'contact',
+			validContact,
+			queuedRequestId,
+			new Date('2026-07-21T00:00:00.000Z')
+		);
+		const harness = deliveryMessage(queued);
+		const emailSend = vi.fn(async () => undefined);
+		const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+		await queueEntrypoint([harness.message], runtimeEnv({ EMAIL: { send: emailSend } }));
+
+		expect(emailSend).toHaveBeenCalledOnce();
+		expect(harness.ack).toHaveBeenCalledOnce();
+		expect(harness.retry).not.toHaveBeenCalled();
+		expect(info).toHaveBeenCalledWith(
+			expect.objectContaining({
+				event: 'contact_delivery',
+				outcome: 'DELIVERED'
+			})
+		);
+	});
+
+	it('retries queue delivery failures and logs only metadata', async () => {
+		const queued = createQueuedDelivery(
+			'contact',
+			validContact,
+			queuedRequestId,
+			new Date('2026-07-21T00:00:00.000Z')
+		);
+		const harness = deliveryMessage(queued);
+		const emailSend = vi.fn(async () => {
+			throw new Error('provider included ada@example.com');
+		});
+		const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		await queueEntrypoint([harness.message], runtimeEnv({ EMAIL: { send: emailSend } }));
+
+		expect(harness.ack).not.toHaveBeenCalled();
+		expect(harness.retry).toHaveBeenCalledOnce();
+		expect(error).toHaveBeenCalledWith(
+			expect.objectContaining({
+				event: 'contact_delivery',
+				outcome: 'DELIVERY_FAILED'
+			})
+		);
+		expect(JSON.stringify(error.mock.calls)).not.toMatch(/ada@example\.com|specifications/);
+	});
+
 	it.each([
 		['CONTACT_SENDER_EMAIL', { CONTACT_SENDER_EMAIL: ' ' }],
 		['CONTACT_RECIPIENT_EMAIL', { CONTACT_RECIPIENT_EMAIL: undefined }],
@@ -435,5 +722,23 @@ describe('contact Worker entrypoint', () => {
 		await expect(
 			fetchEntrypoint(request('/contact'), runtimeEnv({ ALLOWED_ORIGINS: 'not a url' }))
 		).rejects.toThrow();
+	});
+
+	it('fails fast when an allowed origin is insecure or contains URL credentials', async () => {
+		await expect(
+			fetchEntrypoint(request('/contact'), runtimeEnv({ ALLOWED_ORIGINS: 'http://example.com' }))
+		).rejects.toThrow('ALLOWED_ORIGINS');
+		await expect(
+			fetchEntrypoint(
+				request('/contact'),
+				runtimeEnv({ ALLOWED_ORIGINS: 'https://user:password@example.com' })
+			)
+		).rejects.toThrow('ALLOWED_ORIGINS');
+	});
+
+	it('fails fast when a configured email address is invalid', async () => {
+		await expect(
+			fetchEntrypoint(request('/contact'), runtimeEnv({ CONTACT_SENDER_EMAIL: 'not-an-email' }))
+		).rejects.toThrow('CONTACT_SENDER_EMAIL must be a valid email address.');
 	});
 });

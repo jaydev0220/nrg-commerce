@@ -2,8 +2,12 @@ import { createServer } from 'node:http';
 
 const timestamp = '2026-07-19T00:00:00.000Z';
 
+const categoryId = '0189076c-4f2a-7fe1-b9fd-2d68df455114';
+const beakerId = '0189076c-4f2a-7fe1-b9fd-2d68df455111';
+const funnelId = '0189076c-4f2a-7fe1-b9fd-2d68df455115';
+
 const category = {
-	id: 'category-beakers',
+	id: categoryId,
 	name: '燒杯',
 	nameEn: 'Beakers',
 	slug: 'beakers',
@@ -17,11 +21,11 @@ const category = {
 	productCount: 2
 };
 
-function sku(id, skuCode, name, volume, price) {
+function sku(id, productId, productSlug, skuCode, name, volume, price) {
 	return {
 		id,
-		productId: 'product-beaker',
-		productSlug: 'laboratory-beaker',
+		productId,
+		productSlug,
 		skuCode,
 		name,
 		nameEn: name,
@@ -41,7 +45,7 @@ function sku(id, skuCode, name, volume, price) {
 }
 
 const beaker = {
-	id: 'product-beaker',
+	id: beakerId,
 	slug: 'laboratory-beaker',
 	name: '實驗室燒杯',
 	nameEn: 'Laboratory Beaker',
@@ -56,14 +60,30 @@ const beaker = {
 	thumbnail: null,
 	images: [],
 	skus: [
-		sku('sku-beaker-100', 'BEAKER-100', 'Beaker 100 ml', '100 ml', 120),
-		sku('sku-beaker-250', 'BEAKER-250', 'Beaker 250 ml', '250 ml', 180)
+		sku(
+			'0189076c-4f2a-7fe1-b9fd-2d68df455112',
+			beakerId,
+			'laboratory-beaker',
+			'BEAKER-100',
+			'Beaker 100 ml',
+			'100 ml',
+			120
+		),
+		sku(
+			'0189076c-4f2a-7fe1-b9fd-2d68df455116',
+			beakerId,
+			'laboratory-beaker',
+			'BEAKER-250',
+			'Beaker 250 ml',
+			'250 ml',
+			180
+		)
 	]
 };
 
 const funnel = {
 	...beaker,
-	id: 'product-funnel',
+	id: funnelId,
 	slug: 'glass-funnel',
 	name: '玻璃漏斗',
 	nameEn: 'Glass Funnel',
@@ -71,11 +91,15 @@ const funnel = {
 	descriptionEn: 'Laboratory glass funnel.',
 	createdAt: '2026-07-18T02:00:00.000Z',
 	skus: [
-		{
-			...sku('sku-funnel-75', 'FUNNEL-75', 'Funnel 75 mm', '75 mm', 90),
-			productId: 'product-funnel',
-			productSlug: 'glass-funnel'
-		}
+		sku(
+			'0189076c-4f2a-7fe1-b9fd-2d68df455117',
+			funnelId,
+			'glass-funnel',
+			'FUNNEL-75',
+			'Funnel 75 mm',
+			'75 mm',
+			90
+		)
 	]
 };
 

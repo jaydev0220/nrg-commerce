@@ -47,3 +47,27 @@ test('serializes complete exception context while redacting free-text secrets', 
 	assert.match(serialized.stack ?? '', /database token=\[REDACTED\]/);
 	assert.doesNotMatch(JSON.stringify(serialized), /error-token|cause-token|database-password/);
 });
+
+test('redaction handles circular and deeply nested metadata without throwing', () => {
+	const circular: Record<string, unknown> = {};
+	circular['self'] = circular;
+	let deeplyNested: unknown = 'leaf';
+	for (let depth = 0; depth < 5_000; depth += 1) deeplyNested = { child: deeplyNested };
+
+	assert.deepEqual(redactLogValue(circular), { self: '[CIRCULAR]' });
+	assert.doesNotThrow(() => redactLogValue(deeplyNested));
+	assert.match(JSON.stringify(redactLogValue(deeplyNested)), /TRUNCATED/);
+});
+
+test('error serialization bounds nested cause chains', () => {
+	let nestedError: Error = new Error('root');
+	for (let depth = 0; depth < 5_000; depth += 1) {
+		nestedError = new Error(`level-${depth}`, { cause: nestedError });
+	}
+
+	let serialized: ReturnType<typeof serializeLogError> | undefined;
+	assert.doesNotThrow(() => {
+		serialized = serializeLogError(nestedError);
+	});
+	assert.match(JSON.stringify(serialized), /TruncatedError/);
+});

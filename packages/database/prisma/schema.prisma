@@ -49,24 +49,28 @@ enum LogKind {
 }
 
 model Staff {
-  id                 String              @id @default(uuid()) @db.Uuid
-  email              String              @unique
-  name               String
-  status             StaffStatus         @default(inactive)
-  passwordHash       String?
-  preferredMfaMethod MfaMethod?
-  lastLoginAt        DateTime?           @db.Timestamptz(6)
-  deletedAt          DateTime?           @db.Timestamptz(6)
-  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt          DateTime            @updatedAt @db.Timestamptz(6)
-  roles              StaffRole[]
-  sessions           AuthSession[]
-  totpCredentials    TotpCredential[]
-  passkeyCredentials PasskeyCredential[]
-  logs               Log[]
+  id                        String              @id @default(uuid()) @db.Uuid
+  email                     String              @unique
+  name                      String
+  status                    StaffStatus         @default(inactive)
+  passwordHash              String?
+  preferredMfaMethod        MfaMethod?
+  failedAuthCount           Int                 @default(0)
+  failedAuthWindowStartedAt DateTime?           @db.Timestamptz(6)
+  authBlockedUntil          DateTime?           @db.Timestamptz(6)
+  lastLoginAt               DateTime?           @db.Timestamptz(6)
+  deletedAt                 DateTime?           @db.Timestamptz(6)
+  createdAt                 DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime            @updatedAt @db.Timestamptz(6)
+  roles                     StaffRole[]
+  sessions                  AuthSession[]
+  totpCredentials           TotpCredential[]
+  passkeyCredentials        PasskeyCredential[]
+  logs                      Log[]
 
   @@index([status, createdAt])
   @@index([deletedAt])
+  @@index([authBlockedUntil])
 }
 
 model Role {
@@ -151,17 +155,18 @@ model RefreshToken {
 }
 
 model TotpCredential {
-  id              String    @id @default(uuid()) @db.Uuid
-  staffId         String    @db.Uuid
-  secretEncrypted String
-  digits          Int       @default(6)
-  period          Int       @default(30)
-  verifiedAt      DateTime? @db.Timestamptz(6)
-  lastUsedAt      DateTime? @db.Timestamptz(6)
-  deletedAt       DateTime? @db.Timestamptz(6)
-  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
-  staff           Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  id               String    @id @default(uuid()) @db.Uuid
+  staffId          String    @db.Uuid
+  secretEncrypted  String
+  digits           Int       @default(6)
+  period           Int       @default(30)
+  verifiedAt       DateTime? @db.Timestamptz(6)
+  lastUsedAt       DateTime? @db.Timestamptz(6)
+  lastUsedTimeStep BigInt?
+  deletedAt        DateTime? @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(6)
+  staff            Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
   @@index([staffId, deletedAt])
 }
@@ -326,6 +331,7 @@ model Order {
   id                     String         @id @default(uuid()) @db.Uuid
   businessId             String?        @db.Uuid
   status                 OrderStatus    @default(pending)
+  version                Int            @default(0)
   customerName           String?
   customerEmail          String?
   customerPhone          String?
@@ -339,6 +345,8 @@ model Order {
   discountAmount         Decimal        @default(0) @db.Decimal(10, 2)
   totalAmount            Decimal        @db.Decimal(10, 2)
   completedAt            DateTime?      @db.Timestamptz(6)
+  cancelledAt            DateTime?      @db.Timestamptz(6)
+  refundedAt             DateTime?      @db.Timestamptz(6)
   idempotencyKey         String?        @unique @db.Uuid
   idempotencyFingerprint String?        @db.Char(64)
   createdAt              DateTime       @default(now()) @db.Timestamptz(6)

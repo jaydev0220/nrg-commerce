@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
 	z,
+	resourceSlugSchema,
 	storefrontCategoryDetailQuerySchema,
 	storefrontCategoryListQuerySchema,
 	storefrontProductDetailQuerySchema,
@@ -19,15 +20,15 @@ type StorefrontRouterDependencies = {
 };
 
 const skuCodeParamsSchema = z.object({
-	skuCode: z.string().trim().min(1)
+	skuCode: z.string().trim().min(1).max(120)
 });
 
 const productParamsSchema = z.object({
-	productSlug: z.string().trim().min(1)
+	productSlug: resourceSlugSchema
 });
 
 const categorySlugParamsSchema = z.object({
-	categorySlug: z.string().trim().min(1)
+	categorySlug: resourceSlugSchema
 });
 
 export function createStorefrontCatalogRouter(dependencies: StorefrontRouterDependencies): Router {

@@ -1,19 +1,12 @@
-import type { DatabaseClient, RoleKey } from '@packages/database';
+import type { DatabaseClient } from '@packages/database';
 
 import type { ManagedStaffRecord } from '../../../types/management.js';
+import { parsePermissionKey, parseRoleKey } from '../../../utils/access-control.js';
 
 type StaffListResult = {
 	data: ManagedStaffRecord[];
 	total: number;
 };
-
-function mapRoleKey(value: string): RoleKey {
-	if (value === 'catalog-manager' || value === 'staff-manager' || value === 'sales-manager') {
-		return value;
-	}
-
-	return 'admin';
-}
 
 function mapStaffRecord(staff: {
 	id: string;
@@ -46,9 +39,9 @@ function mapStaffRecord(staff: {
 		updatedAt: staff.updatedAt,
 		roles: staff.roles.map(({ role }) => ({
 			id: role.id,
-			key: mapRoleKey(role.key),
+			key: parseRoleKey(role.key),
 			name: role.name,
-			permissions: role.rolePermissions.map(({ permission }) => permission.key)
+			permissions: role.rolePermissions.map(({ permission }) => parsePermissionKey(permission.key))
 		}))
 	};
 }
@@ -152,9 +145,11 @@ export function createPrismaStaffRepository(database: DatabaseClient) {
 
 			return roles.map((role) => ({
 				id: role.id,
-				key: mapRoleKey(role.key),
+				key: parseRoleKey(role.key),
 				name: role.name,
-				permissions: role.rolePermissions.map(({ permission }) => permission.key)
+				permissions: role.rolePermissions.map(({ permission }) =>
+					parsePermissionKey(permission.key)
+				)
 			}));
 		},
 
@@ -193,6 +188,7 @@ export function createPrismaStaffRepository(database: DatabaseClient) {
 				status?: 'active' | 'inactive' | 'suspended';
 			}
 		): Promise<ManagedStaffRecord> {
+			const revokedAt = input.status && input.status !== 'active' ? new Date() : null;
 			await database.$transaction(async (transaction) => {
 				if (input.roleIds) {
 					await transaction.staffRole.deleteMany({
@@ -218,6 +214,16 @@ export function createPrismaStaffRepository(database: DatabaseClient) {
 						status: input.status
 					}
 				});
+				if (revokedAt) {
+					await transaction.authSession.updateMany({
+						where: { staffId, revokedAt: null },
+						data: { revokedAt }
+					});
+					await transaction.refreshToken.updateMany({
+						where: { session: { staffId }, revokedAt: null },
+						data: { revokedAt }
+					});
+				}
 			});
 
 			const updatedStaff = await this.findById(staffId);
@@ -229,24 +235,26 @@ export function createPrismaStaffRepository(database: DatabaseClient) {
 			return updatedStaff;
 		},
 
-		async deleteStaff(staffId: string, force: boolean): Promise<'force' | 'soft'> {
-			if (force) {
-				await database.staff.delete({
+		async deleteStaff(staffId: string): Promise<'soft'> {
+			const deletedAt = new Date();
+			await database.$transaction(async (transaction) => {
+				await transaction.staff.update({
 					where: {
 						id: staffId
+					},
+					data: {
+						status: 'inactive',
+						deletedAt
 					}
 				});
-				return 'force';
-			}
-
-			await database.staff.update({
-				where: {
-					id: staffId
-				},
-				data: {
-					status: 'inactive',
-					deletedAt: new Date()
-				}
+				await transaction.authSession.updateMany({
+					where: { staffId, revokedAt: null },
+					data: { revokedAt: deletedAt }
+				});
+				await transaction.refreshToken.updateMany({
+					where: { session: { staffId }, revokedAt: null },
+					data: { revokedAt: deletedAt }
+				});
 			});
 
 			return 'soft';

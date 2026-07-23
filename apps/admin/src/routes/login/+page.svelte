@@ -109,7 +109,7 @@
 		message = '';
 		passkeyBusy = true;
 		try {
-			const { options } = await beginPasskeyLogin(email.trim() || undefined);
+			const { options } = await beginPasskeyLogin();
 			await finishPasskey(options, 'optional');
 		} catch (error) {
 			if (!isAbortError(error)) message = errorMessage(error);

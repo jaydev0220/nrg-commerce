@@ -34,6 +34,9 @@ const activeStaff: AuthStaffRecord = {
 	passwordHash: 'argon2-hash',
 	preferredMfaMethod: 'authenticator' as const,
 	lastLoginAt: null,
+	failedAuthCount: 0,
+	failedAuthWindowStartedAt: null,
+	authBlockedUntil: null,
 	roles: [adminRole],
 	totpCredentialCount: 1,
 	passkeyCredentialCount: 0
@@ -43,6 +46,9 @@ function createRepositoryStub(overrides: Partial<RepositoryStub> = {}): Reposito
 	return {
 		findStaffByEmail: async () => null,
 		findStaffById: async () => null,
+		recordFailedPasswordAttempt: async () => ({ authBlockedUntil: null }),
+		clearFailedPasswordAttempts: async () => true,
+		consumeTotpTimeStep: async () => true,
 		findSessionById: async () => null,
 		createSession: async (input) => ({
 			id: input.sessionId,
@@ -64,15 +70,17 @@ function createRepositoryStub(overrides: Partial<RepositoryStub> = {}): Reposito
 			secretEncrypted: 'encrypted-secret',
 			digits: 6,
 			period: 30,
-			verifiedAt: new Date('2026-06-12T00:00:00.000Z')
+			verifiedAt: new Date('2026-06-12T00:00:00.000Z'),
+			lastUsedAt: null,
+			lastUsedTimeStep: null
 		}),
 		updateMfaPreference: async () => undefined,
 		upsertTotpCredential: async () => undefined,
-		deleteTotpCredential: async () => undefined,
+		deleteTotpCredential: async () => 'removed',
 		createPasskeyCredential: async () => {
 			throw new Error('not used');
 		},
-		updatePasskeyCredentialCounter: async () => undefined,
+		consumePasskeyAuthentication: async () => true,
 		listPasskeyCredentials: async () => [],
 		findPasskeyCredentialByCredentialId: async () => null,
 		updatePasswordHash: async () => undefined,
@@ -120,6 +128,7 @@ function createTotpServiceStub(overrides: Partial<TotpServiceStub> = {}): TotpSe
 			throw new Error('not used');
 		},
 		verifyCode: async () => true,
+		verifyCodeWithTimeStep: async () => ({ valid: true, timeStep: 1n }),
 		encryptSecret: (secret) => secret,
 		decryptSecret: (secret) => secret,
 		...overrides
@@ -465,6 +474,100 @@ test('loginWithPassword exposes every enrolled MFA method with the preferred met
 	}
 });
 
+test('loginWithPassword performs password verification for unknown accounts before rejecting', async () => {
+	let verifiedDigest = '';
+	const authService = createTestAuthService({
+		repository: {
+			findStaffByEmail: async () => null
+		},
+		passwordHasher: {
+			verify: async (_password, digest) => {
+				verifiedDigest = digest;
+				return false;
+			}
+		}
+	});
+
+	await assert.rejects(
+		() =>
+			authService.loginWithPassword({
+				email: 'missing@example.com',
+				password: 'incorrect password',
+				userAgent: null,
+				ipAddress: null
+			}),
+		(error: unknown) => error instanceof AppError && error.code === 'INVALID_CREDENTIALS'
+	);
+	assert.match(verifiedDigest, /^\$argon2id\$/u);
+});
+
+test('loginWithPassword atomically blocks the fifth failed attempt', async () => {
+	const now = new Date('2026-06-12T00:00:00.000Z');
+	let failedAttempts = 0;
+	const authService = createTestAuthService({
+		now: () => now,
+		repository: {
+			findStaffByEmail: async () => activeStaff,
+			recordFailedPasswordAttempt: async () => {
+				failedAttempts += 1;
+				return {
+					authBlockedUntil: failedAttempts >= 5 ? new Date(now.getTime() + 15 * 60 * 1000) : null
+				};
+			}
+		},
+		passwordHasher: {
+			verify: async () => false
+		}
+	});
+
+	for (let attempt = 1; attempt < 5; attempt += 1) {
+		await assert.rejects(
+			() =>
+				authService.loginWithPassword({
+					email: activeStaff.email,
+					password: 'incorrect password',
+					userAgent: null,
+					ipAddress: null
+				}),
+			(error: unknown) => error instanceof AppError && error.code === 'INVALID_CREDENTIALS'
+		);
+	}
+
+	await assert.rejects(
+		() =>
+			authService.loginWithPassword({
+				email: activeStaff.email,
+				password: 'incorrect password',
+				userAgent: null,
+				ipAddress: null
+			}),
+		(error: unknown) =>
+			error instanceof AppError && error.code === 'AUTHENTICATION_TEMPORARILY_BLOCKED'
+	);
+	assert.equal(failedAttempts, 5);
+});
+
+test('loginWithPassword rejects a valid password when a concurrent attempt locks the account', async () => {
+	const authService = createTestAuthService({
+		repository: {
+			findStaffByEmail: async () => activeStaff,
+			clearFailedPasswordAttempts: async () => false
+		}
+	});
+
+	await assert.rejects(
+		() =>
+			authService.loginWithPassword({
+				email: activeStaff.email,
+				password: 'correct horse battery staple',
+				userAgent: null,
+				ipAddress: null
+			}),
+		(error: unknown) =>
+			error instanceof AppError && error.code === 'AUTHENTICATION_TEMPORARILY_BLOCKED'
+	);
+});
+
 test('direct passkey login requires user verification and creates a passkey session', async () => {
 	const storedCredential = {
 		id: 'credential-record',
@@ -487,7 +590,7 @@ test('direct passkey login requires user verification and creates a passkey sess
 		repository: {
 			findStaffById: async () => ({ ...activeStaff, passkeyCredentialCount: 1 }),
 			findPasskeyCredentialByCredentialId: async () => storedCredential,
-			updatePasskeyCredentialCounter: async () => undefined
+			consumePasskeyAuthentication: async () => true
 		},
 		tokenService: {
 			verifyCeremonyToken: async <T>() =>
@@ -526,6 +629,61 @@ test('direct passkey login requires user verification and creates a passkey sess
 	}
 });
 
+test('direct passkey login rejects an assertion already claimed by another request', async () => {
+	const storedCredential = {
+		id: 'credential-record',
+		staffId: activeStaff.id,
+		credentialId: 'credential-id',
+		publicKey: new Uint8Array(),
+		userHandle: null,
+		counter: 0,
+		transports: [],
+		aaguid: null,
+		deviceType: null,
+		backedUp: null,
+		nickname: null,
+		verifiedAt: new Date('2026-06-12T00:00:00.000Z'),
+		lastUsedAt: null
+	} as never;
+	let sessionCreated = false;
+
+	const authService = createTestAuthService({
+		repository: {
+			findStaffById: async () => ({ ...activeStaff, passkeyCredentialCount: 1 }),
+			findPasskeyCredentialByCredentialId: async () => storedCredential,
+			consumePasskeyAuthentication: async () => false,
+			createSession: async () => {
+				sessionCreated = true;
+				throw new Error('must not create a session');
+			}
+		},
+		tokenService: {
+			verifyCeremonyToken: async <T>() =>
+				({
+					staffId: activeStaff.id,
+					challenge: 'direct-challenge',
+					primaryFactor: 'passkey'
+				}) as T
+		},
+		passkeyService: {
+			finishAuthentication: async () =>
+				({ verified: true, authenticationInfo: { newCounter: 1 } }) as never
+		}
+	});
+
+	await assert.rejects(
+		() =>
+			authService.verifyPasskeyLogin({
+				ceremonyToken: 'ceremony-token',
+				credential: { id: 'credential-id' } as never,
+				userAgent: null,
+				ipAddress: null
+			}),
+		(error: unknown) => error instanceof AppError && error.code === 'PASSKEY_VERIFICATION_FAILED'
+	);
+	assert.equal(sessionCreated, false);
+});
+
 test('passkey MFA permits possession-only verification and rejects another staff credential', async () => {
 	const storedCredential = {
 		id: 'credential-record',
@@ -550,7 +708,7 @@ test('passkey MFA permits possession-only verification and rejects another staff
 			findStaffById: async () => ({ ...activeStaff, passkeyCredentialCount: 1 }),
 			listPasskeyCredentials: async () => [storedCredential],
 			findPasskeyCredentialByCredentialId: async () => storedCredential,
-			updatePasskeyCredentialCounter: async () => undefined
+			consumePasskeyAuthentication: async () => true
 		},
 		tokenService: {
 			verifyPendingAuthToken: async () => ({
@@ -686,7 +844,7 @@ test('completeTotpLogin rejects invalid TOTP codes', async () => {
 			findStaffById: async () => activeStaff
 		},
 		totpService: {
-			verifyCode: async () => false
+			verifyCodeWithTimeStep: async () => ({ valid: false })
 		}
 	});
 
@@ -700,6 +858,48 @@ test('completeTotpLogin rejects invalid TOTP codes', async () => {
 			}),
 		(error: unknown) => error instanceof AppError && error.statusCode === 401
 	);
+});
+
+test('completeTotpLogin rejects a code when its time step was consumed concurrently', async () => {
+	let verificationAfterTimeStep: bigint | null | undefined;
+	let consumedTimeStep: bigint | undefined;
+	const authService = createTestAuthService({
+		repository: {
+			findStaffById: async () => activeStaff,
+			findTotpCredential: async () => ({
+				staffId: activeStaff.id,
+				secretEncrypted: 'encrypted-secret',
+				digits: 6,
+				period: 30,
+				verifiedAt: new Date('2026-06-12T00:00:00.000Z'),
+				lastUsedAt: new Date('2026-06-12T00:00:00.000Z'),
+				lastUsedTimeStep: 41n
+			}),
+			consumeTotpTimeStep: async (_staffId, timeStep) => {
+				consumedTimeStep = timeStep;
+				return false;
+			}
+		},
+		totpService: {
+			verifyCodeWithTimeStep: async (_secret, _code, _digits, _period, afterTimeStep) => {
+				verificationAfterTimeStep = afterTimeStep;
+				return { valid: true, timeStep: 42n };
+			}
+		}
+	});
+
+	await assert.rejects(
+		() =>
+			authService.completeTotpLogin({
+				pendingToken: 'pending-token',
+				code: '123456',
+				userAgent: null,
+				ipAddress: null
+			}),
+		(error: unknown) => error instanceof AppError && error.code === 'INVALID_TOTP_CODE'
+	);
+	assert.equal(verificationAfterTimeStep, 41n);
+	assert.equal(consumedTimeStep, 42n);
 });
 
 test('loginWithPassword requires initial MFA setup when no credential is enrolled', async () => {
@@ -730,7 +930,15 @@ test('loginWithPassword requires initial MFA setup when no credential is enrolle
 test('confirmLoginTotpSetup stores a credential and returns an authenticated session', async () => {
 	let savedPreference: { preferredMfaMethod: 'authenticator' | 'passkey' | null } | undefined;
 	let savedCredential:
-		| { staffId: string; secretEncrypted: string; digits: number; period: number; verifiedAt: Date }
+		| {
+				staffId: string;
+				secretEncrypted: string;
+				digits: number;
+				period: number;
+				verifiedAt: Date;
+				lastUsedAt: Date;
+				lastUsedTimeStep: bigint;
+		  }
 		| undefined;
 	let findStaffByIdCalls = 0;
 
@@ -879,7 +1087,8 @@ test('password security reauthentication is rejected when an MFA factor is confi
 test('removing the final TOTP factor is rejected', async () => {
 	const authService = createTestAuthService({
 		repository: {
-			findStaffById: async () => activeStaff
+			findStaffById: async () => activeStaff,
+			deleteTotpCredential: async () => 'mfa_required'
 		}
 	});
 
@@ -898,8 +1107,7 @@ test('removing the final passkey factor is rejected', async () => {
 				totpCredentialCount: 0,
 				passkeyCredentialCount: 1
 			}),
-			listPasskeyCredentials: async () => [{ id: 'passkey-1' } as never],
-			deletePasskeyCredential: async () => true
+			deletePasskeyCredential: async () => 'mfa_required'
 		}
 	});
 

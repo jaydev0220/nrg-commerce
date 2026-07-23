@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Production target to deploy
+        description: Deployment target
         required: true
         default: all
         type: choice
@@ -18,12 +18,13 @@ on:
           - contact
           - admin
           - api
+          - infrastructure
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number) || 'ci-production' }}
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number) || 'ci-release' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -37,14 +38,16 @@ jobs:
       contact: ${{ steps.targets.outputs.contact }}
       admin: ${{ steps.targets.outputs.admin }}
       api: ${{ steps.targets.outputs.api }}
+      infrastructure: ${{ steps.targets.outputs.infrastructure }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24.18.0
 
@@ -63,10 +66,43 @@ jobs:
             git diff --name-only "$BASE_SHA" "$CURRENT_SHA" | node scripts/ci/affected-targets.mjs
           fi
 
+  dependency-review:
+    name: Review dependency changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Reject vulnerable dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
   validate:
     name: Validate monorepo
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:18@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a
+        env:
+          POSTGRES_DB: nrg_commerce_ci
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nrg_commerce_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       ALLOWED_ORIGINS: https://www.example.test,https://catalog.example.test
       CI: 'true'
@@ -74,6 +110,9 @@ jobs:
       CONTACT_SENDER_EMAIL: sender@example.test
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_ci
       DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_ci
+      SHADOW_DATABASE_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_shadow
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_ci
       PUBLIC_API_BASE_URL: http://127.0.0.1:4174
       PUBLIC_CDN_BASE_URL: https://cdn.example.test
       PUBLIC_COOKIE_DOMAIN: example.test
@@ -87,25 +126,60 @@ jobs:
       TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify immutable GitHub Action references
+        run: node scripts/ci/verify-actions-pinned.mjs
+
+      - name: Scan repository history for secrets
+        run: >-
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/repo:ro"
+          zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          detect --source=/repo --no-banner --redact --exit-code=1
+          --gitleaks-ignore-path=/repo/.gitleaksignore
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
-          version: 11.4.0
+          version: 11.15.1
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24.18.0
           cache: pnpm
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.13.5
+          terraform_wrapper: false
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit dependencies
+        run: pnpm audit --audit-level moderate
+
       - name: Generate project types
         run: pnpm ci:generate
+
+      - name: Prepare database migration shadow
+        working-directory: packages/database
+        run: pnpm db:shadow:create
+
+      - name: Apply database migrations
+        working-directory: packages/database
+        run: pnpm db:deploy
+
+      - name: Detect database migration drift
+        working-directory: packages/database
+        run: pnpm db:diff
 
       - name: Install Chromium
         run: apps/admin/node_modules/.bin/playwright install --with-deps chromium
@@ -116,8 +190,20 @@ jobs:
       - name: Typecheck
         run: pnpm check
 
-      - name: Run unit and component tests
+      - name: Validate Terraform formatting
+        run: terraform -chdir=infra/cloudflare fmt -check -diff
+
+      - name: Initialize Terraform providers
+        run: terraform -chdir=infra/cloudflare init -backend=false -input=false -lockfile=readonly
+
+      - name: Validate Terraform configuration
+        run: terraform -chdir=infra/cloudflare validate
+
+      - name: Run tests
         run: pnpm test
+
+      - name: Enforce coverage thresholds
+        run: pnpm test:coverage
 
       - name: Build all workspaces
         run: pnpm build
@@ -126,34 +212,83 @@ jobs:
         run: node scripts/ci/verify-admin-build.mjs apps/admin/.svelte-kit/cloudflare "$PUBLIC_API_BASE_URL"
 
       - name: Verify prerendered landing output
-        run: node scripts/ci/verify-landing-build.mjs apps/landing/build
+        run: node scripts/ci/verify-landing-build.mjs apps/landing/.svelte-kit/cloudflare "$PUBLIC_CONTACT_WORKER_URL"
 
       - name: Run browser journeys
         run: pnpm test:e2e
 
-  deploy-workers:
-    name: Deploy Cloudflare Workers
-    if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      (needs.changes.outputs.contact == 'true' || needs.changes.outputs.catalog == 'true' || needs.changes.outputs.admin == 'true')
+  build-api-image:
+    name: Build and scan API container
+    if: needs.changes.outputs.api == 'true'
     needs: [changes, validate]
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Build API image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: nrg-commerce-api:${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Scan API image
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
+        with:
+          image: nrg-commerce-api:${{ github.sha }}
+          fail-build: true
+          severity-cutoff: high
+          output-format: table
+
+  deploy-workers-staging:
+    name: Deploy Cloudflare staging
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.validate.result == 'success' &&
+      (needs.build-api-image.result == 'success' || needs.build-api-image.result == 'skipped') &&
+      (needs.changes.outputs.contact == 'true' ||
+       needs.changes.outputs.catalog == 'true' ||
+       needs.changes.outputs.admin == 'true' ||
+       needs.changes.outputs.infrastructure == 'true')
+    needs: [changes, validate, build-api-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     environment:
-      name: production
+      name: staging
     env:
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
-      CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
-      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
+      ADMIN_API_BASE_URL: ${{ vars.ADMIN_API_BASE_URL }}
       ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
       CATALOG_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
-      ADMIN_API_BASE_URL: ${{ vars.ADMIN_API_BASE_URL }}
+      CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
       CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
+      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
       COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
+      DEPLOYMENT_ENVIRONMENT: staging
       FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
+      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
       LINE_URL: ${{ vars.LINE_URL }}
+      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+      TF_CLOUD_PROJECT: ${{ vars.TF_CLOUD_PROJECT }}
+      TF_VAR_admin_origin: https://${{ vars.ADMIN_DOMAIN }}
+      TF_VAR_environment: staging
+      TF_VAR_public_assets_custom_domain: ${{ vars.TF_PUBLIC_ASSETS_CUSTOM_DOMAIN || 'null' }}
+      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
       TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
       PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
       PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
@@ -164,25 +299,53 @@ jobs:
       PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
-          version: 11.4.0
+          version: 11.15.1
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24.18.0
           cache: pnpm
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.13.5
+          terraform_wrapper: false
+          cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+
+      - name: Validate infrastructure environment
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+        run: node scripts/ci/production-env.mjs infrastructure
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Apply staging Cloudflare infrastructure
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          terraform -chdir=infra/cloudflare init -input=false
+          terraform -chdir=infra/cloudflare plan -input=false -lock-timeout=5m -out=deployment.tfplan
+          terraform -chdir=infra/cloudflare apply -input=false -auto-approve -lock-timeout=5m deployment.tfplan
+
       - name: Validate admin environment
         if: needs.changes.outputs.admin == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/ci/production-env.mjs admin
 
       - name: Build admin Worker
@@ -198,19 +361,43 @@ jobs:
       - name: Deploy admin Worker
         if: needs.changes.outputs.admin == 'true'
         working-directory: apps/admin
-        run: pnpm exec wrangler deploy --keep-vars --domain "$ADMIN_DOMAIN" --var "PUBLIC_API_BASE_URL:$ADMIN_API_BASE_URL"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: pnpm exec wrangler deploy --env staging --domain "$ADMIN_DOMAIN" --var "PUBLIC_API_BASE_URL:$ADMIN_API_BASE_URL"
 
       - name: Validate contact Worker environment
         if: needs.changes.outputs.contact == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/ci/production-env.mjs contact
+
+      - name: Update contact Worker secrets
+        if: needs.changes.outputs.contact == 'true'
+        working-directory: apps/contact-worker
+        env:
+          ALLOWED_ORIGINS: ${{ secrets.CONTACT_ALLOWED_ORIGINS }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CONTACT_RECIPIENT_EMAIL: ${{ secrets.CONTACT_RECIPIENT_EMAIL }}
+          CONTACT_SENDER_EMAIL: ${{ secrets.CONTACT_SENDER_EMAIL }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+        run: node ../../scripts/ci/contact-secrets.mjs | pnpm exec wrangler secret bulk --env staging
 
       - name: Deploy contact Worker
         if: needs.changes.outputs.contact == 'true'
         working-directory: apps/contact-worker
-        run: pnpm exec wrangler deploy --keep-vars --domain "$CONTACT_DOMAIN"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: pnpm exec wrangler deploy --env staging --domain "$CONTACT_DOMAIN"
 
       - name: Validate catalog environment
         if: needs.changes.outputs.catalog == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/ci/production-env.mjs catalog
 
       - name: Build catalog Worker
@@ -222,41 +409,176 @@ jobs:
       - name: Deploy catalog Worker
         if: needs.changes.outputs.catalog == 'true'
         working-directory: apps/catalog
-        run: pnpm exec wrangler deploy --keep-vars --domain "$CATALOG_DOMAIN" --var "PUBLIC_API_BASE_URL:$CATALOG_API_BASE_URL"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: pnpm exec wrangler deploy --env staging --domain "$CATALOG_DOMAIN" --var "PUBLIC_API_BASE_URL:$CATALOG_API_BASE_URL"
 
-  build-api-image:
-    name: Build API container
-    if: github.event_name == 'pull_request' && needs.changes.outputs.api == 'true'
-    needs: [changes, validate]
+  deploy-workers-production:
+    name: Promote Cloudflare production
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.deploy-workers-staging.result == 'success' &&
+      (needs.publish-api-image.result == 'success' || needs.publish-api-image.result == 'skipped')
+    needs: [changes, deploy-workers-staging, publish-api-image]
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: read
+    timeout-minutes: 30
+    environment:
+      name: production
+    env:
+      ADMIN_API_BASE_URL: ${{ vars.ADMIN_API_BASE_URL }}
+      ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
+      CATALOG_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
+      CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
+      CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
+      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
+      COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
+      DEPLOYMENT_ENVIRONMENT: production
+      FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
+      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
+      LINE_URL: ${{ vars.LINE_URL }}
+      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+      TF_CLOUD_PROJECT: ${{ vars.TF_CLOUD_PROJECT }}
+      TF_VAR_admin_origin: https://${{ vars.ADMIN_DOMAIN }}
+      TF_VAR_environment: production
+      TF_VAR_public_assets_custom_domain: ${{ vars.TF_PUBLIC_ASSETS_CUSTOM_DOMAIN || 'null' }}
+      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
+      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+      PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
+      PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
+      PUBLIC_CONTACT_WORKER_URL: https://${{ vars.CONTACT_DOMAIN }}
+      PUBLIC_FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
+      PUBLIC_HOME_URL: ${{ vars.LANDING_SITE_URL }}
+      PUBLIC_LINE_URL: ${{ vars.LINE_URL }}
+      PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build API image
-        uses: docker/build-push-action@v7
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          context: .
-          file: apps/api/Dockerfile
-          platforms: linux/amd64
-          push: false
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11.15.1
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.13.5
+          terraform_wrapper: false
+          cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+
+      - name: Validate infrastructure environment
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+        run: node scripts/ci/production-env.mjs infrastructure
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply production Cloudflare infrastructure
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          terraform -chdir=infra/cloudflare init -input=false
+          terraform -chdir=infra/cloudflare plan -input=false -lock-timeout=5m -out=deployment.tfplan
+          terraform -chdir=infra/cloudflare apply -input=false -auto-approve -lock-timeout=5m deployment.tfplan
+
+      - name: Validate admin environment
+        if: needs.changes.outputs.admin == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/ci/production-env.mjs admin
+
+      - name: Build admin Worker
+        if: needs.changes.outputs.admin == 'true'
+        env:
+          PUBLIC_API_BASE_URL: ${{ vars.ADMIN_API_BASE_URL }}
+        run: pnpm --filter @apps/admin build
+
+      - name: Verify admin Worker output
+        if: needs.changes.outputs.admin == 'true'
+        run: node scripts/ci/verify-admin-build.mjs apps/admin/.svelte-kit/cloudflare "$ADMIN_API_BASE_URL"
+
+      - name: Deploy admin Worker
+        if: needs.changes.outputs.admin == 'true'
+        working-directory: apps/admin
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: pnpm exec wrangler deploy --env production --domain "$ADMIN_DOMAIN" --var "PUBLIC_API_BASE_URL:$ADMIN_API_BASE_URL"
+
+      - name: Validate contact Worker environment
+        if: needs.changes.outputs.contact == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/ci/production-env.mjs contact
+
+      - name: Update contact Worker secrets
+        if: needs.changes.outputs.contact == 'true'
+        working-directory: apps/contact-worker
+        env:
+          ALLOWED_ORIGINS: ${{ secrets.CONTACT_ALLOWED_ORIGINS }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CONTACT_RECIPIENT_EMAIL: ${{ secrets.CONTACT_RECIPIENT_EMAIL }}
+          CONTACT_SENDER_EMAIL: ${{ secrets.CONTACT_SENDER_EMAIL }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+        run: node ../../scripts/ci/contact-secrets.mjs | pnpm exec wrangler secret bulk --env production
+
+      - name: Deploy contact Worker
+        if: needs.changes.outputs.contact == 'true'
+        working-directory: apps/contact-worker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: pnpm exec wrangler deploy --env production --domain "$CONTACT_DOMAIN"
+
+      - name: Validate catalog environment
+        if: needs.changes.outputs.catalog == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/ci/production-env.mjs catalog
+
+      - name: Build catalog Worker
+        if: needs.changes.outputs.catalog == 'true'
+        env:
+          PUBLIC_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
+        run: pnpm --filter @apps/catalog build
+
+      - name: Deploy catalog Worker
+        if: needs.changes.outputs.catalog == 'true'
+        working-directory: apps/catalog
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: pnpm exec wrangler deploy --env production --domain "$CATALOG_DOMAIN" --var "PUBLIC_API_BASE_URL:$CATALOG_API_BASE_URL"
 
   publish-api-image:
     name: Publish API container
     if: >-
+      github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      needs.changes.outputs.api == 'true'
-    needs: [changes, validate]
+      needs.changes.outputs.api == 'true' &&
+      needs.build-api-image.result == 'success'
+    needs: [changes, build-api-image]
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
       packages: write
@@ -264,13 +586,15 @@ jobs:
       name: production
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -278,15 +602,13 @@ jobs:
 
       - name: Generate image metadata
         id: metadata
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ghcr.io/jaydev0220/nrg-commerce-api
-          tags: |
-            type=raw,value=${{ github.sha }}
-            type=raw,value=latest
+          tags: type=raw,value=${{ github.sha }}
 
       - name: Build and publish API image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: apps/api/Dockerfile
@@ -299,31 +621,37 @@ jobs:
           provenance: mode=max
           sbom: true
 
-  deploy-landing:
-    name: Deploy landing to GitHub Pages
+      - name: Scan published API image
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
+        with:
+          image: ghcr.io/jaydev0220/nrg-commerce-api:${{ github.sha }}
+          fail-build: true
+          severity-cutoff: high
+          output-format: table
+
+  deploy-landing-staging:
+    name: Deploy landing staging
     if: >-
       always() &&
+      github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       needs.validate.result == 'success' &&
       needs.changes.outputs.landing == 'true' &&
-      (needs.deploy-workers.result == 'success' || needs.deploy-workers.result == 'skipped')
-    needs: [changes, validate, deploy-workers]
+      (needs.build-api-image.result == 'success' || needs.build-api-image.result == 'skipped')
+    needs: [changes, validate, build-api-image]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
     environment:
-      name: production
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: staging
+      url: ${{ vars.LANDING_SITE_URL }}
     env:
-      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
       CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
-      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
       CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
+      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
       COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
       FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
+      LANDING_DOMAIN: ${{ vars.LANDING_DOMAIN }}
+      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
       LINE_URL: ${{ vars.LINE_URL }}
       TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
       PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
@@ -336,16 +664,18 @@ jobs:
       PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
-          version: 11.4.0
+          version: 11.15.1
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24.18.0
           cache: pnpm
@@ -354,22 +684,93 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Validate landing environment
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/ci/production-env.mjs landing
 
       - name: Build landing site
         run: pnpm --filter @apps/landing build
 
       - name: Verify prerendered landing output
-        run: node scripts/ci/verify-landing-build.mjs apps/landing/build
+        run: node scripts/ci/verify-landing-build.mjs apps/landing/.svelte-kit/cloudflare "$PUBLIC_CONTACT_WORKER_URL"
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+      - name: Deploy landing static assets
+        working-directory: apps/landing
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: pnpm exec wrangler deploy --env staging --domain "$LANDING_DOMAIN"
 
-      - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v4
+  deploy-landing-production:
+    name: Deploy landing production
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.landing == 'true' &&
+      needs.deploy-landing-staging.result == 'success' &&
+      (needs.build-api-image.result == 'success' || needs.build-api-image.result == 'skipped') &&
+      (needs.deploy-workers-production.result == 'success' || needs.deploy-workers-production.result == 'skipped')
+    needs: [changes, build-api-image, deploy-landing-staging, deploy-workers-production]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.LANDING_SITE_URL }}
+    env:
+      CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
+      CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
+      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
+      COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
+      FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
+      LANDING_DOMAIN: ${{ vars.LANDING_DOMAIN }}
+      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
+      LINE_URL: ${{ vars.LINE_URL }}
+      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+      PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
+      PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
+      PUBLIC_CONTACT_WORKER_URL: https://${{ vars.CONTACT_DOMAIN }}
+      PUBLIC_CTA_URL: https://${{ vars.CATALOG_DOMAIN }}
+      PUBLIC_FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
+      PUBLIC_LINE_URL: ${{ vars.LINE_URL }}
+      PUBLIC_SITE_URL: ${{ vars.LANDING_SITE_URL }}
+      PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          path: apps/landing/build
+          persist-credentials: false
 
-      - name: Deploy GitHub Pages artifact
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11.15.1
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate landing environment
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/ci/production-env.mjs landing
+
+      - name: Build landing site
+        run: pnpm --filter @apps/landing build
+
+      - name: Verify prerendered landing output
+        run: node scripts/ci/verify-landing-build.mjs apps/landing/.svelte-kit/cloudflare "$PUBLIC_CONTACT_WORKER_URL"
+
+      - name: Deploy landing static assets
+        working-directory: apps/landing
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: pnpm exec wrangler deploy --env production --domain "$LANDING_DOMAIN"

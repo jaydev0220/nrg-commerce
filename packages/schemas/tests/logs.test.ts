@@ -40,3 +40,7 @@ test('managementLogListQuerySchema parses filters and pagination defaults', () =
 	assert.equal(parsedQuery.sort, 'createdAt');
 	assert.equal(parsedQuery.order, 'desc');
 });
+
+test('managementLogListQuerySchema rejects oversized request identifiers', () => {
+	assert.throws(() => managementLogListQuerySchema.parse({ requestId: 'a'.repeat(129) }));
+});

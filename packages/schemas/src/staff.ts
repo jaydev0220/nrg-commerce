@@ -1,21 +1,30 @@
 import { z } from 'zod';
 
-import { mfaMethodSchema, roleSchema, staffStatusSchema, strongPasswordSchema } from './auth.js';
+import { mfaMethodSchema, roleSchema, staffStatusSchema } from './auth.js';
 import {
 	booleanLikeSchema,
 	dateSchema,
+	emailAddressSchema,
+	normalizedEmailAddressSchema,
 	nonEmptyUpdate,
 	paginationQuerySchema,
+	searchQuerySchema,
 	sortOrderSchema,
 	uuidSchema
 } from './common.js';
 
+const staffNameSchema = z.string().trim().min(1).max(200);
+const staffRoleIdsSchema = z
+	.array(uuidSchema)
+	.min(1)
+	.max(20)
+	.refine((roleIds) => new Set(roleIds).size === roleIds.length, 'Role ids must be unique.');
+
 export const staffSchema = z.object({
 	id: uuidSchema,
-	email: z.email(),
-	name: z.string().min(1),
+	email: emailAddressSchema,
+	name: staffNameSchema,
 	status: staffStatusSchema,
-	passwordHash: z.string().min(1).nullable(),
 	preferredMfaMethod: z.preprocess((value) => value ?? null, mfaMethodSchema.nullable()),
 	lastLoginAt: dateSchema.nullable(),
 	deletedAt: dateSchema.nullable(),
@@ -25,7 +34,7 @@ export const staffSchema = z.object({
 });
 
 export const staffListQuerySchema = paginationQuerySchema.extend({
-	search: z.string().trim().min(1).optional(),
+	search: searchQuerySchema.optional(),
 	status: staffStatusSchema.optional(),
 	roleId: uuidSchema.optional(),
 	includeDeleted: booleanLikeSchema.default(false),
@@ -35,24 +44,16 @@ export const staffListQuerySchema = paginationQuerySchema.extend({
 });
 
 export const staffCreateSchema = z.object({
-	email: z.email(),
-	name: z.string().trim().min(1),
-	roleIds: z.array(uuidSchema).min(1)
+	email: normalizedEmailAddressSchema,
+	name: staffNameSchema,
+	roleIds: staffRoleIdsSchema
 });
 
 export const staffUpdateSchema = nonEmptyUpdate(
 	z.object({
-		email: z.email().optional(),
-		name: z.string().trim().min(1).optional(),
-		roleIds: z.array(uuidSchema).min(1).optional(),
+		email: normalizedEmailAddressSchema.optional(),
+		name: staffNameSchema.optional(),
+		roleIds: staffRoleIdsSchema.optional(),
 		status: staffStatusSchema.optional()
 	})
 );
-
-export const staffDeleteQuerySchema = z.object({
-	force: booleanLikeSchema.default(false)
-});
-
-export const staffPasswordUpdateSchema = z.object({
-	password: strongPasswordSchema
-});

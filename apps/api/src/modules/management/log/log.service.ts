@@ -17,6 +17,7 @@ export const logRetentionDaysByLevel = {
 type LogServiceDependencies = {
 	repository: LogRepository;
 	now?: () => Date;
+	onAuditLogPersistenceError?: (error: unknown) => void;
 };
 
 type AuditLogInput = {
@@ -50,24 +51,33 @@ export function createLogService(dependencies: LogServiceDependencies) {
 	const now = dependencies.now ?? (() => new Date());
 
 	return {
-		recordAuditLog(input: AuditLogInput) {
+		async recordAuditLog(input: AuditLogInput) {
 			const createdAt = now();
 			const level = input.level ?? 'info';
 
-			return dependencies.repository.createLog({
-				level,
-				kind: 'audit',
-				message: redactSensitiveText(input.message),
-				actorStaffId: input.actorStaffId ?? null,
-				requestId: input.requestId ?? null,
-				method: input.method ?? null,
-				path: input.path ?? null,
-				statusCode: input.statusCode ?? null,
-				entityType: input.entityType ?? null,
-				entityId: input.entityId ?? null,
-				metadata: redactLogValue(input.metadata),
-				expiresAt: resolveLogExpiresAt(level, createdAt)
-			});
+			try {
+				return await dependencies.repository.createLog({
+					level,
+					kind: 'audit',
+					message: redactSensitiveText(input.message),
+					actorStaffId: input.actorStaffId ?? null,
+					requestId: input.requestId ?? null,
+					method: input.method ?? null,
+					path: input.path ?? null,
+					statusCode: input.statusCode ?? null,
+					entityType: input.entityType ?? null,
+					entityId: input.entityId ?? null,
+					metadata: redactLogValue(input.metadata),
+					expiresAt: resolveLogExpiresAt(level, createdAt)
+				});
+			} catch (error) {
+				try {
+					dependencies.onAuditLogPersistenceError?.(error);
+				} catch {
+					// A diagnostic sink must not change the outcome of the completed operation.
+				}
+				return null;
+			}
 		},
 
 		recordRequestLog(input: Omit<AuditLogInput, 'level'> & { level: LogLevel }) {

@@ -3,15 +3,19 @@ import test from 'node:test';
 
 import { createTokenService } from '../../../src/utils/token-service.js';
 
+const tokenConfig = {
+	accessTokenSecret: 'access-secret',
+	refreshTokenSecret: 'refresh-secret',
+	pendingTokenSecret: 'pending-secret',
+	issuer: 'https://api.example.com',
+	audience: 'nrg-commerce-admin',
+	accessTokenTtlSeconds: 900,
+	refreshTokenTtlSeconds: 86_400,
+	pendingTokenTtlSeconds: 300
+};
+
 test('createTokenService signs and verifies access tokens with the expected claims', async () => {
-	const tokenService = createTokenService({
-		accessTokenSecret: 'access-secret',
-		refreshTokenSecret: 'refresh-secret',
-		pendingTokenSecret: 'pending-secret',
-		accessTokenTtlSeconds: 900,
-		refreshTokenTtlSeconds: 86_400,
-		pendingTokenTtlSeconds: 300
-	});
+	const tokenService = createTokenService(tokenConfig);
 
 	const accessToken = await tokenService.issueAccessToken({
 		sub: '0189076c-4f2a-7fe1-b9fd-2d68df455111',
@@ -32,14 +36,7 @@ test('createTokenService signs and verifies access tokens with the expected clai
 });
 
 test('createTokenService issues refresh and pending-auth tokens with separate claim shapes', async () => {
-	const tokenService = createTokenService({
-		accessTokenSecret: 'access-secret',
-		refreshTokenSecret: 'refresh-secret',
-		pendingTokenSecret: 'pending-secret',
-		accessTokenTtlSeconds: 900,
-		refreshTokenTtlSeconds: 86_400,
-		pendingTokenTtlSeconds: 300
-	});
+	const tokenService = createTokenService(tokenConfig);
 
 	const refreshToken = await tokenService.issueRefreshToken({
 		sub: '0189076c-4f2a-7fe1-b9fd-2d68df455111',
@@ -65,14 +62,7 @@ test('createTokenService issues refresh and pending-auth tokens with separate cl
 });
 
 test('createTokenService issues ceremony tokens for MFA setup flows', async () => {
-	const tokenService = createTokenService({
-		accessTokenSecret: 'access-secret',
-		refreshTokenSecret: 'refresh-secret',
-		pendingTokenSecret: 'pending-secret',
-		accessTokenTtlSeconds: 900,
-		refreshTokenTtlSeconds: 86_400,
-		pendingTokenTtlSeconds: 300
-	});
+	const tokenService = createTokenService(tokenConfig);
 
 	const setupToken = await tokenService.issueCeremonyToken({
 		type: 'ceremony',
@@ -87,4 +77,20 @@ test('createTokenService issues ceremony tokens for MFA setup flows', async () =
 
 	assert.equal(claims.staffId, '0189076c-4f2a-7fe1-b9fd-2d68df455111');
 	assert.equal(claims.primaryFactor, 'password');
+});
+
+test('createTokenService rejects tokens issued for another audience', async () => {
+	const issuer = createTokenService(tokenConfig);
+	const verifier = createTokenService({ ...tokenConfig, audience: 'another-service' });
+	const token = await issuer.issueAccessToken({
+		sub: '0189076c-4f2a-7fe1-b9fd-2d68df455111',
+		sid: '0189076c-4f2a-7fe1-b9fd-2d68df455222',
+		jti: 'access-jti',
+		roles: ['admin'],
+		permissions: ['staff.read'],
+		mfa: ['authenticator'],
+		primaryFactor: 'password'
+	});
+
+	await assert.rejects(() => verifier.verifyAccessToken(token), /aud/u);
 });

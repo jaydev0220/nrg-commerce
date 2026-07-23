@@ -24,6 +24,19 @@ describe('TOTP service', () => {
 		assert.match(setup.otpauthUrl, /issuer=NRG(?:%20|\+)Commerce/);
 		assert.equal(await service.verifyCode(setup.secret, token), true);
 		assert.equal(await service.verifyCode(setup.secret, invalidToken), false);
+
+		const firstVerification = await service.verifyCodeWithTimeStep(setup.secret, token);
+		assert.equal(firstVerification.valid, true);
+		if (firstVerification.valid) {
+			const replay = await service.verifyCodeWithTimeStep(
+				setup.secret,
+				token,
+				setup.digits,
+				setup.period,
+				firstVerification.timeStep
+			);
+			assert.deepEqual(replay, { valid: false });
+		}
 	});
 
 	test('round-trips encrypted TOTP secrets and rejects tampering', () => {

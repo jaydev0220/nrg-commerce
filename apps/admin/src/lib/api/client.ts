@@ -294,7 +294,14 @@ export function createAdminApiClient(options: ClientOptions) {
 			requestOptions: RequestOptions = {}
 		): Promise<T> {
 			const response = await request(path, init, requestOptions);
-			return (await response.json()) as T;
+			if (!response.headers.get('content-type')?.includes('application/json')) {
+				throw new AdminApiError(502, '管理 API 回傳了無效的資料格式。', 'INVALID_API_RESPONSE');
+			}
+			try {
+				return (await response.json()) as T;
+			} catch {
+				throw new AdminApiError(502, '管理 API 回傳了無效的資料格式。', 'INVALID_API_RESPONSE');
+			}
 		},
 		async requestNoContent(
 			path: string,

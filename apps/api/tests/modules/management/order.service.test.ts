@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 
 import type { ManagedOrderRecord } from '../../../src/types/management.js';
@@ -280,16 +281,70 @@ test('createOrder rejects missing referenced product skus', async () => {
 				items: [
 					{
 						productSkuId: 'sku-1',
-						skuCode: 'SKU-1',
-						productName: 'Catalog Item',
-						unitPrice: 9.99,
-						quantity: 1,
-						attributes: {}
+						quantity: 1
 					}
 				]
 			}),
 		(error: unknown) => error instanceof AppError && error.code === 'PRODUCT_SKU_NOT_FOUND'
 	);
+});
+
+test('createOrder persists the server-side catalog snapshot for referenced product skus', async () => {
+	let persistedItem:
+		| Parameters<
+				Parameters<typeof createOrderService>[0]['repository']['createOrder']
+		  >[0]['items'][0]
+		| undefined;
+	const orderService = createOrderService({
+		repository: {
+			listOrders: async () => ({ data: [], total: 0 }),
+			findOrderById: async () => null,
+			findBusinessById: async () => null,
+			findSkuById: async () => ({
+				id: 'sku-1',
+				skuCode: 'REAL-SKU',
+				productName: 'Catalog Item',
+				price: 49.95,
+				attributes: { color: 'black' }
+			}),
+			listOrderSkuLookups: async () => ({ data: [], total: 0 }),
+			createOrder: async (input) => {
+				persistedItem = input.items[0];
+				return {} as ManagedOrderRecord;
+			},
+			updateOrderStatus: async () => {
+				throw new Error('not used');
+			},
+			updateOrder: async () => {
+				throw new Error('not used');
+			}
+		}
+	});
+
+	await orderService.createOrder({
+		customerName: 'Walk-in Buyer',
+		customerPhone: '0912345678',
+		items: [
+			{
+				productSkuId: 'sku-1',
+				skuCode: 'SPOOFED',
+				productName: 'Spoofed item',
+				unitPrice: 0.01,
+				quantity: 2,
+				attributes: { spoofed: true }
+			} as never
+		]
+	});
+
+	assert.deepEqual(persistedItem, {
+		productSkuId: 'sku-1',
+		skuCode: 'REAL-SKU',
+		productName: 'Catalog Item',
+		unitPrice: 49.95,
+		quantity: 2,
+		attributes: { color: 'black' },
+		lineTotal: 99.9
+	});
 });
 
 test('updateOrder changes customer fields without replacing item snapshots', async () => {
@@ -310,7 +365,10 @@ test('updateOrder changes customer fields without replacing item snapshots', asy
 		discountRate: 0,
 		discountAmount: 0,
 		totalAmount: 99,
+		version: 0,
 		completedAt: null,
+		cancelledAt: null,
+		refundedAt: null,
 		createdAt: new Date(),
 		updatedAt: new Date(),
 		business: null,
@@ -344,7 +402,10 @@ test('updateOrder changes customer fields without replacing item snapshots', asy
 			},
 			updateOrder: async (_id, input) => {
 				updateInput = input;
-				return { ...existing, ...input };
+				return {
+					order: { ...existing, ...input },
+					previousStatus: existing.status
+				};
 			}
 		}
 	});
@@ -355,8 +416,7 @@ test('updateOrder changes customer fields without replacing item snapshots', asy
 	});
 	assert.deepEqual(updateInput, {
 		customerName: 'New',
-		status: 'confirmed',
-		completedAt: null
+		status: 'confirmed'
 	});
 	assert.deepEqual(result.order.items, existing.items);
 });
@@ -417,7 +477,7 @@ test('createOrder reuses an idempotency key and rejects conflicting payloads', a
 			}
 		}
 	});
-	const idempotencyKey = '0189076c-4f2a-7fe1-b9fd-2d68df455401';
+	const idempotencyKey = randomUUID();
 	const input = {
 		idempotencyKey,
 		customerName: 'Walk-in Buyer',
@@ -458,44 +518,27 @@ test('createOrder reuses an idempotency key and rejects conflicting payloads', a
 	);
 });
 
-test('updateOrderStatus timestamps completion and clears it when leaving completed', async () => {
-	let current = {
+test('updateOrderStatus returns the atomic repository transition result', async () => {
+	const order = {
 		id: 'order-1',
-		businessId: null,
-		status: 'pending' as ManagedOrderRecord['status'],
-		customerName: 'Buyer',
-		customerEmail: null,
-		customerPhone: '0912345678',
-		customerAddress: null,
-		itemCount: 1,
-		subtotalAmount: 10,
-		discountLabelId: null,
-		discountLabelName: null,
-		suggestedDiscountRate: null,
-		discountRate: 0,
-		discountAmount: 0,
-		totalAmount: 10,
-		completedAt: null as Date | null,
-		createdAt: new Date(),
-		updatedAt: new Date(),
-		business: null,
-		items: []
-	};
-	let receivedCompletedAt: Date | null | undefined;
+		status: 'completed'
+	} as ManagedOrderRecord;
 	const orderService = createOrderService({
 		repository: {
 			listOrders: async () => ({ data: [], total: 0 }),
-			findOrderById: async () => current,
+			findOrderById: async () => {
+				throw new Error('updateOrderStatus must not perform a preflight read');
+			},
 			findBusinessById: async () => null,
 			findSkuById: async () => null,
 			listOrderSkuLookups: async () => ({ data: [], total: 0 }),
 			createOrder: async () => {
 				throw new Error('not used');
 			},
-			updateOrderStatus: async (_orderId, status, completedAt) => {
-				receivedCompletedAt = completedAt;
-				current = { ...current, status, completedAt };
-				return current;
+			updateOrderStatus: async (orderId, status) => {
+				assert.equal(orderId, 'order-1');
+				assert.equal(status, 'completed');
+				return { order, previousStatus: 'processing' };
 			},
 			updateOrder: async () => {
 				throw new Error('not used');
@@ -503,13 +546,7 @@ test('updateOrderStatus timestamps completion and clears it when leaving complet
 		}
 	});
 
-	await orderService.updateOrderStatus('order-1', 'completed');
-	assert.ok(receivedCompletedAt instanceof Date);
-	const completedAt = receivedCompletedAt;
+	const result = await orderService.updateOrderStatus('order-1', 'completed');
 
-	await orderService.updateOrderStatus('order-1', 'completed');
-	assert.equal(receivedCompletedAt, completedAt);
-
-	await orderService.updateOrderStatus('order-1', 'cancelled');
-	assert.equal(receivedCompletedAt, null);
+	assert.deepEqual(result, { order, previousStatus: 'processing' });
 });

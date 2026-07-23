@@ -1,117 +1,9 @@
-import { randomBytes, scryptSync } from 'node:crypto';
-
 import {
-	type DatabaseClient,
 	closeDatabaseClient,
 	createDatabaseClient,
 	permissionDefinitions,
 	roleDefinitions
 } from '../src/index.js';
-
-const defaultSeedAdminName = 'Administrator';
-
-type SeedAdminAccount = {
-	email: string;
-	name: string;
-	password: string;
-};
-
-function readOptionalEnv(name: string): string | undefined {
-	const value = process.env[name]?.trim();
-
-	if (!value) {
-		return undefined;
-	}
-
-	return value;
-}
-
-function readRequiredEnv(name: string): string {
-	const value = readOptionalEnv(name);
-
-	if (value === undefined) {
-		throw new Error(`${name} is required to seed the admin account.`);
-	}
-
-	return value;
-}
-
-function createPasswordHash(password: string): string {
-	const salt = randomBytes(16).toString('hex');
-	const derivedKey = scryptSync(password, salt, 64).toString('hex');
-
-	return `scrypt$16384$8$1$${salt}$${derivedKey}`;
-}
-
-function resolveSeedAdminAccount(): SeedAdminAccount {
-	return {
-		email: readRequiredEnv('SEED_ADMIN_EMAIL'),
-		name: readOptionalEnv('SEED_ADMIN_NAME') ?? defaultSeedAdminName,
-		password: readRequiredEnv('SEED_ADMIN_PASSWORD')
-	};
-}
-
-async function seedAdminAccount(database: DatabaseClient): Promise<void> {
-	const seedAdmin = resolveSeedAdminAccount();
-	const adminRole = await database.role.findUniqueOrThrow({
-		where: {
-			key: 'admin'
-		},
-		select: {
-			id: true
-		}
-	});
-	const existingAdmin = await database.staff.findUnique({
-		where: {
-			email: seedAdmin.email
-		},
-		select: {
-			id: true
-		}
-	});
-	const adminPasswordHash = createPasswordHash(seedAdmin.password);
-	const admin =
-		existingAdmin === null
-			? await database.staff.create({
-					data: {
-						email: seedAdmin.email,
-						name: seedAdmin.name,
-						status: 'active',
-						passwordHash: adminPasswordHash
-					},
-					select: {
-						id: true
-					}
-				})
-			: await database.staff.update({
-					where: {
-						email: seedAdmin.email
-					},
-					data: {
-						name: seedAdmin.name,
-						status: 'active',
-						deletedAt: null,
-						passwordHash: adminPasswordHash
-					},
-					select: {
-						id: true
-					}
-				});
-
-	await database.staffRole.upsert({
-		where: {
-			staffId_roleId: {
-				staffId: admin.id,
-				roleId: adminRole.id
-			}
-		},
-		update: {},
-		create: {
-			staffId: admin.id,
-			roleId: adminRole.id
-		}
-	});
-}
 
 async function main(): Promise<void> {
 	const database = createDatabaseClient();
@@ -170,8 +62,6 @@ async function main(): Promise<void> {
 				}))
 			});
 		}
-
-		await seedAdminAccount(database);
 	} finally {
 		await database.$disconnect();
 		await closeDatabaseClient();

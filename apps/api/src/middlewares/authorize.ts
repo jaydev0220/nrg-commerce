@@ -49,7 +49,11 @@ export function requireVerifiedMfa(): RequestHandler {
 		try {
 			const authContext = requireAuthContext(response);
 
-			if (authContext.mfa.length === 0) {
+			if (
+				authContext.mfa.length === 0 ||
+				(authContext.staff.totpCredentialCount === 0 &&
+					authContext.staff.passkeyCredentialCount === 0)
+			) {
 				throw new AppError(
 					403,
 					'MFA_SETUP_REQUIRED',

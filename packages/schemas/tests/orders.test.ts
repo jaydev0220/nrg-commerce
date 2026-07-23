@@ -4,9 +4,9 @@ import test from 'node:test';
 import {
 	businessBulkLabelUpdateSchema,
 	orderCreateSchema,
+	orderListQuerySchema,
 	orderSkuLookupQuerySchema,
-	orderUpdateSchema,
-	staffPasswordUpdateSchema
+	orderUpdateSchema
 } from '../src/index.js';
 
 const orderItem = {
@@ -28,6 +28,28 @@ test('orderCreateSchema accepts null business and optional customer fields for b
 	});
 
 	assert.equal(order.businessId, '0189076c-4f2a-7fe1-b9fd-2d68df455301');
+});
+
+test('orderCreateSchema strips caller-provided snapshots from catalog SKU lines', () => {
+	const order = orderCreateSchema.parse({
+		customerName: 'Walk-in Buyer',
+		customerPhone: '0912345678',
+		items: [
+			{
+				productSkuId: '0189076c-4f2a-7fe1-b9fd-2d68df455301',
+				skuCode: 'SPOOFED',
+				productName: 'Spoofed item',
+				unitPrice: 0.01,
+				quantity: 2,
+				attributes: { spoofed: true }
+			}
+		]
+	});
+
+	assert.deepEqual(order.items[0], {
+		productSkuId: '0189076c-4f2a-7fe1-b9fd-2d68df455301',
+		quantity: 2
+	});
 });
 
 test('orderCreateSchema requires consumer name and phone and validates phone formatting', () => {
@@ -72,14 +94,6 @@ test('orderUpdateSchema accepts customer updates and rejects item replacement', 
 	assert.throws(() => orderUpdateSchema.parse({ items: [] }));
 });
 
-test('staffPasswordUpdateSchema enforces the strong password policy', () => {
-	assert.equal(
-		staffPasswordUpdateSchema.parse({ password: 'LongerThan16Chars1!' }).password,
-		'LongerThan16Chars1!'
-	);
-	assert.throws(() => staffPasswordUpdateSchema.parse({ password: 'longbutnotcomplexpassword' }));
-});
-
 test('bulk business label updates require unique business ids and allow clearing a label', () => {
 	const input = businessBulkLabelUpdateSchema.parse({
 		businessIds: ['0189076c-4f2a-7fe1-b9fd-2d68df455301'],
@@ -101,4 +115,30 @@ test('order SKU lookup query coerces pagination values and trims search', () => 
 		limit: 10,
 		search: 'SKU-1'
 	});
+});
+
+test('order request schemas reject oversized customer, item, and search values', () => {
+	assert.throws(() =>
+		orderCreateSchema.parse({
+			customerName: 'a'.repeat(201),
+			customerPhone: '+886 912 345 678',
+			items: [orderItem]
+		})
+	);
+	assert.throws(() =>
+		orderCreateSchema.parse({
+			customerName: 'Customer',
+			customerPhone: '+886 912 345 678',
+			customerAddress: 'a'.repeat(1_001),
+			items: [orderItem]
+		})
+	);
+	assert.throws(() =>
+		orderCreateSchema.parse({
+			customerName: 'Customer',
+			customerPhone: '+886 912 345 678',
+			items: [{ ...orderItem, skuCode: 'a'.repeat(121) }]
+		})
+	);
+	assert.throws(() => orderListQuerySchema.parse({ search: 'a'.repeat(201) }));
 });

@@ -34,7 +34,6 @@ type ProductServiceDependencies = {
 		| 'updateProduct'
 		| 'softDeleteProduct'
 		| 'restoreProduct'
-		| 'forceDeleteProduct'
 		| 'bulkUpdateProducts'
 	>;
 };
@@ -126,32 +125,8 @@ export function createProductService(dependencies: ProductServiceDependencies) {
 			return dependencies.repository.updateProduct(productId, input);
 		},
 
-		async deleteProduct(
-			productId: string,
-			input: {
-				force: boolean;
-			}
-		): Promise<'soft' | 'force'> {
-			const existingProduct = ensureProduct(
-				await dependencies.repository.findProductById(productId, {
-					includeSkus: true,
-					includeImages: false
-				})
-			);
-
-			if (input.force && existingProduct.skus.length > 0) {
-				throw new AppError(
-					409,
-					'PRODUCT_DELETE_CONFLICT',
-					'Force deleting a product with assigned SKUs is not allowed.'
-				);
-			}
-
-			if (input.force) {
-				await dependencies.repository.forceDeleteProduct(productId);
-				return 'force';
-			}
-
+		async deleteProduct(productId: string): Promise<'soft'> {
+			ensureProduct(await dependencies.repository.findProductById(productId));
 			await dependencies.repository.softDeleteProduct(productId);
 			return 'soft';
 		},

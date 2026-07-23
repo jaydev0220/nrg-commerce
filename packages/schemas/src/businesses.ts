@@ -3,16 +3,26 @@ import { z } from 'zod';
 import {
 	booleanLikeSchema,
 	dateSchema,
+	emailAddressSchema,
 	nonEmptyUpdate,
 	paginationQuerySchema,
+	searchQuerySchema,
 	sortOrderSchema,
 	uuidSchema
 } from './common.js';
 
+const businessNameSchema = z.string().trim().min(1).max(200);
+const businessLabelNameSchema = z.string().trim().min(1).max(100);
+const contactTextSchema = z.string().trim().min(1).max(200);
+const contactPhoneSchema = z.string().trim().min(1).max(64);
+const taxIdSchema = z.string().trim().min(1).max(64);
+const addressSchema = z.string().trim().min(1).max(1_000);
+const notesSchema = z.string().trim().min(1).max(10_000);
+
 export const businessLabelColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 export const businessLabelSchema = z.object({
 	id: uuidSchema,
-	name: z.string().trim().min(1),
+	name: businessLabelNameSchema,
 	color: businessLabelColorSchema,
 	discountRate: z.number().min(0).max(100).multipleOf(0.01).nullable(),
 	deletedAt: dateSchema.nullable(),
@@ -22,13 +32,13 @@ export const businessLabelSchema = z.object({
 
 export const businessSchema = z.object({
 	id: uuidSchema,
-	name: z.string().trim().min(1),
-	contactName: z.string().trim().min(1).nullable(),
-	contactEmail: z.email().nullable(),
-	contactPhone: z.string().trim().min(1).nullable(),
-	taxId: z.string().trim().min(1).nullable(),
-	address: z.string().trim().min(1).nullable(),
-	notes: z.string().trim().min(1).nullable(),
+	name: businessNameSchema,
+	contactName: contactTextSchema.nullable(),
+	contactEmail: emailAddressSchema.nullable(),
+	contactPhone: contactPhoneSchema.nullable(),
+	taxId: taxIdSchema.nullable(),
+	address: addressSchema.nullable(),
+	notes: notesSchema.nullable(),
 	labelId: uuidSchema.nullable(),
 	label: businessLabelSchema.nullable().optional(),
 	deletedAt: dateSchema.nullable(),
@@ -37,7 +47,7 @@ export const businessSchema = z.object({
 });
 
 export const businessListQuerySchema = paginationQuerySchema.extend({
-	search: z.string().trim().min(1).optional(),
+	search: searchQuerySchema.optional(),
 	includeDeleted: booleanLikeSchema.default(false),
 	archived: booleanLikeSchema.optional(),
 	labelId: uuidSchema.optional(),
@@ -46,25 +56,25 @@ export const businessListQuerySchema = paginationQuerySchema.extend({
 });
 
 export const businessCreateSchema = z.object({
-	name: z.string().trim().min(1),
-	contactName: z.string().trim().min(1).optional(),
-	contactEmail: z.email().optional(),
-	contactPhone: z.string().trim().min(1).optional(),
-	taxId: z.string().trim().min(1).optional(),
-	address: z.string().trim().min(1).optional(),
-	notes: z.string().trim().min(1).optional(),
+	name: businessNameSchema,
+	contactName: contactTextSchema.optional(),
+	contactEmail: emailAddressSchema.optional(),
+	contactPhone: contactPhoneSchema.optional(),
+	taxId: taxIdSchema.optional(),
+	address: addressSchema.optional(),
+	notes: notesSchema.optional(),
 	labelId: uuidSchema.nullable().optional()
 });
 
 export const businessUpdateSchema = nonEmptyUpdate(
 	z.object({
-		name: z.string().trim().min(1).optional(),
-		contactName: z.string().trim().min(1).nullable().optional(),
-		contactEmail: z.email().nullable().optional(),
-		contactPhone: z.string().trim().min(1).nullable().optional(),
-		taxId: z.string().trim().min(1).nullable().optional(),
-		address: z.string().trim().min(1).nullable().optional(),
-		notes: z.string().trim().min(1).nullable().optional(),
+		name: businessNameSchema.optional(),
+		contactName: contactTextSchema.nullable().optional(),
+		contactEmail: emailAddressSchema.nullable().optional(),
+		contactPhone: contactPhoneSchema.nullable().optional(),
+		taxId: taxIdSchema.nullable().optional(),
+		address: addressSchema.nullable().optional(),
+		notes: notesSchema.nullable().optional(),
 		labelId: uuidSchema.nullable().optional()
 	})
 );
@@ -80,18 +90,18 @@ export const businessBulkLabelUpdateSchema = z.object({
 
 export const businessLabelListQuerySchema = paginationQuerySchema.extend({
 	includeDeleted: booleanLikeSchema.default(false),
-	search: z.string().trim().min(1).optional()
+	search: searchQuerySchema.optional()
 });
 
 export const businessLabelCreateSchema = z.object({
-	name: z.string().trim().min(1),
+	name: businessLabelNameSchema,
 	color: businessLabelColorSchema,
 	discountRate: z.number().min(0).max(100).multipleOf(0.01).nullable().optional()
 });
 
 export const businessLabelUpdateSchema = nonEmptyUpdate(
 	z.object({
-		name: z.string().trim().min(1).optional(),
+		name: businessLabelNameSchema.optional(),
 		color: businessLabelColorSchema.optional(),
 		discountRate: z.number().min(0).max(100).multipleOf(0.01).nullable().optional()
 	})

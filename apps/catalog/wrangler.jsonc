@@ -1,6 +1,6 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
-	"name": "catalog",
+	"name": "catalog-local",
 	"compatibility_date": "2026-06-23",
 	"compatibility_flags": ["nodejs_compat"],
 	"main": ".svelte-kit/cloudflare/_worker.js",
@@ -11,6 +11,24 @@
 	"vars": {
 		"PUBLIC_API_BASE_URL": "http://localhost:3000"
 	},
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1
+	},
 	"workers_dev": false,
-	"preview_urls": false
+	"preview_urls": false,
+	"env": {
+		"staging": {
+			"name": "catalog-staging",
+			"vars": {
+				"PUBLIC_API_BASE_URL": "https://api-staging.invalid"
+			}
+		},
+		"production": {
+			"name": "catalog",
+			"vars": {
+				"PUBLIC_API_BASE_URL": "https://api.invalid"
+			}
+		}
+	}
 }

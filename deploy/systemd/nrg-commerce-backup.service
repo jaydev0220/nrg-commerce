@@ -1,0 +1,35 @@
+[Unit]
+Description=NRG Commerce encrypted PostgreSQL backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=nrg-commerce
+Group=nrg-commerce
+EnvironmentFile=/etc/nrg-commerce/backup.env
+WorkingDirectory=/opt/nrg-commerce
+ExecStart=/opt/nrg-commerce/scripts/operations/backup-database.sh
+UMask=0077
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=true
+PrivateDevices=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectProc=invisible
+ProcSubset=pid
+LockPersonality=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=/var/backups/nrg-commerce

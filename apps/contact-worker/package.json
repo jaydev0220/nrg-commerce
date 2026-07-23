@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "wrangler dev",
-		"build": "wrangler types && wrangler deploy --dry-run --outdir build",
+		"build": "wrangler types && wrangler deploy --dry-run --outdir build --env=",
 		"deploy": "wrangler deploy",
 		"check": "wrangler types && tsc --noEmit --project tsconfig.json",
 		"format": "prettier --ignore-path ../../.prettierignore --write .",

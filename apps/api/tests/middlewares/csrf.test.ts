@@ -39,6 +39,29 @@ test('CSRF endpoint issues an HttpOnly cookie and returns the matching memory to
 	assert.match(setCookie, /SameSite=Lax/i);
 });
 
+test('CSRF endpoint uses a host-prefixed cookie when secure cookies are enabled', async () => {
+	const app = express();
+	app.get(
+		'/csrf',
+		createCsrfTokenHandler({
+			...options,
+			cookieSecure: true,
+			cookieSameSite: 'none'
+		})
+	);
+	app.use(errorHandler);
+
+	const response = await requestApp(app, { path: '/csrf' });
+	const setCookie = getSetCookie(response);
+
+	assert.equal(response.status, 200);
+	assert.match(setCookie, /^__Host-admin_csrf_token=/u);
+	assert.match(setCookie, /;\s*Secure(?:;|$)/iu);
+	assert.match(setCookie, /;\s*Path=\/(?:;|$)/iu);
+	assert.match(setCookie, /;\s*SameSite=None(?:;|$)/iu);
+	assert.doesNotMatch(setCookie, /;\s*Domain=/iu);
+});
+
 test('CSRF middleware accepts an exact allowed origin and matching cookie/header token', async () => {
 	const app = express();
 	app.use(createCsrfProtectionMiddleware(options));

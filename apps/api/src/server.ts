@@ -15,6 +15,8 @@ type ClosableServer = {
 type ShutdownDependencies = {
 	server: ClosableServer;
 	closeDatabase?: () => Promise<void>;
+	cleanup?: () => Promise<void> | void;
+	shutdownObservability?: () => Promise<void>;
 	exit?: (code: number) => void;
 	setShutdownTimeout?: (callback: () => void, milliseconds: number) => NodeJS.Timeout;
 	clearShutdownTimeout?: (timeout: NodeJS.Timeout) => void;
@@ -25,6 +27,14 @@ type ShutdownDependencies = {
 export type ShutdownController = {
 	shutdown(signal: ProcessSignal): Promise<void>;
 };
+
+export function configureHttpServer(server: Server): void {
+	server.requestTimeout = 30_000;
+	server.headersTimeout = 15_000;
+	server.keepAliveTimeout = 5_000;
+	server.maxHeadersCount = 100;
+	server.maxRequestsPerSocket = 1_000;
+}
 
 function closeServer(server: ShutdownDependencies['server']): Promise<void> {
 	return new Promise((resolve, reject) => {
@@ -40,8 +50,30 @@ function closeServer(server: ShutdownDependencies['server']): Promise<void> {
 	});
 }
 
-export function createShutdownController(dependencies: ShutdownDependencies): ShutdownController {
+async function closeRuntimeResources(dependencies: ShutdownDependencies): Promise<void> {
 	const closeDatabase = dependencies.closeDatabase ?? closeDatabaseClient;
+	const operations = [
+		() => closeServer(dependencies.server),
+		() => dependencies.cleanup?.(),
+		() => closeDatabase(),
+		() => dependencies.shutdownObservability?.()
+	];
+	let hasError = false;
+	let firstError: unknown;
+
+	for (const operation of operations) {
+		try {
+			await operation();
+		} catch (error) {
+			if (!hasError) firstError = error;
+			hasError = true;
+		}
+	}
+
+	if (hasError) throw firstError;
+}
+
+export function createShutdownController(dependencies: ShutdownDependencies): ShutdownController {
 	const exit = dependencies.exit ?? ((code) => process.exit(code));
 	const setShutdownTimeout = dependencies.setShutdownTimeout ?? setTimeout;
 	const clearShutdownTimeout = dependencies.clearShutdownTimeout ?? clearTimeout;
@@ -60,8 +92,7 @@ export function createShutdownController(dependencies: ShutdownDependencies): Sh
 				timeout.unref();
 
 				try {
-					await closeServer(dependencies.server);
-					await closeDatabase();
+					await closeRuntimeResources(dependencies);
 					clearShutdownTimeout(timeout);
 					exit(0);
 				} catch (error) {
@@ -78,12 +109,26 @@ export function createShutdownController(dependencies: ShutdownDependencies): Sh
 	};
 }
 
-export function startApiServer(config: AppConfig): Server {
-	const app = createApp({ config });
+export function startApiServer(
+	config: AppConfig,
+	dependencies: Pick<ShutdownDependencies, 'shutdownObservability'> = {}
+): Server {
+	const cleanupCallbacks: Array<() => void> = [];
+	const app = createApp({
+		config,
+		registerCleanup: (cleanup) => cleanupCallbacks.push(cleanup)
+	});
 	const server = app.listen(config.port, '0.0.0.0', () => {
 		process.stdout.write(`@apps/api listening on port ${config.port}\n`);
 	});
-	const shutdownController = createShutdownController({ server });
+	configureHttpServer(server);
+	const shutdownController = createShutdownController({
+		server,
+		cleanup: () => {
+			for (const cleanup of cleanupCallbacks) cleanup();
+		},
+		shutdownObservability: dependencies.shutdownObservability
+	});
 
 	process.once('SIGINT', () => void shutdownController.shutdown('SIGINT'));
 	process.once('SIGTERM', () => void shutdownController.shutdown('SIGTERM'));

@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
 	aggregateSkuQuantities,
+	isOrderStatusTransitionAllowed,
 	resolveInventoryAdjustment
 } from '../../../src/modules/management/order/order.inventory.js';
 
@@ -23,11 +24,39 @@ test('aggregateSkuQuantities combines repeated SKU lines and ignores custom line
 	);
 });
 
-test('resolveInventoryAdjustment releases and re-deducts stock exactly at status boundaries', () => {
+test('order status transitions follow the strict lifecycle', () => {
+	const statuses = [
+		'pending',
+		'confirmed',
+		'processing',
+		'completed',
+		'cancelled',
+		'refunded'
+	] as const;
+	const allowed = new Set([
+		'pending:confirmed',
+		'pending:cancelled',
+		'confirmed:processing',
+		'confirmed:cancelled',
+		'processing:completed',
+		'processing:cancelled',
+		'completed:refunded'
+	]);
+
+	for (const currentStatus of statuses) {
+		for (const nextStatus of statuses) {
+			assert.equal(
+				isOrderStatusTransitionAllowed(currentStatus, nextStatus),
+				currentStatus === nextStatus || allowed.has(`${currentStatus}:${nextStatus}`),
+				`${currentStatus} -> ${nextStatus}`
+			);
+		}
+	}
+});
+
+test('resolveInventoryAdjustment changes stock only across valid release boundaries', () => {
 	assert.equal(resolveInventoryAdjustment('pending', 'cancelled'), 'restore');
 	assert.equal(resolveInventoryAdjustment('completed', 'refunded'), 'restore');
-	assert.equal(resolveInventoryAdjustment('cancelled', 'pending'), 'deduct');
-	assert.equal(resolveInventoryAdjustment('refunded', 'completed'), 'deduct');
-	assert.equal(resolveInventoryAdjustment('cancelled', 'refunded'), null);
-	assert.equal(resolveInventoryAdjustment('pending', 'completed'), null);
+	assert.equal(resolveInventoryAdjustment('pending', 'confirmed'), null);
+	assert.equal(resolveInventoryAdjustment('completed', 'completed'), null);
 });

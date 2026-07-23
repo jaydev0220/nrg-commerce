@@ -68,6 +68,25 @@ describe('admin browser API client', () => {
 		).rejects.toMatchObject({ status: 500, code: 'INVALID_CSRF_RESPONSE' });
 	});
 
+	it.each([
+		{
+			name: 'missing JSON content type',
+			response: () => new Response('{}', { status: 200 })
+		},
+		{
+			name: 'malformed JSON body',
+			response: () =>
+				new Response('{', { status: 200, headers: { 'content-type': 'application/json' } })
+		}
+	])('rejects a successful response with $name', async ({ response }) => {
+		const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(response());
+		const client = createAdminApiClient({ baseUrl: 'https://api.example.com', fetch });
+
+		await expect(
+			client.requestJson('/api/auth/state', {}, { authenticated: false })
+		).rejects.toMatchObject({ status: 502, code: 'INVALID_API_RESPONSE' });
+	});
+
 	it('refreshes an expired cookie session once and retries the original request', async () => {
 		const fetch = vi
 			.fn<typeof globalThis.fetch>()

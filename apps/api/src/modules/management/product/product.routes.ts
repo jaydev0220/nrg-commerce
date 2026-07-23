@@ -5,7 +5,6 @@ import {
 	managementProductListQuerySchema,
 	productBulkUpdateSchema,
 	productCreateSchema,
-	productDeleteQuerySchema,
 	productUpdateSchema,
 	uuidSchema
 } from '@packages/schemas';
@@ -88,7 +87,7 @@ export function createProductManagementRouter(
 	router.delete(
 		'/:productId',
 		requirePermission('product.delete'),
-		validateRequest({ params: productParamsSchema, query: productDeleteQuerySchema }),
+		validateRequest({ params: productParamsSchema }),
 		controller.deleteProduct
 	);
 

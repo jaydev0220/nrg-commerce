@@ -93,8 +93,7 @@ export function createProductManagementController(
 		deleteProduct: async (request, response) => {
 			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<ProductParams>(request);
-			const query = getValidatedQuery<Parameters<ProductService['deleteProduct']>[1]>(request);
-			const mode = await dependencies.productService.deleteProduct(params.productId, query);
+			const mode = await dependencies.productService.deleteProduct(params.productId);
 			const requestContext = getRequestContext(request, response);
 			await dependencies.logService.recordAuditLog({
 				message: 'Staff deleted a product.',

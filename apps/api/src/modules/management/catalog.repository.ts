@@ -721,14 +721,6 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			return mapProductRecord(product);
 		},
 
-		async forceDeleteProduct(productId: string): Promise<void> {
-			await database.product.delete({
-				where: {
-					id: productId
-				}
-			});
-		},
-
 		async bulkUpdateProducts(
 			input: BulkProductUpdateInput
 		): Promise<{ updatedCount: number; missingProductIds: string[]; invalidProductIds: string[] }> {
@@ -1404,6 +1396,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			productId: string,
 			uploadId: string,
 			input: {
+				uploadAssetKey: string;
 				skuId?: string | null;
 				imageUrl: string;
 				assetKey: string;
@@ -1416,11 +1409,17 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 		): Promise<CatalogImageRecord | null> {
 			const now = new Date();
 			return database.$transaction(async (transaction) => {
+				await transaction.$queryRaw`
+					SELECT "id"
+					FROM "Product"
+					WHERE "id" = ${productId}
+					FOR UPDATE
+				`;
 				const consumedUpload = await transaction.productImageUpload.updateMany({
 					where: {
 						id: uploadId,
 						productId,
-						assetKey: input.assetKey,
+						assetKey: input.uploadAssetKey,
 						consumedAt: null,
 						expiresAt: { gt: now }
 					},
@@ -1428,8 +1427,8 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				});
 				if (consumedUpload.count !== 1) return null;
 
-				const product = await transaction.product.findUniqueOrThrow({
-					where: { id: productId },
+				const product = await transaction.product.findFirstOrThrow({
+					where: { id: productId, deletedAt: null },
 					select: { thumbnailImageId: true }
 				});
 				if (input.placement === 'thumbnail' && product.thumbnailImageId) {
@@ -1497,7 +1496,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 
 		async listExpiredImageUploads(now: Date) {
 			return database.productImageUpload.findMany({
-				where: { consumedAt: null, expiresAt: { lte: now } },
+				where: { expiresAt: { lte: now } },
 				select: { id: true, assetKey: true }
 			});
 		},

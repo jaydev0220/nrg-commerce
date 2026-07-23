@@ -36,3 +36,21 @@ test('writes structured JSON at or above the configured level', () => {
 		]
 	);
 });
+
+test('adds active trace identifiers to structured logs', () => {
+	const { destination, lines } = createOutput();
+	const logger = createApiLogger({
+		level: 'info',
+		destination,
+		getTraceMetadata: () => ({
+			traceId: '1234567890abcdef1234567890abcdef',
+			spanId: '1234567890abcdef'
+		})
+	});
+
+	logger.info({ requestId: 'request-1' }, 'traced event');
+
+	const parsed = JSON.parse(lines[0] ?? '{}') as Record<string, unknown>;
+	assert.equal(parsed['traceId'], '1234567890abcdef1234567890abcdef');
+	assert.equal(parsed['spanId'], '1234567890abcdef');
+});

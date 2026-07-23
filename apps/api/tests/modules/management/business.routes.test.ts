@@ -24,6 +24,9 @@ const authContext: AuthenticatedStaffContext = {
 		passwordHash: null,
 		preferredMfaMethod: 'authenticator',
 		lastLoginAt: null,
+		failedAuthCount: 0,
+		failedAuthWindowStartedAt: null,
+		authBlockedUntil: null,
 		roles: [],
 		totpCredentialCount: 1,
 		passkeyCredentialCount: 0

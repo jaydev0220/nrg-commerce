@@ -3,9 +3,11 @@ import { z } from 'zod';
 import {
 	attributeMapSchema,
 	dateSchema,
+	emailAddressSchema,
 	moneySchema,
 	nonEmptyUpdate,
 	paginationQuerySchema,
+	searchQuerySchema,
 	sortOrderSchema,
 	uuidSchema
 } from './common.js';
@@ -22,7 +24,10 @@ export const orderStatusValues = [
 
 export const orderStatusSchema = z.enum(orderStatusValues);
 
-const orderCustomerNameSchema = z.string().trim().min(1);
+const orderCustomerNameSchema = z.string().trim().min(1).max(200);
+const orderAddressSchema = z.string().trim().min(1).max(1_000);
+const orderSkuCodeSchema = z.string().trim().min(1).max(120);
+const orderProductNameSchema = z.string().trim().min(1).max(200);
 
 const orderCustomerPhoneSchema = z
 	.string()
@@ -38,10 +43,10 @@ export const orderItemSchema = z.object({
 	id: uuidSchema,
 	orderId: uuidSchema,
 	productSkuId: uuidSchema.nullable(),
-	skuCode: z.string().trim().min(1),
-	productName: z.string().trim().min(1),
+	skuCode: orderSkuCodeSchema,
+	productName: orderProductNameSchema,
 	unitPrice: moneySchema,
-	quantity: z.number().int().min(1),
+	quantity: z.number().int().min(1).max(1_000_000),
 	lineTotal: moneySchema,
 	attributes: attributeMapSchema,
 	createdAt: dateSchema
@@ -52,42 +57,53 @@ export const orderSchema = z.object({
 	businessId: uuidSchema.nullable(),
 	status: orderStatusSchema,
 	customerName: orderCustomerNameSchema.nullable(),
-	customerEmail: z.email().nullable(),
-	customerPhone: z.string().trim().min(1).nullable(),
-	customerAddress: z.string().trim().min(1).nullable(),
+	customerEmail: emailAddressSchema.nullable(),
+	customerPhone: orderCustomerPhoneSchema.nullable(),
+	customerAddress: orderAddressSchema.nullable(),
 	itemCount: z.number().int().min(0),
 	subtotalAmount: moneySchema,
 	discountLabelId: uuidSchema.nullable(),
-	discountLabelName: z.string().trim().min(1).nullable(),
+	discountLabelName: z.string().trim().min(1).max(200).nullable(),
 	suggestedDiscountRate: moneySchema.nullable(),
 	discountRate: moneySchema,
 	discountAmount: moneySchema,
 	totalAmount: moneySchema,
+	version: z.number().int().min(0),
 	completedAt: dateSchema.nullable(),
+	cancelledAt: dateSchema.nullable(),
+	refundedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
 	updatedAt: dateSchema,
 	business: businessSchema.optional().nullable(),
 	items: z.array(orderItemSchema).default([])
 });
 
-export const orderLineItemCreateSchema = z.object({
-	productSkuId: uuidSchema.optional(),
-	skuCode: z.string().trim().min(1),
-	productName: z.string().trim().min(1),
-	unitPrice: moneySchema,
-	quantity: z.coerce.number().int().min(1),
-	attributes: attributeMapSchema.default({})
-});
+const orderItemQuantitySchema = z.coerce.number().int().min(1).max(1_000_000);
+
+export const orderLineItemCreateSchema = z.union([
+	z.object({
+		productSkuId: uuidSchema,
+		quantity: orderItemQuantitySchema
+	}),
+	z.object({
+		productSkuId: z.undefined().optional(),
+		skuCode: orderSkuCodeSchema,
+		productName: orderProductNameSchema,
+		unitPrice: moneySchema,
+		quantity: orderItemQuantitySchema,
+		attributes: attributeMapSchema.default({})
+	})
+]);
 
 export const orderCreateSchema = z
 	.object({
 		businessId: uuidSchema.nullable().optional(),
 		customerName: orderCustomerNameSchema.nullable().optional(),
-		customerEmail: z.email().nullable().optional(),
+		customerEmail: emailAddressSchema.nullable().optional(),
 		customerPhone: orderCustomerPhoneSchema.nullable().optional(),
-		customerAddress: z.string().trim().min(1).nullable().optional(),
+		customerAddress: orderAddressSchema.nullable().optional(),
 		discountRate: z.coerce.number().min(0).max(100).multipleOf(0.01).optional(),
-		items: z.array(orderLineItemCreateSchema).min(1)
+		items: z.array(orderLineItemCreateSchema).min(1).max(100)
 	})
 	.superRefine((order, context) => {
 		if (order.businessId) return;
@@ -112,7 +128,7 @@ export const orderCreateSchema = z
 export const orderIdempotencyKeySchema = uuidSchema;
 
 export const orderListQuerySchema = paginationQuerySchema.extend({
-	search: z.string().trim().min(1).optional(),
+	search: searchQuerySchema.optional(),
 	status: orderStatusSchema.optional(),
 	businessId: uuidSchema.optional(),
 	sort: z.enum(['createdAt', 'totalAmount']).default('createdAt'),
@@ -120,7 +136,7 @@ export const orderListQuerySchema = paginationQuerySchema.extend({
 });
 
 export const orderSkuLookupQuerySchema = paginationQuerySchema.extend({
-	search: z.string().trim().min(1).optional()
+	search: searchQuerySchema.optional()
 });
 
 export const orderStatusUpdateSchema = z.object({
@@ -132,8 +148,8 @@ export const orderUpdateSchema = nonEmptyUpdate(
 		status: orderStatusSchema.optional(),
 		businessId: uuidSchema.nullable().optional(),
 		customerName: orderCustomerNameSchema.nullable().optional(),
-		customerEmail: z.email().nullable().optional(),
+		customerEmail: emailAddressSchema.nullable().optional(),
 		customerPhone: orderCustomerPhoneSchema.nullable().optional(),
-		customerAddress: z.string().trim().min(1).nullable().optional()
+		customerAddress: orderAddressSchema.nullable().optional()
 	})
 );

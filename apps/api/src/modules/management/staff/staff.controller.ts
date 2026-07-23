@@ -29,7 +29,6 @@ type StaffManagementController = {
 	restoreStaff: RequestHandler;
 	resetMfa: RequestHandler;
 	resetPassword: RequestHandler;
-	updatePassword: RequestHandler;
 };
 
 export function createStaffManagementController(dependencies: StaffControllerDependencies) {
@@ -52,8 +51,11 @@ export function createStaffManagementController(dependencies: StaffControllerDep
 
 		createStaff: async (request, response) => {
 			const authContext = requireAuthContext(response);
-			const body = getValidatedBody<Parameters<StaffService['createStaff']>[0]>(request);
-			const result = await dependencies.staffService.createStaff(body);
+			const body = getValidatedBody<Parameters<StaffService['createStaff']>[1]>(request);
+			const result = await dependencies.staffService.createStaff(
+				{ id: authContext.staffId, roles: authContext.roles },
+				body
+			);
 			const { staff } = result;
 			const requestContext = getRequestContext(request, response);
 			await dependencies.logService.recordAuditLog({
@@ -104,14 +106,12 @@ export function createStaffManagementController(dependencies: StaffControllerDep
 		deleteStaff: async (request, response) => {
 			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<StaffParams>(request);
-			const query = getValidatedQuery<{ force: boolean }>(request);
 			const mode = await dependencies.staffService.deleteStaff(
 				{
 					id: authContext.staffId,
 					roles: authContext.roles
 				},
-				params.staffId,
-				query.force
+				params.staffId
 			);
 			const requestContext = getRequestContext(request, response);
 			await dependencies.logService.recordAuditLog({
@@ -134,7 +134,10 @@ export function createStaffManagementController(dependencies: StaffControllerDep
 		restoreStaff: async (request, response) => {
 			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<StaffParams>(request);
-			const staff = await dependencies.staffService.restoreStaff(params.staffId);
+			const staff = await dependencies.staffService.restoreStaff(
+				{ id: authContext.staffId, roles: authContext.roles },
+				params.staffId
+			);
 			const requestContext = getRequestContext(request, response);
 			await dependencies.logService.recordAuditLog({
 				message: 'Staff restored a staff account.',
@@ -152,7 +155,10 @@ export function createStaffManagementController(dependencies: StaffControllerDep
 		resetMfa: async (request, response) => {
 			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<StaffParams>(request);
-			await dependencies.staffService.resetMfa(params.staffId);
+			await dependencies.staffService.resetMfa(
+				{ id: authContext.staffId, roles: authContext.roles },
+				params.staffId
+			);
 			const requestContext = getRequestContext(request, response);
 			await dependencies.logService.recordAuditLog({
 				message: 'Staff reset MFA for a staff account.',
@@ -186,32 +192,6 @@ export function createStaffManagementController(dependencies: StaffControllerDep
 				entityId: params.staffId
 			});
 			response.status(200).json({ initialPassword });
-		},
-
-		updatePassword: async (request, response) => {
-			const authContext = requireAuthContext(response);
-			const params = getValidatedParams<StaffParams>(request);
-			const body = getValidatedBody<{ password: string }>(request);
-			await dependencies.staffService.updatePassword(
-				{
-					id: authContext.staffId,
-					roles: authContext.roles
-				},
-				params.staffId,
-				body.password
-			);
-			const requestContext = getRequestContext(request, response);
-			await dependencies.logService.recordAuditLog({
-				message: 'Staff updated a staff account password.',
-				actorStaffId: authContext.staffId,
-				requestId: requestContext.requestId,
-				method: request.method,
-				path: getRequestPath(request),
-				statusCode: 204,
-				entityType: 'staff',
-				entityId: params.staffId
-			});
-			response.status(204).send();
 		}
 	};
 

@@ -4,12 +4,14 @@ import test from 'node:test';
 import {
 	accessTokenClaimsSchema,
 	mfaPreferenceSchema,
+	passkeyAuthenticationStartSchema,
 	passkeyAuthenticationVerificationSchema,
+	passwordChangeSchema,
 	passwordLoginSchema,
 	refreshTokenRequestSchema,
 	refreshTokenClaimsSchema,
+	securityReauthPasswordSchema,
 	setupTokenRequestSchema,
-	staffPasswordUpdateSchema,
 	totpSetupConfirmationSchema,
 	totpCredentialSchema,
 	totpChallengeSchema
@@ -80,12 +82,32 @@ test('totpCredentialSchema uses the fixed TOTP shape without label or algorithm 
 
 test('passwordLoginSchema requires an email and a long enough password', () => {
 	const parsedPayload = passwordLoginSchema.parse({
-		email: 'admin@example.com',
+		email: ' Admin@Example.COM ',
 		password: 'correct horse battery staple'
 	});
 
 	assert.equal(parsedPayload.email, 'admin@example.com');
 	assert.throws(() => passwordLoginSchema.parse({ email: 'admin@example.com', password: 'short' }));
+});
+
+test('password-bearing request schemas reject oversized values', () => {
+	const oversizedPassword = 'Aa1!'.repeat(65);
+
+	assert.throws(() =>
+		passwordLoginSchema.parse({ email: 'admin@example.com', password: oversizedPassword })
+	);
+	assert.throws(() =>
+		passwordChangeSchema.parse({
+			currentPassword: oversizedPassword,
+			newPassword: oversizedPassword
+		})
+	);
+	assert.throws(() =>
+		securityReauthPasswordSchema.parse({
+			action: 'add_totp',
+			password: oversizedPassword
+		})
+	);
 });
 
 test('refreshTokenRequestSchema rejects browser-readable refresh tokens', () => {
@@ -94,6 +116,8 @@ test('refreshTokenRequestSchema rejects browser-readable refresh tokens', () => 
 });
 
 test('passkey and TOTP schemas keep ceremony tokens out of request bodies', () => {
+	assert.deepEqual(passkeyAuthenticationStartSchema.parse({}), {});
+	assert.throws(() => passkeyAuthenticationStartSchema.parse({ email: 'staff@example.com' }));
 	assert.deepEqual(
 		passkeyAuthenticationVerificationSchema.parse({ credential: { id: 'credential-id' } }),
 		{ credential: { id: 'credential-id' } }
@@ -108,10 +132,4 @@ test('mfaPreferenceSchema requires a configured MFA method', () => {
 		preferredMfaMethod: 'passkey'
 	});
 	assert.throws(() => mfaPreferenceSchema.parse({}));
-});
-
-test('staffPasswordUpdateSchema enforces the admin password update payload', () => {
-	const password = 'Correct-Horse-Battery-7!';
-	assert.equal(staffPasswordUpdateSchema.parse({ password }).password, password);
-	assert.throws(() => staffPasswordUpdateSchema.parse({ password: 'tiny' }));
 });

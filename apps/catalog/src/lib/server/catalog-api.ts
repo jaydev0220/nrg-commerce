@@ -1,5 +1,12 @@
 import { env } from '$env/dynamic/public';
 import { error } from '@sveltejs/kit';
+import {
+	storefrontCategoryResponseSchema,
+	storefrontCategoryTreeListResponseSchema,
+	storefrontProductListResponseSchema,
+	storefrontProductResponseSchema,
+	type ZodType
+} from '@packages/schemas';
 
 import type {
 	CatalogCategoryRecord,
@@ -26,7 +33,7 @@ export type CatalogIndexData = {
 };
 
 function resolveApiBaseUrl(): string {
-	const apiBaseUrl = env.PUBLIC_API_BASE_URL?.trim();
+	const apiBaseUrl = env['PUBLIC_API_BASE_URL']?.trim();
 
 	if (!apiBaseUrl) {
 		throw error(500, 'The catalog service is not configured.');
@@ -44,29 +51,42 @@ function createRequestUrl(path: string, searchParams?: URLSearchParams): string 
 	return url.toString();
 }
 
-async function fetchJson<T>(fetcher: typeof fetch, path: string, searchParams?: URLSearchParams) {
+function upstreamHttpError(status: number) {
+	const responseStatus = status >= 400 && status <= 599 ? status : 502;
+	return error(
+		responseStatus,
+		responseStatus >= 500
+			? 'The catalog service is temporarily unavailable.'
+			: 'The requested catalog resource could not be found.'
+	);
+}
+
+function isHttpError(value: unknown): value is { status: number } {
+	return Boolean(value && typeof value === 'object' && 'status' in value);
+}
+
+async function fetchJson<T>(
+	fetcher: typeof fetch,
+	path: string,
+	schema: ZodType<T>,
+	searchParams?: URLSearchParams
+): Promise<T> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), apiRequestTimeoutMs);
-	const url = createRequestUrl(path, searchParams);
 
 	try {
-		const response = await fetcher(url, { signal: controller.signal });
-		if (!response.ok) {
-			const status = response.status >= 400 && response.status <= 599 ? response.status : 502;
-			throw error(
-				status,
-				status >= 500
-					? 'The catalog service is temporarily unavailable.'
-					: 'The requested catalog resource could not be found.'
-			);
-		}
+		const response = await fetcher(createRequestUrl(path, searchParams), {
+			signal: controller.signal
+		});
+		if (!response.ok) throw upstreamHttpError(response.status);
 
-		return (await response.json()) as T;
+		const parsed = schema.safeParse(await response.json());
+		if (!parsed.success) {
+			throw error(502, 'The catalog service returned an invalid response.');
+		}
+		return parsed.data;
 	} catch (requestError) {
-		if (requestError && typeof requestError === 'object' && 'status' in requestError) {
-			throw requestError;
-		}
-
+		if (isHttpError(requestError)) throw requestError;
 		throw error(502, 'The catalog service is temporarily unavailable.');
 	} finally {
 		clearTimeout(timeout);
@@ -98,14 +118,16 @@ export async function fetchCatalogIndexData(
 	}
 
 	const [productsResponse, categoriesResponse] = await Promise.all([
-		fetchJson<PaginatedResponse<CatalogProductRecord>>(
+		fetchJson(
 			fetcher,
 			'/api/storefront/products',
+			storefrontProductListResponseSchema,
 			productsQuery
 		),
-		fetchJson<{ data: CatalogCategoryNode[] }>(
+		fetchJson(
 			fetcher,
 			'/api/storefront/products/categories',
+			storefrontCategoryTreeListResponseSchema,
 			categoryQuery
 		)
 	]);
@@ -126,9 +148,10 @@ export async function fetchCatalogProductBySlug(
 		includeImages: 'true'
 	});
 
-	return fetchJson<CatalogProductRecord>(
+	return fetchJson(
 		fetcher,
 		`/api/storefront/products/${encodeURIComponent(productSlug)}`,
+		storefrontProductResponseSchema,
 		productQuery
 	);
 }
@@ -138,9 +161,10 @@ export async function fetchCatalogSitemapProducts(fetcher: typeof fetch) {
 	let page = 1;
 
 	while (true) {
-		const response = await fetchJson<PaginatedResponse<CatalogProductRecord>>(
+		const response = await fetchJson(
 			fetcher,
 			'/api/storefront/products',
+			storefrontProductListResponseSchema,
 			new URLSearchParams({ page: String(page), limit: '100', sort: 'createdAt', order: 'desc' })
 		);
 		products.push(...response.data.map(({ slug, updatedAt }) => ({ slug, updatedAt })));
@@ -155,8 +179,9 @@ export async function fetchCatalogCategoryBySlug(
 	fetcher: typeof fetch,
 	categorySlug: string
 ): Promise<CatalogCategoryRecord> {
-	return fetchJson<CatalogCategoryRecord>(
+	return fetchJson(
 		fetcher,
-		`/api/storefront/products/categories/${encodeURIComponent(categorySlug)}`
+		`/api/storefront/products/categories/${encodeURIComponent(categorySlug)}`,
+		storefrontCategoryResponseSchema
 	);
 }

@@ -1,4 +1,5 @@
 import { z } from '@packages/schemas';
+import { deliverQueuedMessage, type DeliveryLogEntry, type QueuedDelivery } from './delivery.js';
 
 import { handleRequest, type TurnstileVerification, type WorkerConfig } from './worker.js';
 
@@ -17,16 +18,39 @@ function required(value: string | undefined, name: string): string {
 	return normalized;
 }
 
+function requiredEmail(value: string | undefined, name: string): string {
+	const parsed = z.email().max(254).safeParse(required(value, name));
+	if (!parsed.success) throw new Error(`${name} must be a valid email address.`);
+	return parsed.data;
+}
+
+function parseAllowedOrigin(value: string): string {
+	const url = new URL(value);
+	const isLoopback =
+		url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+	if (
+		(url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback)) ||
+		url.username ||
+		url.password ||
+		url.pathname !== '/' ||
+		url.search ||
+		url.hash
+	) {
+		throw new Error('ALLOWED_ORIGINS must contain exact HTTPS origins.');
+	}
+	return url.origin;
+}
+
 function readConfig(env: Env): WorkerConfig {
 	const origins = required(env.ALLOWED_ORIGINS, 'ALLOWED_ORIGINS')
 		.split(',')
 		.map((origin) => origin.trim())
 		.filter(Boolean)
-		.map((origin) => new URL(origin).origin);
+		.map(parseAllowedOrigin);
 
 	return {
-		senderEmail: required(env.CONTACT_SENDER_EMAIL, 'CONTACT_SENDER_EMAIL'),
-		recipientEmail: required(env.CONTACT_RECIPIENT_EMAIL, 'CONTACT_RECIPIENT_EMAIL'),
+		senderEmail: requiredEmail(env.CONTACT_SENDER_EMAIL, 'CONTACT_SENDER_EMAIL'),
+		recipientEmail: requiredEmail(env.CONTACT_RECIPIENT_EMAIL, 'CONTACT_RECIPIENT_EMAIL'),
 		turnstileSecret: required(env.TURNSTILE_SECRET_KEY, 'TURNSTILE_SECRET_KEY'),
 		allowedOrigins: new Set(origins)
 	};
@@ -61,12 +85,18 @@ async function verifyTurnstile(input: {
 	};
 }
 
+function logDelivery(entry: DeliveryLogEntry): void {
+	if (entry.outcome === 'DELIVERED') console.info(entry);
+	else console.error(entry);
+}
+
 export default {
 	async fetch(request, env): Promise<Response> {
 		return handleRequest(request, readConfig(env), {
+			rateLimit: (key) => env.CONTACT_RATE_LIMITER.limit({ key }),
 			verifyTurnstile,
-			sendEmail: async (message) => {
-				await env.EMAIL.send(message);
+			enqueueDelivery: async (delivery) => {
+				await env.CONTACT_QUEUE.send(delivery);
 			},
 			log: (entry) => {
 				const logEntry = { event: 'contact_request', ...entry };
@@ -76,5 +106,18 @@ export default {
 			createRequestId: () => crypto.randomUUID(),
 			now: () => Date.now()
 		});
+	},
+	async queue(batch, env): Promise<void> {
+		const config = readConfig(env);
+		await Promise.all(
+			batch.messages.map((message) =>
+				deliverQueuedMessage(message, config, {
+					sendEmail: async (outgoingEmail) => {
+						await env.EMAIL.send(outgoingEmail);
+					},
+					log: logDelivery
+				})
+			)
+		);
 	}
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<Env, QueuedDelivery>;

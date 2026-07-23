@@ -100,3 +100,27 @@ test('product list accepts minimum-price sorting and forwards pagination queries
 		order: 'asc'
 	});
 });
+
+test('storefront resource routes reject oversized identifiers before repository access', async () => {
+	let repositoryCalled = false;
+	const app = express();
+	app.use(
+		'/api/storefront/products',
+		createStorefrontCatalogRouter({
+			storefrontService: createStorefrontService({
+				getProductBySlug: async () => {
+					repositoryCalled = true;
+					return { skus: [] } as never;
+				}
+			})
+		})
+	);
+	app.use(errorHandler);
+
+	const response = await requestApp(app, {
+		path: `/api/storefront/products/${'a'.repeat(161)}`
+	});
+
+	assert.equal(response.status, 422, response.text());
+	assert.equal(repositoryCalled, false);
+});

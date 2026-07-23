@@ -8,7 +8,11 @@ import type {
 	ManagedOrderRecord,
 	ManagedOrderSkuLookupRecord
 } from '../../../types/management.js';
-import { aggregateSkuQuantities, resolveInventoryAdjustment } from './order.inventory.js';
+import {
+	aggregateSkuQuantities,
+	isOrderStatusTransitionAllowed,
+	resolveInventoryAdjustment
+} from './order.inventory.js';
 
 type OrderSortField = 'createdAt' | 'totalAmount';
 
@@ -51,6 +55,10 @@ type CreateOrderInput = {
 
 type ProductSkuLookup = {
 	id: string;
+	skuCode: string;
+	productName: string;
+	price: number;
+	attributes: Prisma.InputJsonValue;
 };
 
 type OrderSkuLookupInput = {
@@ -159,7 +167,10 @@ function mapOrder(order: {
 	discountRate: { toString(): string };
 	discountAmount: { toString(): string };
 	totalAmount: { toString(): string };
+	version: number;
 	completedAt: Date | null;
+	cancelledAt: Date | null;
+	refundedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 	business: {
@@ -216,7 +227,10 @@ function mapOrder(order: {
 		discountRate: Number(order.discountRate.toString()),
 		discountAmount: Number(order.discountAmount.toString()),
 		totalAmount: Number(order.totalAmount.toString()),
+		version: order.version,
 		completedAt: order.completedAt,
+		cancelledAt: order.cancelledAt,
+		refundedAt: order.refundedAt,
 		createdAt: order.createdAt,
 		updatedAt: order.updatedAt,
 		business: mapBusiness(order.business),
@@ -272,6 +286,98 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 		const direction = resolveInventoryAdjustment(currentStatus, nextStatus);
 		if (direction) await adjustInventory(transaction, items, direction);
 	};
+
+	const updateOrderRecord = async (
+		orderId: string,
+		input: {
+			status?: OrderStatus;
+			businessId?: string | null;
+			customerName?: string | null;
+			customerEmail?: string | null;
+			customerPhone?: string | null;
+			customerAddress?: string | null;
+		}
+	) =>
+		database.$transaction(async (transaction) => {
+			const current = await transaction.order.findUnique({
+				where: { id: orderId },
+				select: {
+					status: true,
+					version: true,
+					completedAt: true,
+					cancelledAt: true,
+					refundedAt: true,
+					items: { select: { productSkuId: true, quantity: true } }
+				}
+			});
+			if (!current) {
+				throw new AppError(404, 'ORDER_NOT_FOUND', 'The requested order could not be found.');
+			}
+			const nextStatus = input.status ?? current.status;
+
+			if (!isOrderStatusTransitionAllowed(current.status, nextStatus)) {
+				throw new AppError(
+					409,
+					'INVALID_ORDER_STATUS_TRANSITION',
+					'The requested order status transition is not allowed.'
+				);
+			}
+
+			if (input.status !== undefined && input.status !== current.status) {
+				await adjustInventoryForStatusTransition(
+					transaction,
+					current.status,
+					nextStatus,
+					current.items
+				);
+			}
+
+			const transitionedAt = new Date();
+			const statusData =
+				input.status === undefined || input.status === current.status
+					? {}
+					: nextStatus === 'completed'
+						? {
+								completedAt: current.completedAt ?? transitionedAt,
+								cancelledAt: null,
+								refundedAt: null
+							}
+						: nextStatus === 'cancelled'
+							? {
+									completedAt: null,
+									cancelledAt: current.cancelledAt ?? transitionedAt,
+									refundedAt: null
+								}
+							: nextStatus === 'refunded'
+								? {
+										completedAt: current.completedAt ?? transitionedAt,
+										cancelledAt: null,
+										refundedAt: current.refundedAt ?? transitionedAt
+									}
+								: { completedAt: null, cancelledAt: null, refundedAt: null };
+
+			const result = await transaction.order.updateMany({
+				where: { id: orderId, version: current.version },
+				data: { ...input, ...statusData, version: { increment: 1 } }
+			});
+			if (result.count !== 1) {
+				throw new AppError(
+					409,
+					'ORDER_CONCURRENTLY_MODIFIED',
+					'The order changed while this request was being processed.'
+				);
+			}
+
+			const order = await transaction.order.findUniqueOrThrow({
+				where: { id: orderId },
+				include: {
+					business: { include: { label: true } },
+					items: { orderBy: [{ createdAt: 'asc' }] }
+				}
+			});
+
+			return { order: mapOrder(order), previousStatus: current.status };
+		});
 
 	return {
 		async listOrders(input: ListOrdersInput): Promise<PaginatedResult<ManagedOrderRecord>> {
@@ -365,11 +471,23 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 					}
 				},
 				select: {
-					id: true
+					id: true,
+					skuCode: true,
+					price: true,
+					attributes: true,
+					product: { select: { name: true } }
 				}
 			});
 
-			return sku;
+			return sku
+				? {
+						id: sku.id,
+						skuCode: sku.skuCode,
+						productName: sku.product.name,
+						price: Number(sku.price.toString()),
+						attributes: sku.attributes as Prisma.InputJsonValue
+					}
+				: null;
 		},
 
 		async listOrderSkuLookups(
@@ -473,72 +591,22 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 			return mapOrder(order);
 		},
 
-		async updateOrderStatus(
-			orderId: string,
-			status: OrderStatus,
-			completedAt: Date | null
-		): Promise<ManagedOrderRecord> {
-			const order = await database.$transaction(async (transaction) => {
-				const current = await transaction.order.findUniqueOrThrow({
-					where: { id: orderId },
-					select: { status: true, items: { select: { productSkuId: true, quantity: true } } }
-				});
-				await adjustInventoryForStatusTransition(
-					transaction,
-					current.status,
-					status,
-					current.items
-				);
-				return transaction.order.update({
-					where: { id: orderId },
-					data: { status, completedAt },
-					include: {
-						business: { include: { label: true } },
-						items: {
-							orderBy: [{ createdAt: 'asc' }]
-						}
-					}
-				});
-			});
-
-			return mapOrder(order);
+		async updateOrderStatus(orderId: string, status: OrderStatus) {
+			return updateOrderRecord(orderId, { status });
 		},
 
 		async updateOrder(
 			orderId: string,
 			input: {
 				status?: OrderStatus;
-				completedAt?: Date | null;
 				businessId?: string | null;
 				customerName?: string | null;
 				customerEmail?: string | null;
 				customerPhone?: string | null;
 				customerAddress?: string | null;
 			}
-		): Promise<ManagedOrderRecord> {
-			const order = await database.$transaction(async (transaction) => {
-				if (input.status !== undefined) {
-					const current = await transaction.order.findUniqueOrThrow({
-						where: { id: orderId },
-						select: { status: true, items: { select: { productSkuId: true, quantity: true } } }
-					});
-					await adjustInventoryForStatusTransition(
-						transaction,
-						current.status,
-						input.status,
-						current.items
-					);
-				}
-				return transaction.order.update({
-					where: { id: orderId },
-					data: input,
-					include: {
-						business: { include: { label: true } },
-						items: { orderBy: [{ createdAt: 'asc' }] }
-					}
-				});
-			});
-			return mapOrder(order);
+		) {
+			return updateOrderRecord(orderId, input);
 		}
 	};
 }

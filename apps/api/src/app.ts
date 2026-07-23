@@ -5,14 +5,18 @@ import helmet from 'helmet';
 import { getDatabaseClient } from '@packages/database';
 
 import { readAppConfig, type AppConfig } from './config/app-config.js';
+import { AppError } from './errors/app-error.js';
 import { createErrorHandler } from './errors/error-handler.js';
 import { redactLogValue, serializeLogError } from './logging/log-redaction.js';
 import { createAuthenticateMiddleware } from './middlewares/authenticate.js';
+import { requireJsonRequestBody } from './middlewares/content-type.js';
+import { resolveAuthCookieNames } from './utils/auth-cookies.js';
 import { createGlobalRateLimiter } from './middlewares/rate-limit.js';
 import { createRequestLogger } from './middlewares/request-logging.js';
 import { createRequestContextMiddleware } from './middlewares/request-context.js';
 import type { HealthDependencies } from './health/health.routes.js';
 import { createPrismaAuthRepository } from './modules/auth/auth.repository.js';
+import { startAuthSessionRetentionPruner } from './modules/auth/auth-retention.js';
 import { createAuthService } from './modules/auth/auth.service.js';
 import { createPrismaCatalogRepository } from './modules/management/catalog.repository.js';
 import { createPrismaBusinessRepository } from './modules/management/business/business.repository.js';
@@ -47,6 +51,7 @@ import { createTotpService } from './utils/totp-service.js';
 type AppDependencies = {
 	config?: AppConfig;
 	health?: HealthDependencies;
+	registerCleanup?: (cleanup: () => void) => void;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -69,6 +74,8 @@ export function createApp(dependencies: AppDependencies = {}) {
 		accessTokenSecret: config.accessTokenSecret,
 		refreshTokenSecret: config.refreshTokenSecret,
 		pendingTokenSecret: config.pendingTokenSecret,
+		issuer: config.jwtIssuer,
+		audience: config.jwtAudience,
 		accessTokenTtlSeconds: config.accessTokenTtlSeconds,
 		refreshTokenTtlSeconds: config.refreshTokenTtlSeconds,
 		pendingTokenTtlSeconds: config.pendingTokenTtlSeconds
@@ -101,7 +108,12 @@ export function createApp(dependencies: AppDependencies = {}) {
 		passwordHasher
 	});
 	const logService = createLogService({
-		repository: logRepository
+		repository: logRepository,
+		onAuditLogPersistenceError: (error) =>
+			logger.error(
+				{ error: redactLogValue(serializeLogError(error)) },
+				'Failed to persist API audit log.'
+			)
 	});
 	const requestLogger = createRequestLogger({
 		logger,
@@ -132,6 +144,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 	const objectStorage = createR2ObjectStorage({
 		accountId: config.r2AccountId,
 		bucketName: config.r2BucketName,
+		uploadBucketName: config.r2UploadBucketName,
 		accessKeyId: config.r2AccessKeyId,
 		secretAccessKey: config.r2SecretAccessKey,
 		publicBaseUrl: config.r2PublicBaseUrl,
@@ -150,11 +163,22 @@ export function createApp(dependencies: AppDependencies = {}) {
 			logger
 		}
 	);
-	const authenticate = createAuthenticateMiddleware(authService);
+	const authenticate = createAuthenticateMiddleware(
+		authService,
+		resolveAuthCookieNames(config.cookieSecure).access
+	);
 	const app = express();
 
 	if (config.nodeEnv !== 'test') {
-		startLogRetentionPruner({
+		const authSessionRetentionPruner = startAuthSessionRetentionPruner({
+			repository: authRepository,
+			onError: (error) =>
+				logger.error(
+					{ error: redactLogValue(serializeLogError(error)) },
+					'Failed to prune expired authentication sessions.'
+				)
+		});
+		const logRetentionPruner = startLogRetentionPruner({
 			logService,
 			onError: (error) =>
 				logger.error(
@@ -162,7 +186,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 					'Failed to prune expired logs.'
 				)
 		});
-		startImageRetentionPruner({
+		const imageRetentionPruner = startImageRetentionPruner({
 			imageService,
 			onError: (error) =>
 				logger.error(
@@ -170,14 +194,20 @@ export function createApp(dependencies: AppDependencies = {}) {
 					'Failed to prune product image assets.'
 				)
 		});
+		dependencies.registerCleanup?.(() => {
+			authSessionRetentionPruner.stop();
+			logRetentionPruner.stop();
+			imageRetentionPruner.stop();
+		});
 	}
 
-	if (config.trustProxy) {
-		app.set('trust proxy', 1);
+	if (config.trustProxyHops !== false) {
+		app.set('trust proxy', config.trustProxyHops);
 	}
 
 	app.use(createRequestContextMiddleware());
 	app.use(requestLogger.middleware);
+	app.use(helmet());
 
 	app.use(
 		cors({
@@ -189,14 +219,13 @@ export function createApp(dependencies: AppDependencies = {}) {
 					return;
 				}
 
-				callback(new Error('Origin is not allowed by CORS.'));
+				callback(new AppError(403, 'ORIGIN_NOT_ALLOWED', 'The request origin is not allowed.'));
 			}
 		})
 	);
-	app.use(helmet());
-	app.use(express.json({ limit: config.bodyLimit }));
-	app.use(express.urlencoded({ extended: false, limit: config.bodyLimit }));
 	app.use(createGlobalRateLimiter(config));
+	app.use(requireJsonRequestBody);
+	app.use(express.json({ limit: config.bodyLimit }));
 
 	initializeRoutes(app, {
 		config,

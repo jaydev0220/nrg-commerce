@@ -6,9 +6,20 @@ import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { loadEnv } from 'vite';
 
+type CspHostSource =
+	`${string}://${string}.${string}` | `${string}://localhost` | `${string}://localhost:${number}`;
+
+function toOrigin(value: string): CspHostSource {
+	return new URL(value).origin as CspHostSource;
+}
+
 export default defineConfig(({ mode }) => {
 	const env = loadEnv(mode, process.cwd(), '');
 	const cookieDomain = env['PUBLIC_COOKIE_DOMAIN']?.trim() ?? '';
+	const apiOrigin = toOrigin(env['PUBLIC_API_BASE_URL']?.trim() || 'http://localhost:3000');
+	const contactOrigin = toOrigin(
+		env['PUBLIC_CONTACT_WORKER_URL']?.trim() || 'http://localhost:8787'
+	);
 
 	return {
 		plugins: [
@@ -19,7 +30,26 @@ export default defineConfig(({ mode }) => {
 					runes: ({ filename }) =>
 						filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 				},
-				adapter: adapter()
+				adapter: adapter(),
+				csp: {
+					mode: 'hash',
+					directives: {
+						'default-src': ['self'],
+						'script-src': ['self', 'https://challenges.cloudflare.com'],
+						'script-src-attr': ['none'],
+						'style-src': ['self', 'unsafe-inline'],
+						'img-src': ['self', 'data:', 'blob:', 'https:'],
+						'font-src': ['self', 'data:'],
+						'connect-src': ['self', apiOrigin, contactOrigin, 'https://challenges.cloudflare.com'],
+						'frame-src': ['https://challenges.cloudflare.com'],
+						'worker-src': ['self', 'blob:'],
+						'object-src': ['none'],
+						'base-uri': ['self'],
+						'form-action': ['self'],
+						'frame-ancestors': ['none'],
+						'manifest-src': ['self']
+					}
+				}
 			}),
 			paraglideVitePlugin({
 				project: './project.inlang',

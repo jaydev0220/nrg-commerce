@@ -56,6 +56,35 @@ export function generateInitialPassword(length = 24): string {
 
 export function createStaffService(dependencies: StaffServiceDependencies) {
 	const generatePassword = dependencies.passwordGenerator ?? generateInitialPassword;
+	const isAdmin = (actor: ActingStaffContext) => actor.roles.includes('admin');
+
+	function assertCanManageTarget(
+		actor: ActingStaffContext,
+		staff: Awaited<ReturnType<StaffRepository['findById']>>
+	): void {
+		if (!staff || isAdmin(actor)) return;
+		if (staff.roles.some((role) => role.key === 'admin')) {
+			throw new AppError(
+				403,
+				'FORBIDDEN',
+				'Only system administrators can manage administrator accounts.'
+			);
+		}
+	}
+
+	async function assertCanAssignRoles(actor: ActingStaffContext, roleIds: string[]): Promise<void> {
+		if (isAdmin(actor)) return;
+
+		const selectedRoles = (await dependencies.repository.listRoles()).filter((role) =>
+			roleIds.includes(role.id)
+		);
+		if (
+			selectedRoles.length !== roleIds.length ||
+			selectedRoles.some((role) => !actor.roles.includes(role.key))
+		) {
+			throw new AppError(403, 'FORBIDDEN', 'Staff members cannot grant roles they do not hold.');
+		}
+	}
 
 	return {
 		listStaff(query: Parameters<StaffRepository['listStaff']>[0]) {
@@ -80,7 +109,10 @@ export function createStaffService(dependencies: StaffServiceDependencies) {
 			return staff;
 		},
 
-		async createStaff(input: { email: string; name: string; roleIds: string[] }) {
+		async createStaff(
+			actor: ActingStaffContext,
+			input: { email: string; name: string; roleIds: string[] }
+		) {
 			if (await dependencies.repository.emailExists(input.email)) {
 				throw new AppError(409, 'EMAIL_CONFLICT', 'The provided staff email is already in use.');
 			}
@@ -88,6 +120,7 @@ export function createStaffService(dependencies: StaffServiceDependencies) {
 			if (!(await dependencies.repository.roleIdsExist(input.roleIds))) {
 				throw new AppError(404, 'ROLE_NOT_FOUND', 'One or more assigned roles could not be found.');
 			}
+			await assertCanAssignRoles(actor, input.roleIds);
 
 			const initialPassword = generatePassword();
 			const passwordHash = await dependencies.passwordHasher.hash(initialPassword);
@@ -115,6 +148,15 @@ export function createStaffService(dependencies: StaffServiceDependencies) {
 					'The requested staff record could not be found.'
 				);
 			}
+			assertCanManageTarget(actor, existingStaff);
+
+			if (actor.id === staffId && (input.email || input.roleIds)) {
+				throw new AppError(
+					409,
+					'SELF_UPDATE_NOT_ALLOWED',
+					'Staff members cannot change their own email or role assignments here.'
+				);
+			}
 
 			if (input.email && (await dependencies.repository.emailExists(input.email, staffId))) {
 				throw new AppError(409, 'EMAIL_CONFLICT', 'The provided staff email is already in use.');
@@ -123,6 +165,7 @@ export function createStaffService(dependencies: StaffServiceDependencies) {
 			if (input.roleIds && !(await dependencies.repository.roleIdsExist(input.roleIds))) {
 				throw new AppError(404, 'ROLE_NOT_FOUND', 'One or more assigned roles could not be found.');
 			}
+			if (input.roleIds) await assertCanAssignRoles(actor, input.roleIds);
 
 			if (actor.id === staffId) {
 				if (input.status === 'inactive' || input.status === 'suspended') {
@@ -132,29 +175,12 @@ export function createStaffService(dependencies: StaffServiceDependencies) {
 						'Staff members cannot suspend or deactivate their own account.'
 					);
 				}
-
-				if (input.roleIds && actor.roles.includes('admin')) {
-					const administrativeRoleIds = existingStaff.roles
-						.filter((role) => role.key === 'admin')
-						.map((role) => role.id);
-					const retainsAdministrativeAccess = administrativeRoleIds.some((roleId) =>
-						input.roleIds?.includes(roleId)
-					);
-
-					if (administrativeRoleIds.length > 0 && !retainsAdministrativeAccess) {
-						throw new AppError(
-							409,
-							'SELF_UPDATE_NOT_ALLOWED',
-							'Staff members cannot remove their own administrative access.'
-						);
-					}
-				}
 			}
 
 			return dependencies.repository.updateStaff(staffId, input);
 		},
 
-		async deleteStaff(actor: ActingStaffContext, staffId: string, force: boolean) {
+		async deleteStaff(actor: ActingStaffContext, staffId: string) {
 			const existingStaff = await dependencies.repository.findById(staffId);
 
 			if (!existingStaff) {
@@ -172,11 +198,12 @@ export function createStaffService(dependencies: StaffServiceDependencies) {
 					'The current authenticated staff account cannot delete itself.'
 				);
 			}
+			assertCanManageTarget(actor, existingStaff);
 
-			return dependencies.repository.deleteStaff(staffId, force);
+			return dependencies.repository.deleteStaff(staffId);
 		},
 
-		async restoreStaff(staffId: string) {
+		async restoreStaff(actor: ActingStaffContext, staffId: string) {
 			const staff = await dependencies.repository.findAnyById(staffId);
 			if (!staff) {
 				throw new AppError(
@@ -188,10 +215,18 @@ export function createStaffService(dependencies: StaffServiceDependencies) {
 			if (!staff.deletedAt) {
 				throw new AppError(409, 'STAFF_NOT_DELETED', 'The staff record is not archived.');
 			}
+			assertCanManageTarget(actor, staff);
 			return dependencies.repository.restoreStaff(staffId);
 		},
 
-		async resetMfa(staffId: string): Promise<void> {
+		async resetMfa(actor: ActingStaffContext, staffId: string): Promise<void> {
+			if (actor.id === staffId) {
+				throw new AppError(
+					409,
+					'SELF_UPDATE_NOT_ALLOWED',
+					'Staff members must use security settings to change their own MFA.'
+				);
+			}
 			const staff = await dependencies.repository.findById(staffId);
 			if (!staff) {
 				throw new AppError(
@@ -200,6 +235,7 @@ export function createStaffService(dependencies: StaffServiceDependencies) {
 					'The requested staff record could not be found.'
 				);
 			}
+			assertCanManageTarget(actor, staff);
 			await dependencies.repository.resetMfa(staffId);
 		},
 
@@ -209,6 +245,13 @@ export function createStaffService(dependencies: StaffServiceDependencies) {
 					403,
 					'FORBIDDEN',
 					'Only system administrators can reset staff passwords.'
+				);
+			}
+			if (actor.id === staffId) {
+				throw new AppError(
+					409,
+					'SELF_UPDATE_NOT_ALLOWED',
+					'Staff members must use security settings to change their own password.'
 				);
 			}
 			const staff = await dependencies.repository.findById(staffId);
@@ -225,33 +268,6 @@ export function createStaffService(dependencies: StaffServiceDependencies) {
 				await dependencies.passwordHasher.hash(password)
 			);
 			return password;
-		},
-
-		async updatePassword(
-			actor: ActingStaffContext,
-			staffId: string,
-			password: string
-		): Promise<void> {
-			if (!actor.roles.includes('admin')) {
-				throw new AppError(
-					403,
-					'FORBIDDEN',
-					'Only system administrators can reset staff passwords.'
-				);
-			}
-
-			const staff = await dependencies.repository.findById(staffId);
-
-			if (!staff) {
-				throw new AppError(
-					404,
-					'STAFF_NOT_FOUND',
-					'The requested staff record could not be found.'
-				);
-			}
-
-			const passwordHash = await dependencies.passwordHasher.hash(password);
-			await dependencies.repository.setPassword(staffId, passwordHash);
 		}
 	};
 }

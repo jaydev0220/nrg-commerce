@@ -32,7 +32,7 @@ test('two tabs share one refresh and both finish their protected loads', async (
 		releaseExpiredRequests = resolve;
 	});
 	const staff = {
-		id: 'staff-id',
+		id: '0189076c-4f2a-7fe1-b9fd-2d68df455121',
 		email: 'admin@example.com',
 		name: '管理員',
 		status: 'active',
@@ -66,7 +66,11 @@ test('two tabs share one refresh and both finish their protected loads', async (
 			await route.fulfill({
 				status: authenticated ? 200 : 401,
 				json: authenticated
-					? { staff, sessionId: 'session-id', mfaMethods: ['authenticator'] }
+					? {
+							staff,
+							sessionId: '0189076c-4f2a-7fe1-b9fd-2d68df455122',
+							mfaMethods: ['authenticator']
+						}
 					: { error: { code: 'ACCESS_TOKEN_EXPIRED', message: 'Expired' } }
 			});
 			return;

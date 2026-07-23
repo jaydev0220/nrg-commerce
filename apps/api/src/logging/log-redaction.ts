@@ -10,6 +10,9 @@ const textRedactionPatterns: Array<[RegExp, string]> = [
 	[/((?:password|passphrase|secret|token|api[_-]?key|cookie)\s*[:=]\s*)[^\s,;]+/gi, '$1[REDACTED]'],
 	[/(\b(?:postgres(?:ql)?|mysql):\/\/)[^\s:/]+:[^\s@]+@/gi, '$1[REDACTED]:[REDACTED]@']
 ];
+const maximumLogDepth = 12;
+const maximumLogCollectionEntries = 100;
+const maximumLogStringLength = 10_000;
 
 export function redactSensitiveText(value: string): string {
 	return textRedactionPatterns.reduce(
@@ -18,21 +21,52 @@ export function redactSensitiveText(value: string): string {
 	);
 }
 
-export function redactLogValue(value: unknown): Prisma.InputJsonValue | null {
+function redactLogValueInternal(
+	value: unknown,
+	seen: WeakSet<object>,
+	depth: number
+): Prisma.InputJsonValue | null {
 	if (value === null || value === undefined) return null;
-	if (typeof value === 'string') return redactSensitiveText(value);
+	if (typeof value === 'string') {
+		return redactSensitiveText(value).slice(0, maximumLogStringLength);
+	}
 	if (typeof value === 'number' || typeof value === 'boolean') return value;
-	if (Array.isArray(value)) return value.map((item) => redactLogValue(item));
+	if (depth >= maximumLogDepth) return '[TRUNCATED]';
 	if (typeof value === 'object') {
-		return Object.fromEntries(
-			Object.entries(value).map(([key, nestedValue]) => [
-				key,
-				sensitiveLogKeyPattern.test(key) ? '[REDACTED]' : redactLogValue(nestedValue)
-			])
-		);
+		if (seen.has(value)) return '[CIRCULAR]';
+		seen.add(value);
+	}
+	if (Array.isArray(value)) {
+		return value
+			.slice(0, maximumLogCollectionEntries)
+			.map((item) => redactLogValueInternal(item, seen, depth + 1));
+	}
+	if (typeof value === 'object') {
+		try {
+			return Object.fromEntries(
+				Object.entries(value)
+					.slice(0, maximumLogCollectionEntries)
+					.map(([key, nestedValue]) => [
+						key.slice(0, 200),
+						sensitiveLogKeyPattern.test(key)
+							? '[REDACTED]'
+							: redactLogValueInternal(nestedValue, seen, depth + 1)
+					])
+			);
+		} catch {
+			return '[UNSERIALIZABLE]';
+		}
 	}
 
-	return String(value);
+	try {
+		return redactSensitiveText(String(value)).slice(0, maximumLogStringLength);
+	} catch {
+		return '[UNSERIALIZABLE]';
+	}
+}
+
+export function redactLogValue(value: unknown): Prisma.InputJsonValue | null {
+	return redactLogValueInternal(value, new WeakSet(), 0);
 }
 
 type SerializedLogError = {
@@ -48,7 +82,21 @@ function readErrorProperty(error: object, key: string): unknown {
 	return key in error ? Reflect.get(error, key) : undefined;
 }
 
-export function serializeLogError(error: unknown, seen = new Set<unknown>()): SerializedLogError {
+export function serializeLogError(
+	error: unknown,
+	seen = new Set<unknown>(),
+	depth = 0
+): SerializedLogError {
+	if (depth >= maximumLogDepth) {
+		return {
+			name: 'TruncatedError',
+			message: '[TRUNCATED]',
+			stack: null,
+			code: null,
+			meta: null,
+			cause: null
+		};
+	}
 	if (seen.has(error)) {
 		return {
 			name: 'CircularError',
@@ -83,6 +131,6 @@ export function serializeLogError(error: unknown, seen = new Set<unknown>()): Se
 		stack: error.stack ? redactSensitiveText(error.stack) : null,
 		code: typeof code === 'string' ? redactSensitiveText(code) : null,
 		meta: redactLogValue(meta),
-		cause: cause === undefined ? null : serializeLogError(cause, seen)
+		cause: cause === undefined ? null : serializeLogError(cause, seen, depth + 1)
 	};
 }

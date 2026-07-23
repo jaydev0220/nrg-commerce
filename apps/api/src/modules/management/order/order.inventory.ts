@@ -2,6 +2,22 @@ import type { OrderStatus } from '@packages/database';
 
 const releasedStatuses = new Set<OrderStatus>(['cancelled', 'refunded']);
 
+const allowedTransitions: Record<OrderStatus, ReadonlySet<OrderStatus>> = {
+	pending: new Set(['confirmed', 'cancelled']),
+	confirmed: new Set(['processing', 'cancelled']),
+	processing: new Set(['completed', 'cancelled']),
+	completed: new Set(['refunded']),
+	cancelled: new Set(),
+	refunded: new Set()
+};
+
+export function isOrderStatusTransitionAllowed(
+	currentStatus: OrderStatus,
+	nextStatus: OrderStatus
+): boolean {
+	return currentStatus === nextStatus || allowedTransitions[currentStatus].has(nextStatus);
+}
+
 export function aggregateSkuQuantities(
 	items: Array<{ productSkuId?: string | null; quantity: number }>
 ) {

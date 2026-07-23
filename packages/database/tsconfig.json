@@ -6,6 +6,12 @@
 		"declaration": true,
 		"declarationMap": true
 	},
-	"include": ["src/**/*.ts", "tests/**/*.ts", "prisma.config.ts", "prisma/seed.ts"],
+	"include": [
+		"src/**/*.ts",
+		"tests/**/*.ts",
+		"scripts/**/*.ts",
+		"prisma.config.ts",
+		"prisma/seed.ts"
+	],
 	"exclude": ["node_modules"]
 }

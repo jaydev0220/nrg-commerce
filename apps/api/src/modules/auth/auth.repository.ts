@@ -1,4 +1,4 @@
-import type { DatabaseClient, PermissionKey, RoleKey } from '@packages/database';
+import type { DatabaseClient } from '@packages/database';
 
 import type {
 	AuthSessionRecord,
@@ -7,6 +7,7 @@ import type {
 	RefreshTokenRecord,
 	TotpCredentialRecord
 } from '../../types/auth.js';
+import { parsePermissionKey, parseRoleKey } from '../../utils/access-control.js';
 
 type CreateSessionInput = {
 	sessionId: string;
@@ -36,18 +37,6 @@ function normalizeBinary(value: Uint8Array): Uint8Array<ArrayBuffer> {
 	return value.slice();
 }
 
-function mapRoleKey(value: string): RoleKey {
-	if (value === 'catalog-manager' || value === 'staff-manager') {
-		return value;
-	}
-
-	return 'admin';
-}
-
-function mapPermissionKey(value: string): PermissionKey {
-	return value as PermissionKey;
-}
-
 function mapAuthStaffRecord(staff: {
 	id: string;
 	email: string;
@@ -56,6 +45,9 @@ function mapAuthStaffRecord(staff: {
 	passwordHash: string | null;
 	preferredMfaMethod: 'authenticator' | 'passkey' | null;
 	lastLoginAt: Date | null;
+	failedAuthCount: number;
+	failedAuthWindowStartedAt: Date | null;
+	authBlockedUntil: Date | null;
 	roles: Array<{
 		role: {
 			id: string;
@@ -75,11 +67,14 @@ function mapAuthStaffRecord(staff: {
 		passwordHash: staff.passwordHash,
 		preferredMfaMethod: staff.preferredMfaMethod,
 		lastLoginAt: staff.lastLoginAt,
+		failedAuthCount: staff.failedAuthCount,
+		failedAuthWindowStartedAt: staff.failedAuthWindowStartedAt,
+		authBlockedUntil: staff.authBlockedUntil,
 		roles: staff.roles.map(({ role }) => ({
 			id: role.id,
-			key: mapRoleKey(role.key),
+			key: parseRoleKey(role.key),
 			name: role.name,
-			permissions: role.rolePermissions.map(({ permission }) => mapPermissionKey(permission.key))
+			permissions: role.rolePermissions.map(({ permission }) => parsePermissionKey(permission.key))
 		})),
 		totpCredentialCount: staff.totpCredentials.length,
 		passkeyCredentialCount: staff.passkeyCredentials.length
@@ -204,6 +199,72 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 			});
 
 			return staff ? mapAuthStaffRecord(staff) : null;
+		},
+
+		async recordFailedPasswordAttempt(
+			staffId: string,
+			attemptedAt: Date,
+			options: {
+				windowMilliseconds: number;
+				maxAttempts: number;
+				blockMilliseconds: number;
+			}
+		): Promise<{ authBlockedUntil: Date | null }> {
+			const rows = await database.$queryRaw<Array<{ authBlockedUntil: Date | null }>>`
+				WITH current_attempt AS (
+					SELECT
+						"id",
+						CASE
+							WHEN "failedAuthWindowStartedAt" IS NULL
+								OR "failedAuthWindowStartedAt" <= CAST(${attemptedAt} AS timestamptz)
+									- (CAST(${options.windowMilliseconds} AS double precision) * INTERVAL '1 millisecond')
+							THEN 1
+							ELSE "failedAuthCount" + 1
+						END AS next_count,
+						CASE
+							WHEN "failedAuthWindowStartedAt" IS NULL
+								OR "failedAuthWindowStartedAt" <= CAST(${attemptedAt} AS timestamptz)
+									- (CAST(${options.windowMilliseconds} AS double precision) * INTERVAL '1 millisecond')
+							THEN CAST(${attemptedAt} AS timestamptz)
+							ELSE "failedAuthWindowStartedAt"
+						END AS next_window_started_at
+					FROM "Staff"
+					WHERE "id" = ${staffId}
+					FOR UPDATE
+				)
+				UPDATE "Staff" AS staff
+				SET
+					"failedAuthCount" = current_attempt.next_count,
+					"failedAuthWindowStartedAt" = current_attempt.next_window_started_at,
+					"authBlockedUntil" = CASE
+						WHEN current_attempt.next_count >= CAST(${options.maxAttempts} AS integer)
+						THEN CAST(${attemptedAt} AS timestamptz)
+							+ (CAST(${options.blockMilliseconds} AS double precision) * INTERVAL '1 millisecond')
+						ELSE NULL
+					END,
+					"updatedAt" = CURRENT_TIMESTAMP
+				FROM current_attempt
+				WHERE staff."id" = current_attempt."id"
+				RETURNING staff."authBlockedUntil"
+			`;
+
+			return rows[0] ?? { authBlockedUntil: null };
+		},
+
+		async clearFailedPasswordAttempts(staffId: string, authenticatedAt: Date): Promise<boolean> {
+			const result = await database.staff.updateMany({
+				where: {
+					id: staffId,
+					OR: [{ authBlockedUntil: null }, { authBlockedUntil: { lte: authenticatedAt } }]
+				},
+				data: {
+					failedAuthCount: 0,
+					failedAuthWindowStartedAt: null,
+					authBlockedUntil: null
+				}
+			});
+
+			return result.count === 1;
 		},
 
 		async findSessionById(sessionId: string) {
@@ -394,6 +455,16 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 			return sessions.map(mapSessionRecord);
 		},
 
+		async pruneExpiredSessions(cutoff: Date): Promise<number> {
+			const result = await database.authSession.deleteMany({
+				where: {
+					OR: [{ expiresAt: { lte: cutoff } }, { revokedAt: { lte: cutoff } }]
+				}
+			});
+
+			return result.count;
+		},
+
 		async findTotpCredential(staffId: string): Promise<TotpCredentialRecord | null> {
 			const credentials = await database.$queryRaw<
 				Array<{
@@ -402,8 +473,10 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 					digits: number;
 					period: number;
 					verifiedAt: Date | null;
+					lastUsedAt: Date | null;
+					lastUsedTimeStep: bigint | null;
 				}>
-			>`SELECT "staffId", "secretEncrypted", "digits", "period", "verifiedAt"
+			>`SELECT "staffId", "secretEncrypted", "digits", "period", "verifiedAt", "lastUsedAt", "lastUsedTimeStep"
 				FROM "TotpCredential"
 				WHERE "staffId" = ${staffId} AND "deletedAt" IS NULL
 				ORDER BY "createdAt" DESC
@@ -419,7 +492,9 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 				secretEncrypted: credential.secretEncrypted,
 				digits: credential.digits,
 				period: credential.period,
-				verifiedAt: credential.verifiedAt
+				verifiedAt: credential.verifiedAt,
+				lastUsedAt: credential.lastUsedAt,
+				lastUsedTimeStep: credential.lastUsedTimeStep
 			};
 		},
 
@@ -443,6 +518,8 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 			digits: number;
 			period: number;
 			verifiedAt: Date;
+			lastUsedAt: Date;
+			lastUsedTimeStep: bigint;
 		}): Promise<void> {
 			const existingCredentials = await database.$queryRaw<Array<{ id: string }>>`
 				SELECT "id"
@@ -460,6 +537,8 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 						"digits" = ${input.digits},
 						"period" = ${input.period},
 						"verifiedAt" = ${input.verifiedAt},
+						"lastUsedAt" = ${input.lastUsedAt},
+						"lastUsedTimeStep" = ${input.lastUsedTimeStep},
 						"deletedAt" = NULL,
 						"updatedAt" = CURRENT_TIMESTAMP
 					WHERE "id" = ${existingCredential.id}
@@ -475,6 +554,8 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 					"digits",
 					"period",
 					"verifiedAt",
+					"lastUsedAt",
+					"lastUsedTimeStep",
 					"createdAt",
 					"updatedAt"
 				)
@@ -485,19 +566,60 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 					${input.digits},
 					${input.period},
 					${input.verifiedAt},
+					${input.lastUsedAt},
+					${input.lastUsedTimeStep},
 					CURRENT_TIMESTAMP,
 					CURRENT_TIMESTAMP
 				)
 			`;
 		},
 
-		async deleteTotpCredential(staffId: string): Promise<void> {
-			await database.$executeRaw`
+		async consumeTotpTimeStep(staffId: string, timeStep: bigint, usedAt: Date): Promise<boolean> {
+			const count = await database.$executeRaw`
 				UPDATE "TotpCredential"
-				SET "deletedAt" = CURRENT_TIMESTAMP,
+				SET
+					"lastUsedAt" = ${usedAt},
+					"lastUsedTimeStep" = ${timeStep},
 					"updatedAt" = CURRENT_TIMESTAMP
-				WHERE "staffId" = ${staffId} AND "deletedAt" IS NULL
+				WHERE "staffId" = ${staffId}
+					AND "deletedAt" IS NULL
+					AND "verifiedAt" IS NOT NULL
+					AND ("lastUsedTimeStep" IS NULL OR "lastUsedTimeStep" < ${timeStep})
 			`;
+
+			return count === 1;
+		},
+
+		async deleteTotpCredential(staffId: string): Promise<'removed' | 'not_found' | 'mfa_required'> {
+			return database.$transaction(async (transaction) => {
+				const staff = await transaction.$queryRaw<Array<{ id: string }>>`
+					SELECT "id"
+					FROM "Staff"
+					WHERE "id" = ${staffId}
+					FOR UPDATE
+				`;
+				if (staff.length === 0) return 'not_found';
+
+				const activeTotpCount = await transaction.totpCredential.count({
+					where: { staffId, deletedAt: null, verifiedAt: { not: null } }
+				});
+				if (activeTotpCount === 0) return 'not_found';
+
+				const activePasskeyCount = await transaction.passkeyCredential.count({
+					where: { staffId, deletedAt: null, verifiedAt: { not: null } }
+				});
+				if (activePasskeyCount === 0) return 'mfa_required';
+
+				await transaction.totpCredential.updateMany({
+					where: { staffId, deletedAt: null },
+					data: { deletedAt: new Date() }
+				});
+				await transaction.staff.update({
+					where: { id: staffId },
+					data: { preferredMfaMethod: 'passkey' }
+				});
+				return 'removed';
+			});
 		},
 
 		async createPasskeyCredential(
@@ -522,27 +644,37 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 			return mapPasskeyRecord(credential);
 		},
 
-		async updatePasskeyCredentialCounter(
-			credentialId: string,
-			counter: number,
-			lastUsedAt: Date
-		): Promise<void> {
-			await database.passkeyCredential.update({
+		async consumePasskeyAuthentication(input: {
+			credentialId: string;
+			expectedCounter: number;
+			expectedLastUsedAt: Date | null;
+			counter: number;
+			lastUsedAt: Date;
+		}): Promise<boolean> {
+			if (input.counter < input.expectedCounter) return false;
+
+			const result = await database.passkeyCredential.updateMany({
 				where: {
-					credentialId
+					credentialId: input.credentialId,
+					counter: input.expectedCounter,
+					lastUsedAt: input.expectedLastUsedAt,
+					verifiedAt: { not: null },
+					deletedAt: null
 				},
 				data: {
-					counter,
-					lastUsedAt,
-					verifiedAt: lastUsedAt
+					counter: input.counter,
+					lastUsedAt: input.lastUsedAt
 				}
 			});
+
+			return result.count === 1;
 		},
 
 		async listPasskeyCredentials(staffId: string): Promise<PasskeyCredentialRecord[]> {
 			const credentials = await database.passkeyCredential.findMany({
 				where: {
 					staffId,
+					verifiedAt: { not: null },
 					deletedAt: null
 				},
 				orderBy: {
@@ -558,11 +690,13 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 		): Promise<PasskeyCredentialRecord | null> {
 			const credential = await database.passkeyCredential.findUnique({
 				where: {
-					credentialId
+					credentialId,
+					verifiedAt: { not: null },
+					deletedAt: null
 				}
 			});
 
-			return credential && !credential.deletedAt ? mapPasskeyRecord(credential) : null;
+			return credential ? mapPasskeyRecord(credential) : null;
 		},
 
 		async findPasskeyCredentialById(
@@ -573,6 +707,7 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 				where: {
 					id: passkeyId,
 					staffId,
+					verifiedAt: { not: null },
 					deletedAt: null
 				}
 			});
@@ -598,20 +733,51 @@ export function createPrismaAuthRepository(database: DatabaseClient) {
 			return this.findPasskeyCredentialById(staffId, passkeyId);
 		},
 
-		async deletePasskeyCredential(staffId: string, passkeyId: string): Promise<boolean> {
-			const result = await database.passkeyCredential.updateMany({
-				where: {
-					id: passkeyId,
-					staffId,
-					deletedAt: null
-				},
-				data: {
-					deletedAt: new Date(),
-					updatedAt: new Date()
-				}
-			});
+		async deletePasskeyCredential(
+			staffId: string,
+			passkeyId: string
+		): Promise<'removed' | 'not_found' | 'mfa_required'> {
+			return database.$transaction(async (transaction) => {
+				const staff = await transaction.$queryRaw<Array<{ id: string }>>`
+					SELECT "id"
+					FROM "Staff"
+					WHERE "id" = ${staffId}
+					FOR UPDATE
+				`;
+				if (staff.length === 0) return 'not_found';
 
-			return result.count > 0;
+				const credential = await transaction.passkeyCredential.findFirst({
+					where: {
+						id: passkeyId,
+						staffId,
+						deletedAt: null,
+						verifiedAt: { not: null }
+					},
+					select: { id: true }
+				});
+				if (!credential) return 'not_found';
+
+				const activeTotpCount = await transaction.totpCredential.count({
+					where: { staffId, deletedAt: null, verifiedAt: { not: null } }
+				});
+				const activePasskeyCount = await transaction.passkeyCredential.count({
+					where: { staffId, deletedAt: null, verifiedAt: { not: null } }
+				});
+				if (activeTotpCount === 0 && activePasskeyCount === 1) return 'mfa_required';
+
+				await transaction.passkeyCredential.update({
+					where: { id: credential.id },
+					data: { deletedAt: new Date() }
+				});
+				await transaction.staff.update({
+					where: { id: staffId },
+					data: {
+						preferredMfaMethod:
+							activePasskeyCount > 1 ? 'passkey' : activeTotpCount > 0 ? 'authenticator' : null
+					}
+				});
+				return 'removed';
+			});
 		},
 
 		async updatePasswordHash(staffId: string, passwordHash: string): Promise<void> {

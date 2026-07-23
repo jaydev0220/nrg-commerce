@@ -24,6 +24,13 @@ const expectedFiles = [
 ];
 
 const robotDirectives = 'noindex, nofollow, noarchive, nosnippet, noimageindex';
+const securityHeaders = [
+	"  Content-Security-Policy: base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+	'  Permissions-Policy: camera=()',
+	'  Referrer-Policy: no-referrer',
+	'  X-Content-Type-Options: nosniff',
+	'  X-Frame-Options: DENY'
+].join('\n');
 
 async function createBuild() {
 	const directory = await mkdtemp(join(tmpdir(), 'admin-build-'));
@@ -32,9 +39,9 @@ async function createBuild() {
 		await mkdir(dirname(outputPath), { recursive: true });
 		let content = '';
 		if (path === 'index.html') {
-			content = `<meta name="robots" content="${robotDirectives}"><script type="module" src="/_app/immutable/entry/start.example.js"></script>`;
+			content = `<meta name="robots" content="${robotDirectives}"><meta http-equiv="content-security-policy" content="default-src 'self'; connect-src 'self' https://api.example.test https://*.r2.cloudflarestorage.com; object-src 'none'; script-src 'self' 'sha256-example'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'"><script type="module" src="/_app/immutable/entry/start.example.js"></script>`;
 		} else if (path === '_headers') {
-			content = `/*\n  X-Robots-Tag: ${robotDirectives}\n`;
+			content = `/*\n  X-Robots-Tag: ${robotDirectives}\n${securityHeaders}\n`;
 		} else if (path === 'robots.txt') {
 			content = 'User-agent: *\nDisallow: /\n';
 		}
@@ -89,5 +96,31 @@ test('rejects a build that allows crawler traffic', async () => {
 	await assert.rejects(
 		verifyAdminBuild(directory, 'https://api.example.test'),
 		/robots.txt does not disallow all crawlers/
+	);
+});
+
+test('rejects a build without anti-clickjacking headers', async () => {
+	const directory = await createBuild();
+	await writeFile(
+		join(directory, '_headers'),
+		`/*\n  X-Robots-Tag: ${robotDirectives}\n  Referrer-Policy: no-referrer\n  X-Content-Type-Options: nosniff\n`
+	);
+
+	await assert.rejects(
+		verifyAdminBuild(directory, 'https://api.example.test'),
+		/frame-ancestors CSP/
+	);
+});
+
+test('rejects a build without a strict resource policy', async () => {
+	const directory = await createBuild();
+	await writeFile(
+		join(directory, 'index.html'),
+		`<meta name="robots" content="${robotDirectives}"><script type="module" src="/_app/immutable/entry/start.example.js"></script>`
+	);
+
+	await assert.rejects(
+		verifyAdminBuild(directory, 'https://api.example.test'),
+		/Content Security Policy/u
 	);
 });

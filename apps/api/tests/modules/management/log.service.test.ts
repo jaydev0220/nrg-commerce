@@ -103,6 +103,49 @@ test('recordAuditLog creates an expiring audit record with default info severity
 	});
 });
 
+test('recordAuditLog reports persistence failures without rejecting the completed operation', async () => {
+	const persistenceError = new Error('database unavailable');
+	let reportedError: unknown;
+	const logService = createLogService({
+		repository: {
+			listLogs: async () => ({ data: [], total: 0 }),
+			createLog: async () => {
+				throw persistenceError;
+			},
+			findLogById: async () => null,
+			deleteExpiredLogs: async () => 0
+		},
+		onAuditLogPersistenceError: (error) => {
+			reportedError = error;
+		}
+	});
+
+	const result = await logService.recordAuditLog({
+		message: 'Staff created a product.'
+	});
+
+	assert.equal(result, null);
+	assert.equal(reportedError, persistenceError);
+});
+
+test('recordAuditLog does not reject when the persistence error callback fails', async () => {
+	const logService = createLogService({
+		repository: {
+			listLogs: async () => ({ data: [], total: 0 }),
+			createLog: async () => {
+				throw new Error('database unavailable');
+			},
+			findLogById: async () => null,
+			deleteExpiredLogs: async () => 0
+		},
+		onAuditLogPersistenceError: () => {
+			throw new Error('logger unavailable');
+		}
+	});
+
+	assert.equal(await logService.recordAuditLog({ message: 'Staff created a product.' }), null);
+});
+
 test('recordRequestLog creates a sanitized expiring request record', async () => {
 	let createInput:
 		Parameters<Parameters<typeof createLogService>[0]['repository']['createLog']>[0] | undefined;

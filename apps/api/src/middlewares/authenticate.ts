@@ -3,16 +3,17 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { AppError } from '../errors/app-error.js';
 import type { AuthService } from '../modules/auth/auth.service.js';
 import type { AuthenticatedStaffContext } from '../types/auth.js';
+import { authCookieNames } from '../utils/auth-cookies.js';
 import { readCookie } from '../utils/http-cookies.js';
 
-export const accessTokenCookieName = 'admin_access_token';
+export const accessTokenCookieName = authCookieNames.access;
 
 type AuthLocals = {
 	auth?: AuthenticatedStaffContext;
 };
 
-function readAccessToken(request: Request): string {
-	const accessToken = readCookie(request, accessTokenCookieName);
+function readAccessToken(request: Request, cookieName: string): string {
+	const accessToken = readCookie(request, cookieName);
 
 	if (!accessToken) {
 		throw new AppError(401, 'AUTHENTICATION_REQUIRED', 'Authentication is required.');
@@ -22,11 +23,12 @@ function readAccessToken(request: Request): string {
 }
 
 export function createAuthenticateMiddleware(
-	authService: Pick<AuthService, 'authenticateAccessToken'>
+	authService: Pick<AuthService, 'authenticateAccessToken'>,
+	cookieName: string = accessTokenCookieName
 ): RequestHandler {
 	return async (request, response, next) => {
 		try {
-			const accessToken = readAccessToken(request);
+			const accessToken = readAccessToken(request, cookieName);
 			const authContext = await authService.authenticateAccessToken(accessToken);
 			(response.locals as AuthLocals).auth = authContext;
 			next();

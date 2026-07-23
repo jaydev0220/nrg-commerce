@@ -22,6 +22,30 @@ function jsonResponse(body: unknown, status = 200): Response {
 	});
 }
 
+const productId = '00000000-0000-4000-8000-000000000001';
+const timestamp = '2026-07-01T00:00:00.000Z';
+
+function productRecord(overrides: Record<string, unknown> = {}) {
+	return {
+		id: productId,
+		slug: 'glassware',
+		name: 'Glassware',
+		nameEn: null,
+		description: null,
+		descriptionEn: null,
+		categoryId: null,
+		categorySlug: null,
+		published: true,
+		deletedAt: null,
+		createdAt: timestamp,
+		updatedAt: timestamp,
+		thumbnail: null,
+		images: [],
+		skus: [],
+		...overrides
+	};
+}
+
 describe('catalog API client', () => {
 	it('requests paginated products and the category tree with the storefront contract', async () => {
 		const fetcher = vi.fn<typeof fetch>(async (input) => {
@@ -73,6 +97,15 @@ describe('catalog API client', () => {
 		).rejects.toMatchObject({ status: 502 });
 	});
 
+	it('rejects malformed successful responses at the API boundary', async () => {
+		await expect(
+			fetchCatalogProductBySlug(async () => jsonResponse({ slug: 'incomplete' }), 'glassware')
+		).rejects.toMatchObject({
+			status: 502,
+			body: { message: 'The catalog service returned an invalid response.' }
+		});
+	});
+
 	it('aborts slow requests after the configured timeout', async () => {
 		vi.useFakeTimers();
 		try {
@@ -95,7 +128,7 @@ describe('catalog API client', () => {
 	});
 
 	it('encodes product slugs in detail requests', async () => {
-		const fetcher = vi.fn<typeof fetch>(async () => jsonResponse({}));
+		const fetcher = vi.fn<typeof fetch>(async () => jsonResponse(productRecord()));
 		await fetchCatalogProductBySlug(fetcher, 'glassware / large');
 
 		const requestUrl = String(fetcher.mock.calls[0]?.[0]);
@@ -107,15 +140,16 @@ describe('catalog API client', () => {
 	it('loads every storefront product page for sitemap generation', async () => {
 		const fetcher = vi.fn<typeof fetch>(async (input) => {
 			const page = Number(new URL(String(input)).searchParams.get('page'));
+			const updatedAt = `2026-07-${String(page).padStart(2, '0')}T00:00:00.000Z`;
 			return jsonResponse({
-				data: [{ slug: `product-${page}`, updatedAt: `2026-07-${String(page).padStart(2, '0')}` }],
+				data: [productRecord({ slug: `product-${page}`, updatedAt })],
 				pagination: { page, limit: 100, total: 2, totalPages: 2 }
 			});
 		});
 
 		await expect(fetchCatalogSitemapProducts(fetcher)).resolves.toEqual([
-			{ slug: 'product-1', updatedAt: '2026-07-01' },
-			{ slug: 'product-2', updatedAt: '2026-07-02' }
+			{ slug: 'product-1', updatedAt: '2026-07-01T00:00:00.000Z' },
+			{ slug: 'product-2', updatedAt: '2026-07-02T00:00:00.000Z' }
 		]);
 		expect(fetcher).toHaveBeenCalledTimes(2);
 		expect(new URL(String(fetcher.mock.calls[0]?.[0])).searchParams.get('limit')).toBe('100');

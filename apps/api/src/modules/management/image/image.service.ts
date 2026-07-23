@@ -24,7 +24,7 @@ type ImageServiceDependencies = {
 	>;
 	objectStorage: Pick<
 		ImageObjectStorage,
-		'createImageUploadTarget' | 'assertImageAssetExists' | 'deleteImageAsset'
+		'createImageUploadTarget' | 'promoteImageAsset' | 'deleteImageAsset' | 'deleteImageUploadAsset'
 	>;
 };
 
@@ -102,26 +102,41 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 					'The image upload is missing or has expired. Upload the image again.'
 				);
 			}
-			const uploadedAsset = await dependencies.objectStorage.assertImageAssetExists(productId, {
+			const promotedAsset = await dependencies.objectStorage.promoteImageAsset(productId, {
 				assetKey: upload.assetKey
 			});
-			const image = await dependencies.repository.consumeImageUpload(productId, input.uploadId, {
-				skuId: input.skuId,
-				imageUrl: uploadedAsset.imageUrl,
-				assetKey: uploadedAsset.assetKey,
-				altText: input.altText,
-				placement: input.placement,
-				focusX: input.focusX,
-				focusY: input.focusY,
-				zoom: input.zoom
-			});
+			let image: CatalogImageRecord | null;
+			try {
+				image = await dependencies.repository.consumeImageUpload(productId, input.uploadId, {
+					uploadAssetKey: upload.assetKey,
+					skuId: input.skuId,
+					imageUrl: promotedAsset.imageUrl,
+					assetKey: promotedAsset.assetKey,
+					altText: input.altText,
+					placement: input.placement,
+					focusX: input.focusX,
+					focusY: input.focusY,
+					zoom: input.zoom
+				});
+			} catch (error) {
+				await dependencies.objectStorage
+					.deleteImageAsset(promotedAsset.assetKey)
+					.catch(() => undefined);
+				throw error;
+			}
 			if (!image) {
+				await dependencies.objectStorage
+					.deleteImageAsset(promotedAsset.assetKey)
+					.catch(() => undefined);
 				throw new AppError(
 					409,
 					'IMAGE_UPLOAD_ALREADY_USED',
 					'The image upload has already been registered.'
 				);
 			}
+			await dependencies.objectStorage
+				.deleteImageUploadAsset(upload.assetKey)
+				.catch(() => undefined);
 			return image;
 		},
 
@@ -147,7 +162,7 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 				});
 			} catch (error) {
 				await dependencies.objectStorage
-					.deleteImageAsset(uploadTarget.assetKey)
+					.deleteImageUploadAsset(uploadTarget.assetKey)
 					.catch(() => undefined);
 				throw error;
 			}
@@ -227,7 +242,7 @@ export function createImageService(dependencies: ImageServiceDependencies) {
 				await dependencies.repository.forceDeleteImage(image.id);
 			}
 			for (const upload of uploads) {
-				await dependencies.objectStorage.deleteImageAsset(upload.assetKey);
+				await dependencies.objectStorage.deleteImageUploadAsset(upload.assetKey);
 				await dependencies.repository.deleteImageUpload(upload.id);
 			}
 			return { images: images.length, uploads: uploads.length };

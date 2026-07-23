@@ -108,7 +108,10 @@ export type ManagedOrderRecord = {
 	discountRate: number;
 	discountAmount: number;
 	totalAmount: number;
+	version: number;
 	completedAt: Date | null;
+	cancelledAt: Date | null;
+	refundedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 	business: ManagedBusinessRecord | null;

@@ -6,6 +6,11 @@ import { AppError } from '../errors/app-error.js';
 import { readCookie } from '../utils/http-cookies.js';
 
 export const csrfCookieName = 'admin_csrf_token';
+export const secureCsrfCookieName = '__Host-admin_csrf_token';
+
+function resolveCsrfCookieName(secure: boolean): string {
+	return secure ? secureCsrfCookieName : csrfCookieName;
+}
 
 type CsrfOptions = {
 	allowedOrigins: string[];
@@ -38,8 +43,9 @@ function verifyOrigin(origin: string | undefined, allowedOrigins: string[]): voi
 
 export function createCsrfTokenHandler(options: CsrfOptions): RequestHandler {
 	return (request, response) => {
-		const csrfToken = readCookie(request, csrfCookieName) ?? randomBytes(32).toString('base64url');
-		response.cookie(csrfCookieName, csrfToken, createCookieOptions(options));
+		const cookieName = resolveCsrfCookieName(options.cookieSecure);
+		const csrfToken = readCookie(request, cookieName) ?? randomBytes(32).toString('base64url');
+		response.cookie(cookieName, csrfToken, createCookieOptions(options));
 		response.status(200).json({ csrfToken });
 	};
 }
@@ -53,7 +59,7 @@ export function createCsrfProtectionMiddleware(options: CsrfOptions): RequestHan
 
 		try {
 			verifyOrigin(request.get('origin'), options.allowedOrigins);
-			const cookieToken = readCookie(request, csrfCookieName);
+			const cookieToken = readCookie(request, resolveCsrfCookieName(options.cookieSecure));
 			const headerToken = request.get('x-csrf-token');
 			if (!cookieToken || !headerToken || !tokensMatch(cookieToken, headerToken)) {
 				throw new AppError(403, 'CSRF_VALIDATION_FAILED', 'The CSRF token is missing or invalid.');

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
-import { dateSchema, uuidSchema } from './common.js';
+import { dateSchema, normalizedEmailAddressSchema, uuidSchema } from './common.js';
+
+const maximumPasswordLength = 256;
 
 export const staffStatusValues = ['active', 'inactive', 'suspended'] as const;
 export const mfaMethodValues = ['authenticator', 'passkey'] as const;
@@ -163,20 +165,21 @@ export const mfaPreferenceSchema = z.object({
 });
 
 export const passwordLoginSchema = z.object({
-	email: z.email(),
-	password: z.string().min(8)
+	email: normalizedEmailAddressSchema,
+	password: z.string().min(8).max(maximumPasswordLength)
 });
 
 export const strongPasswordSchema = z
 	.string()
 	.min(17)
+	.max(maximumPasswordLength)
 	.regex(/[A-Z]/)
 	.regex(/[a-z]/)
 	.regex(/[0-9]/)
 	.regex(/[^A-Za-z0-9]/);
 
 export const passwordChangeSchema = z.object({
-	currentPassword: z.string().min(1),
+	currentPassword: z.string().min(1).max(maximumPasswordLength),
 	newPassword: strongPasswordSchema
 });
 
@@ -184,16 +187,14 @@ export const pendingAuthTokenSchema = z.object({}).strict();
 
 export const setupTokenRequestSchema = z.object({}).strict();
 
-export const passkeyAuthenticationStartSchema = z.object({
-	email: z.email().optional()
-});
+export const passkeyAuthenticationStartSchema = z.object({}).strict();
 
 export const passkeyAuthenticationVerificationSchema = z.object({
 	credential: z.unknown()
 });
 
 export const passkeyRegistrationStartSchema = z.object({
-	nickname: z.string().trim().min(1).optional()
+	nickname: z.string().trim().min(1).max(64).optional()
 });
 
 export const totpSetupConfirmationSchema = z.object({
@@ -206,7 +207,7 @@ const securityReauthContextSchema = z.object({
 });
 
 export const securityReauthPasswordSchema = securityReauthContextSchema.extend({
-	password: z.string().min(1)
+	password: z.string().min(1).max(maximumPasswordLength)
 });
 
 export const securityReauthTotpSchema = securityReauthContextSchema.extend({

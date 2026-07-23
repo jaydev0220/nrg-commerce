@@ -45,11 +45,13 @@ test('authenticated results become HttpOnly cookies without exposing tokens in J
 
 	assert.deepEqual(body, { status: 'authenticated' });
 	assert.equal(JSON.stringify(body).includes('secret'), false);
-	assert.match(cookies, /admin_access_token=access-secret/);
-	assert.match(cookies, /admin_refresh_token=refresh-secret/);
+	assert.match(cookies, /__Host-admin_access_token=access-secret/);
+	assert.match(cookies, /__Host-admin_refresh_token=refresh-secret/);
 	assert.match(cookies, /HttpOnly/i);
 	assert.match(cookies, /Secure/i);
 	assert.match(cookies, /SameSite=None/i);
+	assert.match(cookies, /Path=\//i);
+	assert.doesNotMatch(cookies, /Domain=/i);
 });
 
 test('MFA flow tokens and methods stay in HttpOnly cookies', async () => {
@@ -73,7 +75,7 @@ test('MFA flow tokens and methods stay in HttpOnly cookies', async () => {
 		method: 'authenticator',
 		availableMethods: ['authenticator']
 	});
-	assert.match(cookies, /admin_mfa_pending_token=pending-secret/);
+	assert.match(cookies, /__Host-admin_mfa_pending_token=pending-secret/);
 	assert.doesNotMatch(cookies, /admin_mfa_pending_method=/);
 	assert.equal(response.text().includes('pending-secret'), false);
 });

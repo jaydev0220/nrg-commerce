@@ -272,6 +272,28 @@ test('productImageUploadRequestSchema rejects unsupported types and oversized fi
 	);
 });
 
+test('product request schemas reject oversized text and database integers', () => {
+	assert.throws(() => productCreateSchema.parse({ name: 'a'.repeat(201), slug: 'valid-slug' }));
+	assert.throws(() => productCreateSchema.parse({ name: 'Product', slug: 'a'.repeat(161) }));
+	assert.throws(() => managementProductListQuerySchema.parse({ search: 'a'.repeat(201) }));
+	assert.throws(() =>
+		productSkuCreateSchema.parse({
+			productId: 'c1cf3cbb-c58b-4409-a449-85b086c9089a',
+			skuCode: 'SKU-001',
+			price: 19.99,
+			stockQuantity: 2_147_483_648,
+			attributes: {}
+		})
+	);
+	assert.throws(() =>
+		productImageUploadRequestSchema.parse({
+			fileName: 'a'.repeat(256),
+			contentType: 'image/webp',
+			fileSize: 1024
+		})
+	);
+});
+
 test('storefront product query schemas parse include flags from query strings', () => {
 	const listQuery = storefrontProductListQuerySchema.parse({
 		includeSkus: 'true',

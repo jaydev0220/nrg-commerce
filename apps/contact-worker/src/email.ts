@@ -1,6 +1,6 @@
 import type { ContactRequest, InquiryRequest } from '@packages/schemas';
 
-type FormRequest = ContactRequest | InquiryRequest;
+type FormRequest = Omit<ContactRequest, 'turnstileToken'> | Omit<InquiryRequest, 'turnstileToken'>;
 
 export type EmailConfig = {
 	senderEmail: string;

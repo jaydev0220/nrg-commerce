@@ -17,7 +17,7 @@ function createTestConfig() {
 		port: 0,
 		databaseUrl: 'postgresql://postgres:postgres@localhost:5432/nrg_commerce',
 		databaseMaxConnections: 10,
-		trustProxy: false,
+		trustProxyHops: false as const,
 		corsOrigins: ['http://localhost:4173'],
 		bodyLimit: '64kb',
 		cookieSecure: false,
@@ -26,6 +26,8 @@ function createTestConfig() {
 		refreshTokenSecret: 'refresh-secret',
 		pendingTokenSecret: 'pending-secret',
 		dataEncryptionSecret: 'data-secret',
+		jwtIssuer: 'nrg-commerce-api',
+		jwtAudience: 'nrg-commerce-admin',
 		accessTokenTtlSeconds: 900,
 		refreshTokenTtlSeconds: 86_400,
 		pendingTokenTtlSeconds: 300,
@@ -40,13 +42,17 @@ function createTestConfig() {
 		authRateLimitMax: 10,
 		r2AccountId: 'account-id',
 		r2BucketName: 'catalog-assets',
+		r2UploadBucketName: 'catalog-uploads',
 		r2AccessKeyId: 'access-key-id',
 		r2SecretAccessKey: 'secret-access-key',
 		r2PublicBaseUrl: 'https://assets.example.com',
 		r2AssetKeyPrefix: 'products/skus',
 		r2UploadUrlTtlSeconds: 900,
 		storefrontCacheTtlSeconds: 60,
-		storefrontCacheMaxEntries: 500
+		storefrontCacheMaxEntries: 500,
+		otelExporterOtlpEndpoint: null,
+		otelServiceName: 'nrg-commerce-api',
+		otelMetricExportIntervalMs: 60_000
 	};
 }
 
@@ -66,6 +72,9 @@ function createManagementAuthContext(): AuthenticatedStaffContext {
 			passwordHash: null,
 			preferredMfaMethod: 'authenticator',
 			lastLoginAt: null,
+			failedAuthCount: 0,
+			failedAuthWindowStartedAt: null,
+			authBlockedUntil: null,
 			roles: [],
 			totpCredentialCount: 1,
 			passkeyCredentialCount: 0
@@ -124,6 +133,26 @@ test('auth and management responses are not stored by browser caches', async () 
 
 	assert.equal(authResponse.headers['cache-control'], 'no-store');
 	assert.equal(managementResponse.headers['cache-control'], 'no-store');
+});
+
+test('createApp rejects disallowed CORS origins with a controlled client error', async () => {
+	const app = createApp({
+		config: createTestConfig(),
+		health: {
+			isReady: async () => true
+		}
+	});
+
+	const response = await requestApp(app, {
+		path: '/api/auth/state',
+		headers: { origin: 'http://localhost:4173.attacker.example' }
+	});
+	const payload = response.json<{ error: { code: string } }>();
+
+	assert.equal(response.status, 403);
+	assert.equal(payload.error.code, 'ORIGIN_NOT_ALLOWED');
+	assert.equal(response.headers['access-control-allow-origin'], undefined);
+	assert.equal(response.headers['x-content-type-options'], 'nosniff');
 });
 
 test('management routes require a verified MFA claim', async () => {

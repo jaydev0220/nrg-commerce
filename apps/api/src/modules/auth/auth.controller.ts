@@ -88,8 +88,8 @@ type AuthController = {
 
 function getRequestMetadata(request: Request) {
 	return {
-		userAgent: request.get('user-agent') ?? null,
-		ipAddress: request.ip ?? null
+		userAgent: request.get('user-agent')?.slice(0, 512) ?? null,
+		ipAddress: request.ip?.slice(0, 64) ?? null
 	};
 }
 
@@ -193,9 +193,8 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 				.json(getPublicAuthResult(result));
 		},
 
-		beginPasskeyLogin: async (request, response) => {
-			const body = getValidatedBody<{ email?: string }>(request);
-			const result = await dependencies.authService.beginPasskeyLogin(body.email);
+		beginPasskeyLogin: async (_request, response) => {
+			const result = await dependencies.authService.beginPasskeyLogin();
 			dependencies.authCookies.setCeremonyToken(response, result.ceremonyToken);
 			response.status(200).json(getPublicPasskeyOptions(result));
 		},
@@ -328,10 +327,11 @@ export function createAuthController(dependencies: AuthControllerDependencies) {
 		refreshSession: async (request, response) => {
 			try {
 				const requestContext = getRequestContext(request, response);
+				const metadata = getRequestMetadata(request);
 				const result = await dependencies.authService.refreshSession(
 					requireFlowToken(dependencies.authCookies.readRefreshToken(request)),
-					request.get('user-agent') ?? null,
-					request.ip ?? null,
+					metadata.userAgent,
+					metadata.ipAddress,
 					requestContext.requestId
 				);
 				dependencies.authCookies.applyAuthResult(response, result);

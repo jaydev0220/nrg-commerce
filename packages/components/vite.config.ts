@@ -25,11 +25,20 @@ export default defineConfig({
 			exclude: ['src/**/*.d.ts'],
 			thresholds: { lines: 70, branches: 75, functions: 79 }
 		},
-		browser: {
-			enabled: true,
-			provider: playwright(),
-			instances: [{ browser: 'chromium', headless: true }]
-		},
-		include: ['tests/**/*.svelte.{test,spec}.{js,ts}']
+		projects: [
+			{
+				extends: './vite.config.ts',
+				test: {
+					name: 'client',
+					fileParallelism: false,
+					browser: {
+						enabled: true,
+						provider: playwright(),
+						instances: [{ browser: 'chromium', headless: true }]
+					},
+					include: ['tests/**/*.svelte.{test,spec}.{js,ts}']
+				}
+			}
+		]
 	}
 });

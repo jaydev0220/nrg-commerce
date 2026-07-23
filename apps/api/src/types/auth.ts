@@ -27,6 +27,9 @@ export type AuthStaffRecord = {
 	passwordHash: string | null;
 	preferredMfaMethod: MfaMethod | null;
 	lastLoginAt: Date | null;
+	failedAuthCount: number;
+	failedAuthWindowStartedAt: Date | null;
+	authBlockedUntil: Date | null;
 	roles: AuthRoleRecord[];
 	totpCredentialCount: number;
 	passkeyCredentialCount: number;
@@ -38,6 +41,8 @@ export type TotpCredentialRecord = {
 	digits: number;
 	period: number;
 	verifiedAt: Date | null;
+	lastUsedAt: Date | null;
+	lastUsedTimeStep: bigint | null;
 };
 
 export type PasskeyCredentialRecord = {

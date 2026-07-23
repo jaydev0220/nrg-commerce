@@ -8,10 +8,12 @@ type RequestContextLocals = {
 	requestContext?: RequestContext;
 };
 
+const externalRequestIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
 function resolveRequestId(request: Request, createId: () => string): string {
 	const headerValue = request.get('x-request-id')?.trim();
 
-	return headerValue || createId();
+	return headerValue && externalRequestIdPattern.test(headerValue) ? headerValue : createId();
 }
 
 export function createRequestContextMiddleware(

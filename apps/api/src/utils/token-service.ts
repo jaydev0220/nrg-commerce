@@ -14,6 +14,8 @@ type TokenServiceConfig = {
 	accessTokenSecret: string;
 	refreshTokenSecret: string;
 	pendingTokenSecret: string;
+	issuer: string;
+	audience: string;
 	accessTokenTtlSeconds: number;
 	refreshTokenTtlSeconds: number;
 	pendingTokenTtlSeconds: number;
@@ -38,10 +40,14 @@ function createSecretKey(secret: string): Uint8Array {
 async function issueToken(
 	secret: Uint8Array,
 	payload: Record<string, unknown>,
-	ttlSeconds: number
+	ttlSeconds: number,
+	issuer: string,
+	audience: string
 ): Promise<string> {
 	return new SignJWT(payload)
 		.setProtectedHeader({ alg: algorithm })
+		.setIssuer(issuer)
+		.setAudience(audience)
 		.setIssuedAt()
 		.setExpirationTime(`${ttlSeconds}s`)
 		.sign(secret);
@@ -60,12 +66,18 @@ export function createTokenService(config: TokenServiceConfig) {
 					...payload,
 					type: 'access'
 				},
-				config.accessTokenTtlSeconds
+				config.accessTokenTtlSeconds,
+				config.issuer,
+				config.audience
 			);
 		},
 
 		async verifyAccessToken(token: string) {
-			const { payload } = await jwtVerify(token, accessTokenSecret);
+			const { payload } = await jwtVerify(token, accessTokenSecret, {
+				algorithms: [algorithm],
+				issuer: config.issuer,
+				audience: config.audience
+			});
 			return accessTokenClaimsSchema.parse(payload);
 		},
 
@@ -76,12 +88,18 @@ export function createTokenService(config: TokenServiceConfig) {
 					...payload,
 					type: 'refresh'
 				},
-				config.refreshTokenTtlSeconds
+				config.refreshTokenTtlSeconds,
+				config.issuer,
+				config.audience
 			);
 		},
 
 		async verifyRefreshToken(token: string) {
-			const { payload } = await jwtVerify(token, refreshTokenSecret);
+			const { payload } = await jwtVerify(token, refreshTokenSecret, {
+				algorithms: [algorithm],
+				issuer: config.issuer,
+				audience: config.audience
+			});
 			return refreshTokenClaimsSchema.parse(payload);
 		},
 
@@ -92,12 +110,18 @@ export function createTokenService(config: TokenServiceConfig) {
 					...payload,
 					type: 'pending_auth'
 				},
-				config.pendingTokenTtlSeconds
+				config.pendingTokenTtlSeconds,
+				config.issuer,
+				config.audience
 			);
 		},
 
 		async verifyPendingAuthToken(token: string): Promise<PendingTokenClaims> {
-			const { payload } = await jwtVerify(token, pendingTokenSecret);
+			const { payload } = await jwtVerify(token, pendingTokenSecret, {
+				algorithms: [algorithm],
+				issuer: config.issuer,
+				audience: config.audience
+			});
 
 			if (payload['type'] !== 'pending_auth') {
 				throw new Error('Invalid pending token type.');
@@ -126,11 +150,21 @@ export function createTokenService(config: TokenServiceConfig) {
 		},
 
 		async issueCeremonyToken(payload: CeremonyTokenClaims): Promise<string> {
-			return issueToken(pendingTokenSecret, payload, config.pendingTokenTtlSeconds);
+			return issueToken(
+				pendingTokenSecret,
+				payload,
+				config.pendingTokenTtlSeconds,
+				config.issuer,
+				config.audience
+			);
 		},
 
 		async verifyCeremonyToken<T>(token: string, purpose: CeremonyTokenPurpose): Promise<T> {
-			const { payload } = await jwtVerify(token, pendingTokenSecret);
+			const { payload } = await jwtVerify(token, pendingTokenSecret, {
+				algorithms: [algorithm],
+				issuer: config.issuer,
+				audience: config.audience
+			});
 
 			if (payload['type'] !== 'ceremony' || payload['purpose'] !== purpose) {
 				throw new Error('Invalid ceremony token.');

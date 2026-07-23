@@ -25,35 +25,40 @@ test('app-only changes affect only their deployment target', () => {
 		catalog: false,
 		contact: false,
 		admin: false,
-		api: false
+		api: false,
+		infrastructure: false
 	});
 	assert.deepEqual(determineAffectedTargets(['apps/catalog/src/routes/+page.svelte']), {
 		landing: false,
 		catalog: true,
 		contact: false,
 		admin: false,
-		api: false
+		api: false,
+		infrastructure: false
 	});
 	assert.deepEqual(determineAffectedTargets(['apps/contact-worker/src/index.ts']), {
 		landing: false,
 		catalog: false,
 		contact: true,
 		admin: false,
-		api: false
+		api: false,
+		infrastructure: false
 	});
 	assert.deepEqual(determineAffectedTargets(['apps/admin/src/routes/+page.svelte']), {
 		landing: false,
 		catalog: false,
 		contact: false,
 		admin: true,
-		api: false
+		api: false,
+		infrastructure: false
 	});
 	assert.deepEqual(determineAffectedTargets(['apps/api/src/routes/index.ts']), {
 		landing: false,
 		catalog: false,
 		contact: false,
 		admin: false,
-		api: true
+		api: true,
+		infrastructure: false
 	});
 });
 
@@ -63,28 +68,32 @@ test('shared package changes affect each dependent deployment', () => {
 		catalog: true,
 		contact: false,
 		admin: false,
-		api: false
+		api: false,
+		infrastructure: false
 	});
 	assert.deepEqual(determineAffectedTargets(['packages/schemas/src/common.ts']), {
 		landing: true,
 		catalog: true,
 		contact: true,
 		admin: true,
-		api: true
+		api: true,
+		infrastructure: false
 	});
 	assert.deepEqual(determineAffectedTargets(['packages/styles/shared.css']), {
 		landing: true,
 		catalog: true,
 		contact: false,
 		admin: true,
-		api: false
+		api: false,
+		infrastructure: false
 	});
 	assert.deepEqual(determineAffectedTargets(['packages/database/src/client.ts']), {
 		landing: false,
 		catalog: false,
 		contact: false,
 		admin: false,
-		api: true
+		api: true,
+		infrastructure: false
 	});
 });
 
@@ -101,9 +110,21 @@ test('root tooling changes affect all deployment targets', () => {
 			catalog: true,
 			contact: true,
 			admin: true,
-			api: true
+			api: true,
+			infrastructure: true
 		});
 	}
+});
+
+test('infrastructure changes affect only infrastructure provisioning', () => {
+	assert.deepEqual(determineAffectedTargets(['infra/cloudflare/main.tf']), {
+		landing: false,
+		catalog: false,
+		contact: false,
+		admin: false,
+		api: false,
+		infrastructure: true
+	});
 });
 
 test('docker context changes affect only the API image', () => {
@@ -112,7 +133,8 @@ test('docker context changes affect only the API image', () => {
 		catalog: false,
 		contact: false,
 		admin: false,
-		api: true
+		api: true,
+		infrastructure: false
 	});
 });
 
@@ -122,27 +144,39 @@ test('manual targets override changed paths', () => {
 		catalog: true,
 		contact: true,
 		admin: true,
-		api: true
+		api: true,
+		infrastructure: true
 	});
 	assert.deepEqual(determineAffectedTargets([], 'catalog'), {
 		landing: false,
 		catalog: true,
 		contact: false,
 		admin: false,
-		api: false
+		api: false,
+		infrastructure: false
 	});
 	assert.deepEqual(determineAffectedTargets([], 'admin'), {
 		landing: false,
 		catalog: false,
 		contact: false,
 		admin: true,
-		api: false
+		api: false,
+		infrastructure: false
 	});
 	assert.deepEqual(determineAffectedTargets([], 'api'), {
 		landing: false,
 		catalog: false,
 		contact: false,
 		admin: false,
-		api: true
+		api: true,
+		infrastructure: false
+	});
+	assert.deepEqual(determineAffectedTargets([], 'infrastructure'), {
+		landing: false,
+		catalog: false,
+		contact: false,
+		admin: false,
+		api: false,
+		infrastructure: true
 	});
 });

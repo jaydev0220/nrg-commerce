@@ -58,7 +58,6 @@ test('createProduct allows uncategorized products', async () => {
 			},
 			softDeleteProduct: async () => undefined,
 			restoreProduct: async () => createCatalogProductRecord(),
-			forceDeleteProduct: async () => undefined,
 			bulkUpdateProducts: async () => ({
 				updatedCount: 0,
 				missingProductIds: [],
@@ -94,7 +93,6 @@ test('createProduct rejects unknown categories', async () => {
 			},
 			softDeleteProduct: async () => undefined,
 			restoreProduct: async () => createCatalogProductRecord(),
-			forceDeleteProduct: async () => undefined,
 			bulkUpdateProducts: async () => ({
 				updatedCount: 0,
 				missingProductIds: [],
@@ -148,7 +146,6 @@ test('updateProduct allows clearing the category assignment', async () => {
 			},
 			softDeleteProduct: async () => undefined,
 			restoreProduct: async () => createCatalogProductRecord(),
-			forceDeleteProduct: async () => undefined,
 			bulkUpdateProducts: async () => ({
 				updatedCount: 0,
 				missingProductIds: [],
@@ -166,36 +163,12 @@ test('updateProduct allows clearing the category assignment', async () => {
 	assert.equal(product.categorySlug, null);
 });
 
-test('deleteProduct rejects force deletion when variants are still assigned', async () => {
+test('deleteProduct always archives the top-level product record', async () => {
+	let softDeletedProductId: string | undefined;
 	const productService = createProductService({
 		repository: {
 			listProducts: async () => ({ data: [], total: 0 }),
-			findProductById: async () => ({
-				...createCatalogProductRecord(),
-				skus: [
-					{
-						id: 'sku-1',
-						productId: 'product-1',
-						skuCode: 'SKU-001',
-						name: 'Canvas Tote',
-						nameEn: 'Canvas Tote',
-						description: 'Everyday bag',
-						descriptionEn: 'Everyday bag',
-						categoryId: 'category-1',
-						categorySlug: 'bags',
-						productSlug: 'canvas-tote',
-						published: true,
-						price: 19.99,
-						stockQuantity: 5,
-						availability: 'in_stock' as const,
-						attributes: {},
-						deletedAt: null,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						images: []
-					}
-				]
-			}),
+			findProductById: async () => createCatalogProductRecord(),
 			findProductBySlug: async () => null,
 			findCategoryById: async () => null,
 			productSlugExists: async () => false,
@@ -205,9 +178,10 @@ test('deleteProduct rejects force deletion when variants are still assigned', as
 			updateProduct: async () => {
 				throw new Error('not used');
 			},
-			softDeleteProduct: async () => undefined,
+			softDeleteProduct: async (productId) => {
+				softDeletedProductId = productId;
+			},
 			restoreProduct: async () => createCatalogProductRecord(),
-			forceDeleteProduct: async () => undefined,
 			bulkUpdateProducts: async () => ({
 				updatedCount: 0,
 				missingProductIds: [],
@@ -216,10 +190,8 @@ test('deleteProduct rejects force deletion when variants are still assigned', as
 		}
 	});
 
-	await assert.rejects(
-		() => productService.deleteProduct('product-1', { force: true }),
-		(error: unknown) => error instanceof AppError && error.code === 'PRODUCT_DELETE_CONFLICT'
-	);
+	assert.equal(await productService.deleteProduct('product-1'), 'soft');
+	assert.equal(softDeletedProductId, 'product-1');
 });
 
 test('createProduct rejects duplicate product slugs', async () => {
@@ -250,7 +222,6 @@ test('createProduct rejects duplicate product slugs', async () => {
 			},
 			softDeleteProduct: async () => undefined,
 			restoreProduct: async () => createCatalogProductRecord(),
-			forceDeleteProduct: async () => undefined,
 			bulkUpdateProducts: async () => ({
 				updatedCount: 0,
 				missingProductIds: [],
@@ -291,7 +262,6 @@ test('restoreProduct restores an archived product', async () => {
 				restored = true;
 				return createCatalogProductRecord();
 			},
-			forceDeleteProduct: async () => undefined,
 			bulkUpdateProducts: async () => ({
 				updatedCount: 0,
 				missingProductIds: [],

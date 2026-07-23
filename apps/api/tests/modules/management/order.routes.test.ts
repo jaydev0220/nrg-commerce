@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import express from 'express';
 
@@ -24,6 +25,9 @@ const authContext: AuthenticatedStaffContext = {
 		passwordHash: null,
 		preferredMfaMethod: 'authenticator',
 		lastLoginAt: null,
+		failedAuthCount: 0,
+		failedAuthWindowStartedAt: null,
+		authBlockedUntil: null,
 		roles: [],
 		totpCredentialCount: 1,
 		passkeyCredentialCount: 0
@@ -47,7 +51,10 @@ function createOrderRecord(status: 'pending' | 'confirmed' = 'pending') {
 		discountRate: 0,
 		discountAmount: 0,
 		totalAmount: 29.97,
+		version: 0,
 		completedAt: null,
+		cancelledAt: null,
+		refundedAt: null,
 		createdAt: new Date('2026-07-08T08:00:00.000Z'),
 		updatedAt: new Date('2026-07-08T08:00:00.000Z'),
 		business: null,
@@ -125,12 +132,13 @@ test('management order route creates an order and records an audit log', async (
 		}
 	);
 
+	const idempotencyKey = randomUUID();
 	const response = await requestApp(app, {
 		method: 'POST',
 		path: '/api/management/orders',
 		headers: {
 			'Content-Type': 'application/json',
-			'Idempotency-Key': '0189076c-4f2a-7fe1-b9fd-2d68df455403'
+			'Idempotency-Key': idempotencyKey
 		},
 		body: JSON.stringify({
 			businessId: null,

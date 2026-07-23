@@ -48,9 +48,10 @@ function createCatalogProductRecord() {
 	};
 }
 
-test('createImage stores the uploaded asset URL after verifying the object exists', async () => {
+test('createImage stores a normalized public asset and removes the private upload', async () => {
 	let createdImageInput:
 		| {
+				uploadAssetKey: string;
 				imageUrl: string;
 				assetKey?: string;
 				altText: string;
@@ -61,6 +62,10 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 				zoom?: number | null;
 		  }
 		| undefined;
+	let deletedUploadAssetKey: string | undefined;
+	let deletedPublicAssetKey: string | undefined;
+	let consumeUpload = true;
+	let promotionCount = 0;
 
 	const imageService = createImageService({
 		repository: {
@@ -97,6 +102,7 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 			}),
 			consumeImageUpload: async (_skuId, _uploadId, input) => {
 				createdImageInput = input;
+				if (!consumeUpload) return null;
 
 				return {
 					id: 'image-1',
@@ -144,12 +150,20 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 			createImageUploadTarget: async () => {
 				throw new Error('not used');
 			},
-			assertImageAssetExists: async () => ({
-				assetKey: 'products/skus/sku-1/image.png',
-				imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
-				contentType: 'image/png'
-			}),
-			deleteImageAsset: async () => undefined
+			promoteImageAsset: async () => {
+				promotionCount += 1;
+				return {
+					assetKey: `products/skus/sku-1/image-${promotionCount}.webp`,
+					imageUrl: `https://assets.example.com/products/skus/sku-1/image-${promotionCount}.webp`,
+					contentType: 'image/webp' as const
+				};
+			},
+			deleteImageAsset: async (assetKey) => {
+				deletedPublicAssetKey = assetKey;
+			},
+			deleteImageUploadAsset: async (assetKey) => {
+				deletedUploadAssetKey = assetKey;
+			}
 		}
 	});
 
@@ -160,16 +174,18 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 	});
 
 	assert.deepEqual(createdImageInput, {
+		uploadAssetKey: 'products/skus/sku-1/image.png',
 		skuId: undefined,
-		imageUrl: 'https://assets.example.com/products/skus/sku-1/image.png',
-		assetKey: 'products/skus/sku-1/image.png',
+		imageUrl: 'https://assets.example.com/products/skus/sku-1/image-1.webp',
+		assetKey: 'products/skus/sku-1/image-1.webp',
 		altText: 'Front image',
 		placement: 'shared-gallery',
 		focusX: undefined,
 		focusY: undefined,
 		zoom: undefined
 	});
-	assert.equal(image.imageUrl, 'https://assets.example.com/products/skus/sku-1/image.png');
+	assert.equal(image.imageUrl, 'https://assets.example.com/products/skus/sku-1/image-1.webp');
+	assert.equal(deletedUploadAssetKey, 'products/skus/sku-1/image.png');
 	const focusedImage = await imageService.updateImageCrop('product-1', 'image-1', {
 		focusX: 0.2,
 		focusY: 0.8,
@@ -180,6 +196,18 @@ test('createImage stores the uploaded asset URL after verifying the object exist
 		{ focusX: 0.2, focusY: 0.8 }
 	);
 	assert.equal(focusedImage.zoom, 1.5);
+
+	consumeUpload = false;
+	await assert.rejects(
+		() =>
+			imageService.createImage('product-1', {
+				uploadId: 'upload-1',
+				altText: 'Front image',
+				placement: 'shared-gallery'
+			}),
+		(error: unknown) => error instanceof AppError && error.code === 'IMAGE_UPLOAD_ALREADY_USED'
+	);
+	assert.equal(deletedPublicAssetKey, 'products/skus/sku-1/image-2.webp');
 });
 
 test('createImageUploadTarget rejects unknown skus before generating upload URLs', async () => {
@@ -212,10 +240,11 @@ test('createImageUploadTarget rejects unknown skus before generating upload URLs
 			createImageUploadTarget: async () => {
 				throw new Error('not used');
 			},
-			assertImageAssetExists: async () => {
+			promoteImageAsset: async () => {
 				throw new Error('not used');
 			},
-			deleteImageAsset: async () => undefined
+			deleteImageAsset: async () => undefined,
+			deleteImageUploadAsset: async () => undefined
 		}
 	});
 
@@ -283,12 +312,13 @@ test('deleteImage soft deletes normally and removes the asset on force delete', 
 			createImageUploadTarget: async () => {
 				throw new Error('not used');
 			},
-			assertImageAssetExists: async () => {
+			promoteImageAsset: async () => {
 				throw new Error('not used');
 			},
 			deleteImageAsset: async (assetKey) => {
 				deletedAssetKey = assetKey;
-			}
+			},
+			deleteImageUploadAsset: async () => undefined
 		}
 	});
 
@@ -347,10 +377,13 @@ test('pruneExpiredAssets deletes expired objects and their database records', as
 			createImageUploadTarget: async () => {
 				throw new Error('not used');
 			},
-			assertImageAssetExists: async () => {
+			promoteImageAsset: async () => {
 				throw new Error('not used');
 			},
 			deleteImageAsset: async (assetKey) => {
+				deletedAssetKeys.push(assetKey);
+			},
+			deleteImageUploadAsset: async (assetKey) => {
 				deletedAssetKeys.push(assetKey);
 			}
 		}

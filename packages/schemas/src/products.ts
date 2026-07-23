@@ -7,6 +7,8 @@ import {
 	moneySchema,
 	nonEmptyUpdate,
 	paginationQuerySchema,
+	resourceSlugSchema,
+	searchQuerySchema,
 	sortOrderSchema,
 	uuidSchema
 } from './common.js';
@@ -26,27 +28,35 @@ export const productImageContentTypeSchema = z.enum(productImageContentTypeValue
 export const productImageMaxFileSize = 10 * 1024 * 1024;
 const productImageFocusCoordinateSchema = z.number().min(0).max(1);
 const productImageZoomSchema = z.number().min(1).max(3);
+const maximumDatabaseInteger = 2_147_483_647;
+const productNameSchema = z.string().trim().min(1).max(200);
+const productDescriptionSchema = z.string().trim().min(1).max(10_000);
+const skuCodeSchema = z.string().trim().min(1).max(120);
+const imageAltTextSchema = z.string().trim().min(1).max(500);
 
-const parsedAttributeQuerySchema = z.string().transform((value, context) => {
-	try {
-		return attributeMapSchema.parse(JSON.parse(value));
-	} catch {
-		context.addIssue({
-			code: 'custom',
-			message: 'attributes must be a valid JSON object.'
-		});
-		return z.NEVER;
-	}
-});
+const parsedAttributeQuerySchema = z
+	.string()
+	.max(8_192)
+	.transform((value, context) => {
+		try {
+			return attributeMapSchema.parse(JSON.parse(value));
+		} catch {
+			context.addIssue({
+				code: 'custom',
+				message: 'attributes must be a valid JSON object.'
+			});
+			return z.NEVER;
+		}
+	});
 
 export const productCategorySchema = z.object({
 	id: uuidSchema,
-	name: z.string().min(1),
-	nameEn: z.string().min(1).nullable(),
-	slug: z.string().trim().min(1),
-	description: z.string().min(1).nullable(),
-	descriptionEn: z.string().min(1).nullable(),
-	position: z.number().int().min(0),
+	name: productNameSchema,
+	nameEn: productNameSchema.nullable(),
+	slug: resourceSlugSchema,
+	description: productDescriptionSchema.nullable(),
+	descriptionEn: productDescriptionSchema.nullable(),
+	position: z.number().int().min(0).max(maximumDatabaseInteger),
 	parentId: uuidSchema.nullable(),
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
@@ -55,11 +65,11 @@ export const productCategorySchema = z.object({
 
 export const productSchema = z.object({
 	id: uuidSchema,
-	slug: z.string().trim().min(1),
-	name: z.string().trim().min(1),
-	nameEn: z.string().trim().min(1).nullable(),
-	description: z.string().min(1).nullable(),
-	descriptionEn: z.string().min(1).nullable(),
+	slug: resourceSlugSchema,
+	name: productNameSchema,
+	nameEn: productNameSchema.nullable(),
+	description: productDescriptionSchema.nullable(),
+	descriptionEn: productDescriptionSchema.nullable(),
 	categoryId: uuidSchema.nullable(),
 	published: z.boolean(),
 	deletedAt: dateSchema.nullable(),
@@ -72,10 +82,10 @@ export const productImageSchema = z.object({
 	productId: uuidSchema,
 	skuId: uuidSchema.nullable(),
 	imageUrl: z.url(),
-	assetKey: z.string().min(1).nullable(),
-	altText: z.string().min(1),
+	assetKey: z.string().min(1).max(1_024).nullable(),
+	altText: imageAltTextSchema,
 	placement: productImagePlacementSchema,
-	position: z.number().int().min(0),
+	position: z.number().int().min(0).max(maximumDatabaseInteger),
 	focusX: productImageFocusCoordinateSchema.nullable(),
 	focusY: productImageFocusCoordinateSchema.nullable(),
 	zoom: productImageZoomSchema.nullable(),
@@ -87,9 +97,9 @@ export const productImageSchema = z.object({
 export const productSkuSchema = z.object({
 	id: uuidSchema,
 	productId: uuidSchema,
-	skuCode: z.string().trim().min(1),
+	skuCode: skuCodeSchema,
 	price: moneySchema,
-	stockQuantity: z.number().int().min(0),
+	stockQuantity: z.number().int().min(0).max(maximumDatabaseInteger),
 	attributes: attributeMapSchema,
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
@@ -99,7 +109,7 @@ export const productSkuSchema = z.object({
 });
 
 export const managementSkuListQuerySchema = paginationQuerySchema.extend({
-	search: z.string().trim().min(1).optional(),
+	search: searchQuerySchema.optional(),
 	published: booleanLikeSchema.optional(),
 	categoryId: uuidSchema.optional(),
 	sort: z.enum(['createdAt', 'updatedAt', 'skuCode', 'price']).default('createdAt'),
@@ -107,7 +117,7 @@ export const managementSkuListQuerySchema = paginationQuerySchema.extend({
 });
 
 export const managementProductListQuerySchema = paginationQuerySchema.extend({
-	search: z.string().trim().min(1).optional(),
+	search: searchQuerySchema.optional(),
 	published: booleanLikeSchema.optional(),
 	categoryId: uuidSchema.optional(),
 	sort: z.enum(['name', 'createdAt', 'updatedAt']).default('createdAt'),
@@ -120,18 +130,18 @@ export const managementProductListQuerySchema = paginationQuerySchema.extend({
 
 export const productSkuCreateSchema = z.object({
 	productId: uuidSchema,
-	skuCode: z.string().trim().min(1),
+	skuCode: skuCodeSchema,
 	price: moneySchema,
-	stockQuantity: z.coerce.number().int().min(0),
+	stockQuantity: z.coerce.number().int().min(0).max(maximumDatabaseInteger),
 	attributes: attributeMapSchema.default({})
 });
 
 export const productCreateSchema = z.object({
-	slug: z.string().trim().min(1),
-	name: z.string().trim().min(1),
-	nameEn: z.string().trim().min(1).optional(),
-	description: z.string().trim().min(1).optional(),
-	descriptionEn: z.string().trim().min(1).optional(),
+	slug: resourceSlugSchema,
+	name: productNameSchema,
+	nameEn: productNameSchema.optional(),
+	description: productDescriptionSchema.optional(),
+	descriptionEn: productDescriptionSchema.optional(),
 	categoryId: uuidSchema.nullable().optional(),
 	published: booleanLikeSchema.default(false)
 });
@@ -139,32 +149,32 @@ export const productCreateSchema = z.object({
 export const productSkuUpdateSchema = nonEmptyUpdate(
 	z.object({
 		productId: uuidSchema.optional(),
-		skuCode: z.string().trim().min(1).optional(),
+		skuCode: skuCodeSchema.optional(),
 		price: moneySchema.optional(),
-		stockQuantity: z.coerce.number().int().min(0).optional(),
+		stockQuantity: z.coerce.number().int().min(0).max(maximumDatabaseInteger).optional(),
 		attributes: attributeMapSchema.optional()
 	})
 );
 
 export const productUpdateSchema = nonEmptyUpdate(
 	z.object({
-		slug: z.string().trim().min(1).optional(),
-		name: z.string().trim().min(1).optional(),
-		nameEn: z.string().trim().min(1).nullable().optional(),
-		description: z.string().trim().min(1).nullable().optional(),
-		descriptionEn: z.string().trim().min(1).nullable().optional(),
+		slug: resourceSlugSchema.optional(),
+		name: productNameSchema.optional(),
+		nameEn: productNameSchema.nullable().optional(),
+		description: productDescriptionSchema.nullable().optional(),
+		descriptionEn: productDescriptionSchema.nullable().optional(),
 		categoryId: uuidSchema.nullable().optional(),
 		published: booleanLikeSchema.optional()
 	})
 );
 
 export const productBulkUpdateSchema = z.object({
-	productIds: z.array(uuidSchema).min(1).max(100),
+	productIds: z
+		.array(uuidSchema)
+		.min(1)
+		.max(100)
+		.refine((productIds) => new Set(productIds).size === productIds.length),
 	action: z.enum(['archive', 'restore', 'publish', 'unpublish'])
-});
-
-export const productDeleteQuerySchema = z.object({
-	force: booleanLikeSchema.default(false)
 });
 
 export const managementProductDetailQuerySchema = z.object({
@@ -181,7 +191,7 @@ export const managementSkuDetailQuerySchema = z.object({
 });
 
 export const managementCategoryListQuerySchema = paginationQuerySchema.extend({
-	search: z.string().trim().min(1).optional(),
+	search: searchQuerySchema.optional(),
 	parentId: uuidSchema.optional(),
 	includeTree: booleanLikeSchema.default(false),
 	sort: z.enum(['name', 'createdAt', 'updatedAt', 'position']).default('position'),
@@ -189,24 +199,24 @@ export const managementCategoryListQuerySchema = paginationQuerySchema.extend({
 });
 
 export const productCategoryCreateSchema = z.object({
-	name: z.string().trim().min(1),
-	nameEn: z.string().trim().min(1).optional(),
-	slug: z.string().trim().min(1),
+	name: productNameSchema,
+	nameEn: productNameSchema.optional(),
+	slug: resourceSlugSchema,
 	parentId: uuidSchema.optional(),
-	description: z.string().trim().min(1).optional(),
-	descriptionEn: z.string().trim().min(1).optional(),
-	position: z.coerce.number().int().min(0).default(0)
+	description: productDescriptionSchema.optional(),
+	descriptionEn: productDescriptionSchema.optional(),
+	position: z.coerce.number().int().min(0).max(maximumDatabaseInteger).default(0)
 });
 
 export const productCategoryUpdateSchema = nonEmptyUpdate(
 	z.object({
-		name: z.string().trim().min(1).optional(),
-		nameEn: z.string().trim().min(1).nullable().optional(),
-		slug: z.string().trim().min(1).optional(),
+		name: productNameSchema.optional(),
+		nameEn: productNameSchema.nullable().optional(),
+		slug: resourceSlugSchema.optional(),
 		parentId: uuidSchema.nullable().optional(),
-		description: z.string().trim().min(1).nullable().optional(),
-		descriptionEn: z.string().trim().min(1).nullable().optional(),
-		position: z.coerce.number().int().min(0).optional()
+		description: productDescriptionSchema.nullable().optional(),
+		descriptionEn: productDescriptionSchema.nullable().optional(),
+		position: z.coerce.number().int().min(0).max(maximumDatabaseInteger).optional()
 	})
 );
 
@@ -262,7 +272,7 @@ export const managementProductImageListQuerySchema = paginationQuerySchema.exten
 });
 
 export const productImageUploadRequestSchema = z.object({
-	fileName: z.string().trim().min(1),
+	fileName: z.string().trim().min(1).max(255),
 	contentType: productImageContentTypeSchema,
 	fileSize: z.coerce.number().int().positive().max(productImageMaxFileSize)
 });
@@ -270,7 +280,7 @@ export const productImageUploadRequestSchema = z.object({
 export const productImageCreateSchema = z
 	.object({
 		uploadId: uuidSchema,
-		altText: z.string().trim().min(1),
+		altText: imageAltTextSchema,
 		placement: productImagePlacementSchema.default('shared-gallery'),
 		skuId: uuidSchema.nullish(),
 		focusX: productImageFocusCoordinateSchema.nullish(),
@@ -323,8 +333,8 @@ export const productImageDeleteQuerySchema = z.object({
 });
 
 export const storefrontSkuListQuerySchema = paginationQuerySchema.extend({
-	search: z.string().trim().min(1).optional(),
-	categorySlug: z.string().trim().min(1).optional(),
+	search: searchQuerySchema.optional(),
+	categorySlug: resourceSlugSchema.optional(),
 	minPrice: moneySchema.optional(),
 	maxPrice: moneySchema.optional(),
 	attributes: z.union([attributeMapSchema, parsedAttributeQuerySchema]).optional(),
@@ -334,8 +344,8 @@ export const storefrontSkuListQuerySchema = paginationQuerySchema.extend({
 });
 
 export const storefrontProductListQuerySchema = paginationQuerySchema.extend({
-	search: z.string().trim().min(1).optional(),
-	categorySlug: z.string().trim().min(1).optional(),
+	search: searchQuerySchema.optional(),
+	categorySlug: resourceSlugSchema.optional(),
 	includeSkus: booleanLikeSchema.default(false),
 	includeImages: booleanLikeSchema.default(false),
 	sort: z.enum(['name', 'createdAt', 'minPrice']).default('createdAt'),
@@ -352,7 +362,7 @@ export const storefrontProductDetailQuerySchema = z.object({
 });
 
 export const storefrontCategoryListQuerySchema = z.object({
-	parentSlug: z.string().trim().min(1).optional(),
+	parentSlug: resourceSlugSchema.optional(),
 	includeTree: booleanLikeSchema.default(false),
 	includeProductCount: booleanLikeSchema.default(false)
 });

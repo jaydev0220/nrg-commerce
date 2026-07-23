@@ -2,9 +2,7 @@ import { Router } from 'express';
 import {
 	z,
 	staffCreateSchema,
-	staffDeleteQuerySchema,
 	staffListQuerySchema,
-	staffPasswordUpdateSchema,
 	staffUpdateSchema,
 	uuidSchema
 } from '@packages/schemas';
@@ -61,7 +59,7 @@ export function createStaffManagementRouter(dependencies: StaffRouterDependencie
 	router.delete(
 		'/:staffId',
 		requirePermission('staff.delete'),
-		validateRequest({ params: staffParamsSchema, query: staffDeleteQuerySchema }),
+		validateRequest({ params: staffParamsSchema }),
 		controller.deleteStaff
 	);
 
@@ -86,14 +84,5 @@ export function createStaffManagementRouter(dependencies: StaffRouterDependencie
 		validateRequest({ params: staffParamsSchema }),
 		controller.resetPassword
 	);
-
-	router.patch(
-		'/:staffId/password',
-		requirePermission('staff.update'),
-		requireRole('admin'),
-		validateRequest({ params: staffParamsSchema, body: staffPasswordUpdateSchema }),
-		controller.updatePassword
-	);
-
 	return router;
 }

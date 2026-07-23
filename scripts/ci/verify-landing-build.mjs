@@ -17,6 +17,19 @@ const limits = {
 	referencedJavascriptBytesPerPage: 165 * 1024,
 	inlineScriptsPerPage: 2
 };
+const serverOnlyAssets = ['_worker.js', '_routes.json', '_headers', '_redirects'];
+
+async function assertServerAssetsExcluded(root) {
+	const ignoredAssets = new Set(
+		(await readFile(resolve(root, '.assetsignore'), 'utf8')).split(/\r?\n/u).filter(Boolean)
+	);
+
+	for (const asset of serverOnlyAssets) {
+		if (!ignoredAssets.has(asset)) {
+			throw new Error(`Landing build must exclude ${asset} from static asset uploads.`);
+		}
+	}
+}
 
 async function listJavascriptFiles(directory) {
 	const entries = await readdir(directory, { withFileTypes: true, recursive: true });
@@ -49,8 +62,35 @@ function hasRenderedHeading(html) {
 	);
 }
 
-export async function verifyLandingBuild(buildDirectory) {
+function readCspMeta(html, page) {
+	const tag = html.match(/<meta\b[^>]*\bhttp-equiv=["']content-security-policy["'][^>]*>/iu)?.[0];
+	const content = tag?.match(/\bcontent="([^"]+)"/iu)?.[1];
+	if (!content) throw new Error(`${page} must contain a Content Security Policy.`);
+	return content;
+}
+
+function assertResourcePolicy(csp, page, expectedContactWorkerUrl) {
+	const contactOrigin = new URL(expectedContactWorkerUrl).origin;
+	for (const requirement of [
+		"default-src 'self'",
+		"object-src 'none'",
+		"script-src-attr 'none'",
+		'https://challenges.cloudflare.com',
+		contactOrigin
+	]) {
+		if (!csp.includes(requirement)) {
+			throw new Error(`${page} Content Security Policy does not include ${requirement}.`);
+		}
+	}
+	const scriptSource = csp.match(/(?:^|;\s*)script-src\s+([^;]+)/u)?.[1] ?? '';
+	if (!/'sha256-[^']+'/u.test(scriptSource) || scriptSource.includes("'unsafe-inline'")) {
+		throw new Error(`${page} Content Security Policy must hash inline scripts.`);
+	}
+}
+
+export async function verifyLandingBuild(buildDirectory, expectedContactWorkerUrl) {
 	const root = resolve(buildDirectory);
+	await assertServerAssetsExcluded(root);
 	const javascriptFiles = await listJavascriptFiles(resolve(root, '_app', 'immutable'));
 	const totalJavascriptBytes = (
 		await Promise.all(javascriptFiles.map(async (file) => (await stat(file)).size))
@@ -65,6 +105,7 @@ export async function verifyLandingBuild(buildDirectory) {
 		if (!/<main\b[^>]*\bid=["']main-content["'][^>]*>/i.test(html) || !hasRenderedHeading(html)) {
 			throw new Error(`${page} must contain prerendered main content and a rendered heading.`);
 		}
+		assertResourcePolicy(readCspMeta(html, page), page, expectedContactWorkerUrl);
 
 		const references = [...new Set(pageAssetReferences(html))];
 		assertWithin(references.length, limits.modulePreloadsPerPage, '15 module preloads per page');
@@ -99,7 +140,14 @@ export async function verifyLandingBuild(buildDirectory) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-	const result = await verifyLandingBuild(process.argv[2] ?? 'apps/landing/build');
+	const buildDirectory = process.argv[2] ?? 'apps/landing/.svelte-kit/cloudflare';
+	const expectedContactWorkerUrl = process.argv[3];
+	if (!expectedContactWorkerUrl) {
+		throw new Error(
+			'Usage: verify-landing-build.mjs <build-directory> <expected-contact-worker-url>'
+		);
+	}
+	const result = await verifyLandingBuild(buildDirectory, expectedContactWorkerUrl);
 	process.stdout.write(
 		`Verified ${result.pageCount} pages and ${result.javascriptFileCount} JavaScript files (${result.totalJavascriptBytes} bytes).\n`
 	);

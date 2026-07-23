@@ -5,6 +5,9 @@ dist
 .wrangler
 static
 generated
+coverage
+playwright-report
+test-results
 
 pnpm-lock.yaml
 worker-configuration.d.ts

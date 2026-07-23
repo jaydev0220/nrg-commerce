@@ -1,5 +1,10 @@
 import { readAppConfig } from './config/app-config.js';
-import { startApiServer } from './server.js';
+import { startObservability } from './observability.js';
 
 const config = readAppConfig();
-startApiServer(config);
+const observability = startObservability(config);
+const { startApiServer } = await import('./server.js');
+
+startApiServer(config, {
+	shutdownObservability: () => observability.shutdown()
+});

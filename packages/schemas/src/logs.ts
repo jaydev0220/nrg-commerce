@@ -35,7 +35,7 @@ export const managementLogListQuerySchema = paginationQuerySchema.extend({
 	kind: logKindSchema.optional(),
 	level: logLevelSchema.optional(),
 	actorStaffId: uuidSchema.optional(),
-	requestId: z.string().trim().min(1).optional(),
+	requestId: z.string().trim().min(1).max(128).optional(),
 	sort: z.enum(['createdAt', 'expiresAt']).default('createdAt'),
 	order: sortOrderSchema.default('desc')
 });

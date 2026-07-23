@@ -3,7 +3,12 @@ import { expect, test } from '@playwright/test';
 test('browses, searches, configures a product, and carries its SKU to inquiry', async ({
 	page
 }) => {
-	await page.goto('/en/');
+	const response = await page.goto('/en/');
+	const contentSecurityPolicy = response?.headers()['content-security-policy'] ?? '';
+	expect(contentSecurityPolicy).toContain("default-src 'self'");
+	expect(contentSecurityPolicy).toContain("script-src-attr 'none'");
+	expect(contentSecurityPolicy).toContain("object-src 'none'");
+	expect(contentSecurityPolicy).toContain("frame-ancestors 'none'");
 
 	await expect(page.getByRole('heading', { name: 'Laboratory Beaker' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Glass Funnel' })).toBeVisible();

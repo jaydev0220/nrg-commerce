@@ -1,6 +1,6 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
-	"name": "admin",
+	"name": "admin-local",
 	"compatibility_date": "2026-06-23",
 	"compatibility_flags": ["nodejs_compat"],
 	"main": ".svelte-kit/cloudflare/_worker.js",
@@ -10,8 +10,26 @@
 		"not_found_handling": "single-page-application"
 	},
 	"vars": {
-		"PUBLIC_API_BASE_URL": "https://api.nrglabware.com"
+		"PUBLIC_API_BASE_URL": "http://localhost:3000"
+	},
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1
 	},
 	"workers_dev": false,
-	"preview_urls": false
+	"preview_urls": false,
+	"env": {
+		"staging": {
+			"name": "admin-staging",
+			"vars": {
+				"PUBLIC_API_BASE_URL": "https://api-staging.invalid"
+			}
+		},
+		"production": {
+			"name": "admin",
+			"vars": {
+				"PUBLIC_API_BASE_URL": "https://api.invalid"
+			}
+		}
+	}
 }

@@ -155,7 +155,7 @@ test('passkey options store ceremony state in a cookie', async () => {
 		method: 'POST',
 		path: '/login/passkey/options',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ email: 'admin@example.com' })
+		body: JSON.stringify({})
 	});
 
 	assert.deepEqual(response.json(), { options: { challenge: 'public-challenge' } });
@@ -187,9 +187,11 @@ test('passkey verification reads ceremony state from the cookie', async () => {
 
 test('session refresh reads and rotates the refresh cookie', async () => {
 	let receivedRefreshToken = '';
+	let receivedUserAgent = '';
 	const app = createApp({
-		refreshSession: async (refreshToken) => {
+		refreshSession: async (refreshToken, userAgent) => {
 			receivedRefreshToken = refreshToken;
+			receivedUserAgent = userAgent ?? '';
 			return authenticatedResult;
 		}
 	});
@@ -198,13 +200,15 @@ test('session refresh reads and rotates the refresh cookie', async () => {
 		path: '/refresh',
 		headers: {
 			'content-type': 'application/json',
-			cookie: 'admin_refresh_token=cookie-refresh'
+			cookie: 'admin_refresh_token=cookie-refresh',
+			'user-agent': 'a'.repeat(1_000)
 		},
 		body: '{}'
 	});
 
 	assert.equal(response.status, 200);
 	assert.equal(receivedRefreshToken, 'cookie-refresh');
+	assert.equal(receivedUserAgent, 'a'.repeat(512));
 	assert.deepEqual(response.json(), { status: 'authenticated' });
 });
 
@@ -268,8 +272,7 @@ test('auth state does not treat an invalid access cookie as authenticated', asyn
 
 test('passkey options accept a username-less request', async () => {
 	const app = createApp({
-		beginPasskeyLogin: async (email) => {
-			assert.equal(email, undefined);
+		beginPasskeyLogin: async () => {
 			return {
 				ceremonyToken: 'ceremony-secret',
 				options: { challenge: 'public-challenge' } as never
@@ -284,4 +287,12 @@ test('passkey options accept a username-less request', async () => {
 	});
 
 	assert.equal(response.status, 200, response.text());
+
+	const emailSpecificResponse = await requestApp(app, {
+		method: 'POST',
+		path: '/login/passkey/options',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ email: 'staff@example.com' })
+	});
+	assert.equal(emailSpecificResponse.status, 422, emailSpecificResponse.text());
 });
