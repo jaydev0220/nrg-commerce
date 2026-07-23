@@ -21,7 +21,7 @@ test('createTokenService signs and verifies access tokens with the expected clai
 		sub: '0189076c-4f2a-7fe1-b9fd-2d68df455111',
 		sid: '0189076c-4f2a-7fe1-b9fd-2d68df455222',
 		jti: 'access-jti',
-		roles: ['admin', 'catalog-manager'],
+		roles: ['admin', 'product-manager'],
 		permissions: ['staff.read', 'product.image.update'],
 		mfa: ['authenticator'],
 		primaryFactor: 'password'
@@ -31,7 +31,7 @@ test('createTokenService signs and verifies access tokens with the expected clai
 
 	assert.equal(claims.sub, '0189076c-4f2a-7fe1-b9fd-2d68df455111');
 	assert.deepEqual(claims.permissions, ['staff.read', 'product.image.update']);
-	assert.deepEqual(claims.roles, ['admin', 'catalog-manager']);
+	assert.deepEqual(claims.roles, ['admin', 'product-manager']);
 	assert.equal(claims.primaryFactor, 'password');
 });
 

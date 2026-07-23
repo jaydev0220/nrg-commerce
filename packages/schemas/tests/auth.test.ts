@@ -23,7 +23,7 @@ test('accessTokenClaimsSchema accepts the expected JWT claims shape', () => {
 		sid: 'ca7641b9-6856-42b6-99f0-f75f1a4d9e79',
 		jti: 'refresh-family-1',
 		type: 'access',
-		roles: ['admin', 'catalog-manager', 'sales-manager'],
+		roles: ['admin', 'product-manager', 'order-manager'],
 		permissions: ['staff.read', 'log.read', 'business.read', 'order.write', 'product.image.update'],
 		mfa: ['passkey'],
 		primaryFactor: 'password',
@@ -39,7 +39,52 @@ test('accessTokenClaimsSchema accepts the expected JWT claims shape', () => {
 		'order.write',
 		'product.image.update'
 	]);
-	assert.deepEqual(parsedClaims.roles, ['admin', 'catalog-manager', 'sales-manager']);
+	assert.deepEqual(parsedClaims.roles, ['admin', 'product-manager', 'order-manager']);
+});
+
+test('accessTokenClaimsSchema accepts every supported role key', () => {
+	const roles = [
+		'admin',
+		'read-only-admin',
+		'read-only',
+		'business-manager',
+		'order-manager',
+		'product-manager'
+	] as const;
+
+	const parsedClaims = accessTokenClaimsSchema.parse({
+		sub: '9be808ab-bd34-4cf4-b8ae-db0f819ff5e6',
+		sid: 'ca7641b9-6856-42b6-99f0-f75f1a4d9e79',
+		jti: 'all-supported-roles',
+		type: 'access',
+		roles,
+		permissions: [],
+		mfa: ['passkey'],
+		primaryFactor: 'passkey',
+		exp: 1_800_000_000,
+		iat: 1_700_000_000
+	});
+
+	assert.deepEqual(parsedClaims.roles, roles);
+});
+
+test('accessTokenClaimsSchema rejects retired role keys', () => {
+	for (const role of ['catalog-manager', 'staff-manager', 'sales-manager']) {
+		assert.throws(() =>
+			accessTokenClaimsSchema.parse({
+				sub: '9be808ab-bd34-4cf4-b8ae-db0f819ff5e6',
+				sid: 'ca7641b9-6856-42b6-99f0-f75f1a4d9e79',
+				jti: `retired-${role}`,
+				type: 'access',
+				roles: [role],
+				permissions: [],
+				mfa: ['passkey'],
+				primaryFactor: 'passkey',
+				exp: 1_800_000_000,
+				iat: 1_700_000_000
+			})
+		);
+	}
 });
 
 test('refreshTokenClaimsSchema rejects access token payloads', () => {

@@ -7,7 +7,8 @@ import {
 	getDatabaseClient,
 	permissionKeys,
 	resolveDatabaseUrl,
-	roleDefinitions
+	roleDefinitions,
+	roleKeys
 } from '../src/index.js';
 
 test('resolveDatabaseUrl prefers the explicit connection string', () => {
@@ -40,6 +41,11 @@ test('getDatabaseClient memoizes the database client', async () => {
 test('roleDefinitions only reference seeded permission keys', () => {
 	const knownPermissionKeys = new Set(permissionKeys);
 
+	assert.deepEqual(
+		roleDefinitions.map((role) => role.key),
+		roleKeys
+	);
+
 	for (const role of roleDefinitions) {
 		for (const permissionKey of role.permissions) {
 			assert.equal(knownPermissionKeys.has(permissionKey), true);
@@ -52,4 +58,34 @@ test('administrator role receives log read permission', () => {
 
 	assert.ok(administratorRole);
 	assert.equal(administratorRole.permissions.includes('log.read'), true);
+});
+
+test('read-only roles only receive their intended read permissions', () => {
+	const readOnlyAdminRole = roleDefinitions.find((role) => role.key === 'read-only-admin');
+	const readOnlyRole = roleDefinitions.find((role) => role.key === 'read-only');
+
+	assert.ok(readOnlyAdminRole);
+	assert.ok(readOnlyRole);
+	assert.deepEqual(
+		readOnlyAdminRole.permissions,
+		permissionKeys.filter((key) => key.endsWith('.read'))
+	);
+	assert.deepEqual(
+		readOnlyRole.permissions,
+		permissionKeys.filter(
+			(key) => key.endsWith('.read') && !key.startsWith('log') && !key.startsWith('staff')
+		)
+	);
+});
+
+test('manager roles only receive permissions for their own domain', () => {
+	for (const domain of ['business', 'order', 'product'] as const) {
+		const role = roleDefinitions.find((candidate) => candidate.key === `${domain}-manager`);
+
+		assert.ok(role);
+		assert.deepEqual(
+			role.permissions,
+			permissionKeys.filter((key) => key.startsWith(`${domain}.`))
+		);
+	}
 });

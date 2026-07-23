@@ -50,7 +50,14 @@ export const permissionKeySchema = z.enum([
 	'staff.update',
 	'staff.delete'
 ]);
-export const roleKeySchema = z.enum(['admin', 'catalog-manager', 'staff-manager', 'sales-manager']);
+export const roleKeySchema = z.enum([
+	'admin',
+	'read-only-admin',
+	'read-only',
+	'business-manager',
+	'order-manager',
+	'product-manager'
+]);
 
 export const permissionSchema = z.object({
 	id: uuidSchema,

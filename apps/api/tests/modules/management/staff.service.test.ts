@@ -165,21 +165,26 @@ test('createStaff hashes and returns a generated initial password once', async (
 	assert.equal(passwordHash, `hashed:${generatedPassword}`);
 });
 
-test('non-admin staff managers cannot grant roles they do not hold', async () => {
+test('non-admin staff cannot grant roles they do not hold', async () => {
 	const adminRoleId = '0189076c-4f2a-7fe1-b9fd-2d68df455441';
-	const catalogRoleId = '0189076c-4f2a-7fe1-b9fd-2d68df455442';
-	const staffManagerRoleId = '0189076c-4f2a-7fe1-b9fd-2d68df455443';
+	const productManagerRoleId = '0189076c-4f2a-7fe1-b9fd-2d68df455442';
+	const readOnlyAdminRoleId = '0189076c-4f2a-7fe1-b9fd-2d68df455443';
 	let createCalled = false;
 	const staffService = createStaffService({
 		repository: createStaffRepository({
 			listRoles: async () =>
 				[
-					{ id: adminRoleId, key: 'admin', name: 'Administrator', permissions: [] },
-					{ id: catalogRoleId, key: 'catalog-manager', name: 'Catalog Manager', permissions: [] },
+					{ id: adminRoleId, key: 'admin', name: '管理員', permissions: [] },
 					{
-						id: staffManagerRoleId,
-						key: 'staff-manager',
-						name: 'Staff Manager',
+						id: productManagerRoleId,
+						key: 'product-manager',
+						name: '產品管理',
+						permissions: []
+					},
+					{
+						id: readOnlyAdminRoleId,
+						key: 'read-only-admin',
+						name: '唯讀 (含內部管理)',
 						permissions: []
 					}
 				] as never,
@@ -192,7 +197,7 @@ test('non-admin staff managers cannot grant roles they do not hold', async () =>
 	});
 	const actor = {
 		id: '0189076c-4f2a-7fe1-b9fd-2d68df455444',
-		roles: ['staff-manager']
+		roles: ['read-only-admin']
 	};
 	const input = {
 		email: 'new@example.com',
@@ -204,20 +209,20 @@ test('non-admin staff managers cannot grant roles they do not hold', async () =>
 		(error: unknown) => error instanceof AppError && error.statusCode === 403
 	);
 	await assert.rejects(
-		() => staffService.createStaff(actor, { ...input, roleIds: [catalogRoleId] }),
+		() => staffService.createStaff(actor, { ...input, roleIds: [productManagerRoleId] }),
 		(error: unknown) => error instanceof AppError && error.statusCode === 403
 	);
 	assert.equal(createCalled, false);
 });
 
-test('non-admin staff managers cannot mutate administrator accounts or their own roles', async () => {
+test('non-admin staff cannot mutate administrator accounts or their own roles', async () => {
 	const actor = {
 		id: '0189076c-4f2a-7fe1-b9fd-2d68df455444',
-		roles: ['staff-manager']
+		roles: ['read-only-admin']
 	};
 	const adminId = '0189076c-4f2a-7fe1-b9fd-2d68df455445';
-	const staffManagerRoleId = '0189076c-4f2a-7fe1-b9fd-2d68df455443';
-	const makeStaff = (id: string, roles: Array<{ id: string; key: 'admin' | 'staff-manager' }>) =>
+	const readOnlyAdminRoleId = '0189076c-4f2a-7fe1-b9fd-2d68df455443';
+	const makeStaff = (id: string, roles: Array<{ id: string; key: 'admin' | 'read-only-admin' }>) =>
 		({
 			id,
 			email: 'staff@example.com',
@@ -235,13 +240,13 @@ test('non-admin staff managers cannot mutate administrator accounts or their own
 			findById: async (staffId) =>
 				staffId === adminId
 					? makeStaff(adminId, [{ id: '0189076c-4f2a-7fe1-b9fd-2d68df455441', key: 'admin' }])
-					: makeStaff(actor.id, [{ id: staffManagerRoleId, key: 'staff-manager' }]),
+					: makeStaff(actor.id, [{ id: readOnlyAdminRoleId, key: 'read-only-admin' }]),
 			listRoles: async () =>
 				[
 					{
-						id: staffManagerRoleId,
-						key: 'staff-manager',
-						name: 'Staff Manager',
+						id: readOnlyAdminRoleId,
+						key: 'read-only-admin',
+						name: '唯讀 (含內部管理)',
 						permissions: []
 					}
 				] as never
@@ -254,7 +259,7 @@ test('non-admin staff managers cannot mutate administrator accounts or their own
 		(error: unknown) => error instanceof AppError && error.statusCode === 403
 	);
 	await assert.rejects(
-		() => staffService.updateStaff(actor, actor.id, { roleIds: [staffManagerRoleId] }),
+		() => staffService.updateStaff(actor, actor.id, { roleIds: [readOnlyAdminRoleId] }),
 		(error: unknown) => error instanceof AppError && error.statusCode === 409
 	);
 });
