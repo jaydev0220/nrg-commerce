@@ -162,7 +162,14 @@ export const permissionDefinitions = [
 	}
 ] as const satisfies readonly PermissionDefinition[];
 
-export const roleKeys = ['admin', 'catalog-manager', 'staff-manager', 'sales-manager'] as const;
+export const roleKeys = [
+	'admin',
+	'read-only-admin',
+	'read-only',
+	'business-manager',
+	'order-manager',
+	'product-manager'
+] as const;
 
 export type RoleKey = (typeof roleKeys)[number];
 
@@ -176,43 +183,40 @@ export type RoleDefinition = {
 export const roleDefinitions = [
 	{
 		key: 'admin',
-		name: 'Administrator',
-		description: 'Full access across staff and product management.',
+		name: '管理員',
+		description: '擁有所有權限',
 		permissions: permissionKeys
 	},
 	{
-		key: 'catalog-manager',
-		name: 'Catalog Manager',
-		description: 'Manage product SKUs, categories, and images.',
-		permissions: [
-			'product.read',
-			'product.create',
-			'product.update',
-			'product.delete',
-			'product.sku.read',
-			'product.sku.create',
-			'product.sku.update',
-			'product.sku.delete',
-			'product.category.read',
-			'product.category.create',
-			'product.category.update',
-			'product.category.delete',
-			'product.image.read',
-			'product.image.create',
-			'product.image.update',
-			'product.image.delete'
-		]
+		key: 'read-only-admin',
+		name: '唯讀 (含內部管理)',
+		description: '可以查看所有資料，但無法修改 (包含內部管理資料)',
+		permissions: permissionKeys.filter((key) => key.endsWith('.read'))
 	},
 	{
-		key: 'staff-manager',
-		name: 'Staff Manager',
-		description: 'Manage staff accounts and their assigned roles.',
-		permissions: ['staff.read', 'staff.create', 'staff.update', 'staff.delete']
+		key: 'read-only',
+		name: '唯讀',
+		description: '可以查看所有資料，但無法修改',
+		permissions: permissionKeys.filter(
+			(key) => key.endsWith('.read') && !key.startsWith('log') && !key.startsWith('staff')
+		)
 	},
 	{
-		key: 'sales-manager',
-		name: 'Sales Manager',
-		description: 'Manage business records and order workflows.',
-		permissions: ['business.read', 'business.write', 'order.read', 'order.write']
+		key: 'business-manager',
+		name: '企業管理',
+		description: '可以管理企業資料',
+		permissions: permissionKeys.filter((key) => key.startsWith('business.'))
+	},
+	{
+		key: 'order-manager',
+		name: '訂單管理',
+		description: '可以管理訂單資料',
+		permissions: permissionKeys.filter((key) => key.startsWith('order.'))
+	},
+	{
+		key: 'product-manager',
+		name: '產品管理',
+		description: '可以管理產品資料',
+		permissions: permissionKeys.filter((key) => key.startsWith('product.'))
 	}
 ] as const satisfies readonly RoleDefinition[];
