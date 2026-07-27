@@ -157,6 +157,7 @@ export function createAuthRouter(dependencies: AuthRouterDependencies): Router {
 
 	protectedRouter.patch(
 		'/password',
+		dependencies.authRateLimiter,
 		validateRequest({ body: passwordChangeSchema }),
 		controller.changePassword
 	);
@@ -167,10 +168,11 @@ export function createAuthRouter(dependencies: AuthRouterDependencies): Router {
 		controller.updateMfaPreference
 	);
 
-	protectedRouter.post('/mfa/totp/setup', controller.beginTotpSetup);
+	protectedRouter.post('/mfa/totp/setup', dependencies.authRateLimiter, controller.beginTotpSetup);
 
 	protectedRouter.post(
 		'/mfa/totp/confirm',
+		dependencies.authRateLimiter,
 		validateRequest({ body: totpSetupConfirmationSchema }),
 		controller.confirmTotpSetup
 	);
@@ -179,24 +181,28 @@ export function createAuthRouter(dependencies: AuthRouterDependencies): Router {
 
 	protectedRouter.post(
 		'/security/reauth/password',
+		dependencies.authRateLimiter,
 		validateRequest({ body: securityReauthPasswordSchema }),
 		controller.verifySecurityPassword
 	);
 
 	protectedRouter.post(
 		'/security/reauth/totp',
+		dependencies.authRateLimiter,
 		validateRequest({ body: securityReauthTotpSchema }),
 		controller.verifySecurityTotp
 	);
 
 	protectedRouter.post(
 		'/security/reauth/passkey/options',
+		dependencies.authRateLimiter,
 		validateRequest({ body: securityReauthOptionsSchema }),
 		controller.beginSecurityPasskeyReauth
 	);
 
 	protectedRouter.post(
 		'/security/reauth/passkey/verify',
+		dependencies.authRateLimiter,
 		validateRequest({ body: passkeyAuthenticationVerificationSchema }),
 		controller.verifySecurityPasskeyReauth
 	);
@@ -217,12 +223,14 @@ export function createAuthRouter(dependencies: AuthRouterDependencies): Router {
 
 	protectedRouter.post(
 		'/passkeys/registration/options',
+		dependencies.authRateLimiter,
 		validateRequest({ body: passkeyManagementRegistrationStartSchema }),
 		controller.beginPasskeyRegistration
 	);
 
 	protectedRouter.post(
 		'/passkeys/registration/verify',
+		dependencies.authRateLimiter,
 		validateRequest({ body: passkeyAuthenticationVerificationSchema }),
 		controller.finishPasskeyRegistration
 	);

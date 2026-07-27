@@ -32,7 +32,7 @@ const authenticatedResult = {
 	staff
 };
 
-function createApp(serviceOverrides: Partial<AuthService>) {
+function createApp(serviceOverrides: Partial<AuthService>, authRateLimiter?: RequestHandler) {
 	const app = express();
 	app.use(express.json());
 	app.use(createRequestContextMiddleware());
@@ -49,7 +49,7 @@ function createApp(serviceOverrides: Partial<AuthService>) {
 		createAuthRouter({
 			authService: service,
 			logService: { recordAuditLog: async () => ({}) as never },
-			authRateLimiter: passThrough as never,
+			authRateLimiter: (authRateLimiter ?? passThrough) as never,
 			authenticate: passThrough,
 			authCookies,
 			csrfTokenHandler: (_request, response) => response.json({ csrfToken: 'token' })
@@ -295,4 +295,37 @@ test('passkey options accept a username-less request', async () => {
 		body: JSON.stringify({ email: 'staff@example.com' })
 	});
 	assert.equal(emailSpecificResponse.status, 422, emailSpecificResponse.text());
+});
+
+test('strict auth rate limiting covers protected credential verification routes', async () => {
+	let limitedRequestCount = 0;
+	const rejectLimitedRequest: RequestHandler = (_request, response) => {
+		limitedRequestCount += 1;
+		response.status(429).json({ error: { code: 'RATE_LIMITED' } });
+	};
+	const app = createApp({}, rejectLimitedRequest);
+	const protectedAuthRoutes = [
+		{ method: 'PATCH', path: '/password' },
+		{ method: 'POST', path: '/mfa/totp/setup' },
+		{ method: 'POST', path: '/mfa/totp/confirm' },
+		{ method: 'POST', path: '/security/reauth/password' },
+		{ method: 'POST', path: '/security/reauth/totp' },
+		{ method: 'POST', path: '/security/reauth/passkey/options' },
+		{ method: 'POST', path: '/security/reauth/passkey/verify' },
+		{ method: 'POST', path: '/passkeys/registration/options' },
+		{ method: 'POST', path: '/passkeys/registration/verify' }
+	] as const;
+
+	for (const route of protectedAuthRoutes) {
+		const response = await requestApp(app, {
+			method: route.method,
+			path: route.path,
+			headers: { 'content-type': 'application/json' },
+			body: '{}'
+		});
+		assert.equal(response.status, 429, `${route.method} ${route.path}`);
+		assert.equal(response.json<{ error: { code: string } }>().error.code, 'RATE_LIMITED');
+	}
+
+	assert.equal(limitedRequestCount, protectedAuthRoutes.length);
 });
