@@ -1,15 +1,28 @@
-export type CacheEvent = 'hit' | 'miss' | 'coalesced' | 'expired' | 'evicted';
+export type CacheEvent = 'hit' | 'miss' | 'coalesced' | 'expired' | 'evicted' | 'saturated';
 
 type CacheEntry<Value> = {
 	value: Value;
 	expiresAt: number;
 };
 
+export class CacheLoadCapacityError extends Error {
+	constructor() {
+		super('Cache load capacity has been reached.');
+		this.name = 'CacheLoadCapacityError';
+	}
+}
+
+type CacheStats = {
+	entries: number;
+	pending: number;
+};
+
 type TtlCacheOptions = {
 	ttlMs: number;
 	maxEntries: number;
+	maxPending: number;
 	now?: () => number;
-	onEvent?: (event: CacheEvent, size: number) => void;
+	onEvent?: (event: CacheEvent, stats: CacheStats) => void;
 };
 
 function stableSerialize(value: unknown): string {
@@ -28,7 +41,7 @@ export function createTtlLruCache<Key, Value>(options: TtlCacheOptions) {
 	const now = options.now ?? Date.now;
 
 	function emit(event: CacheEvent) {
-		options.onEvent?.(event, entries.size);
+		options.onEvent?.(event, { entries: entries.size, pending: pending.size });
 	}
 
 	async function getOrLoad(key: Key, load: () => Promise<Value>): Promise<Value> {
@@ -49,6 +62,11 @@ export function createTtlLruCache<Key, Value>(options: TtlCacheOptions) {
 		if (pendingRequest) {
 			emit('coalesced');
 			return pendingRequest;
+		}
+
+		if (pending.size >= options.maxPending) {
+			emit('saturated');
+			throw new CacheLoadCapacityError();
 		}
 
 		emit('miss');

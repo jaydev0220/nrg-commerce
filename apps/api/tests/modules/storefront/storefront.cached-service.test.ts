@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { AppError } from '../../../src/errors/app-error.js';
 import { createCachedStorefrontCatalogService } from '../../../src/modules/storefront/storefront.cached-service.js';
 import type { StorefrontCatalogService } from '../../../src/modules/storefront/storefront.service.js';
 
@@ -45,7 +46,8 @@ test('cached storefront service caches every catalog operation by its input', as
 	const { service, getCalls } = createService();
 	const cached = createCachedStorefrontCatalogService(service, {
 		ttlMs: 1_000,
-		maxEntries: 20
+		maxEntries: 20,
+		maxPending: 10
 	});
 
 	await cached.listProducts({
@@ -91,11 +93,55 @@ test('cached storefront service does not retain failed requests', async () => {
 	});
 	const cached = createCachedStorefrontCatalogService(service, {
 		ttlMs: 1_000,
-		maxEntries: 20
+		maxEntries: 20,
+		maxPending: 10
 	});
 	const query = { includeSkus: false, includeImages: false };
 
 	await assert.rejects(() => cached.getProductBySlug('product', query));
 	await cached.getProductBySlug('product', query);
 	assert.equal(calls, 2);
+});
+
+test('cached storefront service returns a controlled overload error at load capacity', async () => {
+	let release: (() => void) | undefined;
+	const { service } = createService({
+		listProducts: async () =>
+			new Promise<{ data: []; total: number }>((resolve) => {
+				release = () => resolve({ data: [], total: 0 });
+			})
+	});
+	const cached = createCachedStorefrontCatalogService(service, {
+		ttlMs: 1_000,
+		maxEntries: 20,
+		maxPending: 1
+	});
+	const first = cached.listProducts({
+		page: 1,
+		limit: 20,
+		includeSkus: false,
+		includeImages: false,
+		sort: 'createdAt',
+		order: 'desc'
+	});
+
+	await assert.rejects(
+		() =>
+			cached.listSkus({
+				page: 1,
+				limit: 20,
+				includeImages: false,
+				sort: 'createdAt',
+				order: 'desc'
+			}),
+		(error: unknown) => {
+			assert.ok(error instanceof AppError);
+			assert.equal(error.statusCode, 503);
+			assert.equal(error.code, 'STOREFRONT_BUSY');
+			return true;
+		}
+	);
+	await Promise.resolve();
+	release?.();
+	await first;
 });

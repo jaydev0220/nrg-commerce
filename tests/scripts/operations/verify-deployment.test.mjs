@@ -30,6 +30,21 @@ function jsonResponse(value, init = {}) {
 	});
 }
 
+function authCsrfResponse(input, init = {}, trustedResponseInit = {}) {
+	const url = new URL(input);
+	if (url.pathname !== '/api/auth/csrf') return null;
+
+	const origin = new Headers(init.headers).get('origin');
+	if (origin === validEnvironment.VERIFY_CONTACT_ORIGIN) {
+		return jsonResponse(
+			{ error: { code: 'ORIGIN_NOT_ALLOWED', message: 'The request origin is not allowed.' } },
+			{ status: 403 }
+		);
+	}
+
+	return jsonResponse({ csrfToken: 'csrf-token' }, trustedResponseInit);
+}
+
 test('verification configuration requires exact confirmation of remote request targets', () => {
 	assert.throws(
 		() =>
@@ -38,6 +53,14 @@ test('verification configuration requires exact confirmation of remote request t
 				VERIFY_CONFIRMED_CDN_ORIGIN: 'https://cdn.example.com'
 			}),
 		/VERIFY_CONFIRMED_CDN_ORIGIN/u
+	);
+	assert.throws(
+		() =>
+			parseVerificationEnvironment({
+				...validEnvironment,
+				VERIFY_CONTACT_ORIGIN: validEnvironment.VERIFY_API_ORIGIN
+			}),
+		/must differ from the trusted VERIFY_API_ORIGIN/u
 	);
 });
 
@@ -87,12 +110,10 @@ test('post-deploy verification exercises every required flow once and logs out',
 
 		if (url.pathname === '/health/liveness') return jsonResponse({ status: 'ok' });
 		if (url.pathname === '/health/readiness') return jsonResponse({ status: 'ready' });
-		if (url.pathname === '/api/auth/csrf') {
-			return jsonResponse(
-				{ csrfToken: 'csrf-token' },
-				{ headers: { 'set-cookie': '__Host-csrf=csrf-cookie; Path=/; Secure; HttpOnly' } }
-			);
-		}
+		const csrfResponse = authCsrfResponse(input, init, {
+			headers: { 'set-cookie': '__Host-csrf=csrf-cookie; Path=/; Secure; HttpOnly' }
+		});
+		if (csrfResponse) return csrfResponse;
 		if (url.pathname === '/api/auth/login/password') {
 			assert.equal(headers.get('origin'), 'https://admin.staging.example.com');
 			assert.deepEqual(body, {
@@ -161,6 +182,7 @@ test('post-deploy verification exercises every required flow once and logs out',
 	assert.deepEqual(result, {
 		liveness: 'passed',
 		readiness: 'passed',
+		sensitiveOriginIsolation: 'passed',
 		login: 'passed',
 		storefrontList: 'passed',
 		storefrontDetail: 'passed',
@@ -176,13 +198,30 @@ test('post-deploy verification exercises every required flow once and logs out',
 	}
 });
 
-test('post-deploy verification rejects accounts that still require MFA setup', async () => {
+test('post-deploy verification rejects public-origin access to sensitive routes', async () => {
 	const config = parseVerificationEnvironment(validEnvironment);
 	const fetch = async (input) => {
 		const pathname = new URL(input).pathname;
 		if (pathname === '/health/liveness') return jsonResponse({ status: 'ok' });
 		if (pathname === '/health/readiness') return jsonResponse({ status: 'ready' });
-		if (pathname === '/api/auth/csrf') return jsonResponse({ csrfToken: 'csrf-token' });
+		if (pathname === '/api/auth/csrf') return jsonResponse({ csrfToken: 'exposed-token' });
+		throw new Error(`Unexpected request path: ${pathname}`);
+	};
+
+	await assert.rejects(
+		() => verifyDeployment(config, { fetch }),
+		/Sensitive origin isolation failed with HTTP 200/u
+	);
+});
+
+test('post-deploy verification rejects accounts that still require MFA setup', async () => {
+	const config = parseVerificationEnvironment(validEnvironment);
+	const fetch = async (input, init = {}) => {
+		const pathname = new URL(input).pathname;
+		if (pathname === '/health/liveness') return jsonResponse({ status: 'ok' });
+		if (pathname === '/health/readiness') return jsonResponse({ status: 'ready' });
+		const csrfResponse = authCsrfResponse(input, init);
+		if (csrfResponse) return csrfResponse;
 		if (pathname === '/api/auth/login/password') {
 			return jsonResponse(
 				{ status: 'mfa_setup_required', availableMethods: ['authenticator'] },
@@ -201,11 +240,12 @@ test('post-deploy verification rejects accounts that still require MFA setup', a
 test('post-deploy verification logs out when password authentication bypasses MFA', async () => {
 	const config = parseVerificationEnvironment(validEnvironment);
 	let logoutCalls = 0;
-	const fetch = async (input) => {
+	const fetch = async (input, init = {}) => {
 		const pathname = new URL(input).pathname;
 		if (pathname === '/health/liveness') return jsonResponse({ status: 'ok' });
 		if (pathname === '/health/readiness') return jsonResponse({ status: 'ready' });
-		if (pathname === '/api/auth/csrf') return jsonResponse({ csrfToken: 'csrf-token' });
+		const csrfResponse = authCsrfResponse(input, init);
+		if (csrfResponse) return csrfResponse;
 		if (pathname === '/api/auth/login/password') {
 			return jsonResponse(
 				{ status: 'authenticated' },
@@ -233,11 +273,12 @@ test('post-deploy verification logs out when password authentication bypasses MF
 test('post-deploy verification logs out when an authentication response is malformed', async () => {
 	const config = parseVerificationEnvironment(validEnvironment);
 	let logoutCalls = 0;
-	const fetch = async (input) => {
+	const fetch = async (input, init = {}) => {
 		const pathname = new URL(input).pathname;
 		if (pathname === '/health/liveness') return jsonResponse({ status: 'ok' });
 		if (pathname === '/health/readiness') return jsonResponse({ status: 'ready' });
-		if (pathname === '/api/auth/csrf') return jsonResponse({ csrfToken: 'csrf-token' });
+		const csrfResponse = authCsrfResponse(input, init);
+		if (csrfResponse) return csrfResponse;
 		if (pathname === '/api/auth/login/password') {
 			return jsonResponse(
 				{
@@ -271,11 +312,12 @@ test('post-deploy verification logs out when an authentication response is malfo
 test('post-deploy verification logs out after downstream failure without hiding that failure', async () => {
 	const config = parseVerificationEnvironment(validEnvironment);
 	let logoutCalls = 0;
-	const fetch = async (input) => {
+	const fetch = async (input, init = {}) => {
 		const pathname = new URL(input).pathname;
 		if (pathname === '/health/liveness') return jsonResponse({ status: 'ok' });
 		if (pathname === '/health/readiness') return jsonResponse({ status: 'ready' });
-		if (pathname === '/api/auth/csrf') return jsonResponse({ csrfToken: 'csrf-token' });
+		const csrfResponse = authCsrfResponse(input, init);
+		if (csrfResponse) return csrfResponse;
 		if (pathname === '/api/auth/login/password') {
 			return jsonResponse(
 				{

@@ -1,10 +1,16 @@
 import type { ApiLogger } from '../../logging/logger.js';
-import { createTtlLruCache, stableSerialize } from '../../cache/ttl-cache.js';
+import { AppError } from '../../errors/app-error.js';
+import {
+	CacheLoadCapacityError,
+	createTtlLruCache,
+	stableSerialize
+} from '../../cache/ttl-cache.js';
 import type { StorefrontCatalogService } from './storefront.service.js';
 
 type StorefrontCacheOptions = {
 	ttlMs: number;
 	maxEntries: number;
+	maxPending: number;
 	logger?: Pick<ApiLogger, 'debug'>;
 };
 
@@ -15,12 +21,24 @@ export function createCachedStorefrontCatalogService(
 	const cache = createTtlLruCache<string, unknown>({
 		ttlMs: options.ttlMs,
 		maxEntries: options.maxEntries,
-		onEvent: (event, size) =>
-			options.logger?.debug({ cache: 'storefront', event, size }, 'Storefront cache event.')
+		maxPending: options.maxPending,
+		onEvent: (event, stats) =>
+			options.logger?.debug({ cache: 'storefront', event, ...stats }, 'Storefront cache event.')
 	});
 
-	function cached<T>(operation: string, input: unknown, load: () => Promise<T>): Promise<T> {
-		return cache.getOrLoad(`${operation}:${stableSerialize(input)}`, load) as Promise<T>;
+	async function cached<T>(operation: string, input: unknown, load: () => Promise<T>): Promise<T> {
+		try {
+			return (await cache.getOrLoad(`${operation}:${stableSerialize(input)}`, load)) as T;
+		} catch (error) {
+			if (error instanceof CacheLoadCapacityError) {
+				throw new AppError(
+					503,
+					'STOREFRONT_BUSY',
+					'The storefront is temporarily busy. Please retry shortly.'
+				);
+			}
+			throw error;
+		}
 	}
 
 	return {

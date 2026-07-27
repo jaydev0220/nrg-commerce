@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createTtlLruCache, stableSerialize } from '../../src/cache/ttl-cache.js';
+import {
+	CacheLoadCapacityError,
+	createTtlLruCache,
+	stableSerialize
+} from '../../src/cache/ttl-cache.js';
 
 test('ttl cache reuses values until the ttl expires', async () => {
 	let now = 0;
@@ -9,6 +13,7 @@ test('ttl cache reuses values until the ttl expires', async () => {
 	const cache = createTtlLruCache<string, string>({
 		ttlMs: 1_000,
 		maxEntries: 5,
+		maxPending: 5,
 		now: () => now
 	});
 
@@ -24,7 +29,7 @@ test('ttl cache reuses values until the ttl expires', async () => {
 
 test('ttl cache evicts the least recently used entry', async () => {
 	let loads = 0;
-	const cache = createTtlLruCache<string, number>({ ttlMs: 1_000, maxEntries: 2 });
+	const cache = createTtlLruCache<string, number>({ ttlMs: 1_000, maxEntries: 2, maxPending: 2 });
 	const load = async (key: string) => ++loads + key.length;
 
 	await cache.getOrLoad('a', () => load('a'));
@@ -40,7 +45,7 @@ test('ttl cache evicts the least recently used entry', async () => {
 test('ttl cache coalesces concurrent loads and does not cache failures', async () => {
 	let loads = 0;
 	let release: (() => void) | undefined;
-	const cache = createTtlLruCache<string, string>({ ttlMs: 1_000, maxEntries: 2 });
+	const cache = createTtlLruCache<string, string>({ ttlMs: 1_000, maxEntries: 2, maxPending: 2 });
 
 	const first = cache.getOrLoad(
 		'key',
@@ -72,6 +77,43 @@ test('ttl cache coalesces concurrent loads and does not cache failures', async (
 		})
 	);
 	assert.equal(loads, 3);
+});
+
+test('ttl cache bounds distinct concurrent loads while preserving request coalescing', async () => {
+	let release: (() => void) | undefined;
+	let loads = 0;
+	const events: Array<{ event: string; entries: number; pending: number }> = [];
+	const cache = createTtlLruCache<string, string>({
+		ttlMs: 1_000,
+		maxEntries: 2,
+		maxPending: 1,
+		onEvent: (event, stats) => events.push({ event, ...stats })
+	});
+	const first = cache.getOrLoad(
+		'first',
+		() =>
+			new Promise<string>((resolve) => {
+				loads += 1;
+				release = () => resolve('first-value');
+			})
+	);
+	const coalesced = cache.getOrLoad('first', async () => {
+		loads += 1;
+		return 'unexpected';
+	});
+
+	await assert.rejects(
+		() => cache.getOrLoad('second', async () => 'second-value'),
+		CacheLoadCapacityError
+	);
+	assert.deepEqual(
+		events.find(({ event }) => event === 'saturated'),
+		{ event: 'saturated', entries: 0, pending: 1 }
+	);
+	release?.();
+	assert.deepEqual(await Promise.all([first, coalesced]), ['first-value', 'first-value']);
+	assert.equal(loads, 1);
+	assert.equal(await cache.getOrLoad('second', async () => 'second-value'), 'second-value');
 });
 
 test('stable serialization ignores object key order', () => {

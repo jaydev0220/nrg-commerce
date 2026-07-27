@@ -15,10 +15,11 @@ export function createHealthRouter(dependencies: HealthDependencies): Router {
 	const readinessCache = createTtlLruCache<string, boolean>({
 		ttlMs: 5_000,
 		maxEntries: 1,
+		maxPending: 1,
 		now: dependencies.now,
-		onEvent: (event, size) =>
+		onEvent: (event, stats) =>
 			dependencies.logger?.debug(
-				{ cache: 'health-readiness', event, size },
+				{ cache: 'health-readiness', event, ...stats },
 				'Health readiness cache event.'
 			)
 	});

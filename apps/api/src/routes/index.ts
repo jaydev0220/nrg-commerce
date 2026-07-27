@@ -63,7 +63,7 @@ export function initializeRoutes(app: Application, dependencies: RouteDependenci
 	};
 	const authCookies = createAuthCookieManager(cookieOptions);
 	const csrfOptions = {
-		allowedOrigins: dependencies.config.corsOrigins,
+		allowedOrigins: [dependencies.config.webauthnOrigin],
 		cookieSecure: dependencies.config.cookieSecure,
 		cookieSameSite: dependencies.config.cookieSameSite,
 		cookieMaxAgeSeconds: dependencies.config.refreshTokenTtlSeconds

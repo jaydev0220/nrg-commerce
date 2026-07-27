@@ -84,6 +84,9 @@ export function parseVerificationEnvironment(environment) {
 	if (config.totpCode && !/^\d{6,8}$/u.test(config.totpCode)) {
 		errors.push('VERIFY_TOTP_CODE must contain six to eight digits.');
 	}
+	if (config.apiOrigin && config.contactOrigin && config.apiOrigin === config.contactOrigin) {
+		errors.push('VERIFY_CONTACT_ORIGIN must differ from the trusted VERIFY_API_ORIGIN.');
+	}
 	assertNoConfigurationErrors(errors, 'Invalid post-deploy verification environment');
 	return config;
 }
@@ -142,6 +145,7 @@ export async function verifyDeployment(config, dependencies = {}) {
 	const result = {
 		liveness: 'pending',
 		readiness: 'pending',
+		sensitiveOriginIsolation: 'pending',
 		login: 'pending',
 		storefrontList: 'pending',
 		storefrontDetail: 'pending',
@@ -183,6 +187,30 @@ export async function verifyDeployment(config, dependencies = {}) {
 	result.liveness = 'passed';
 	await health('/health/readiness', 'ready', 'Readiness');
 	result.readiness = 'passed';
+
+	const isolatedOriginResponse = await fetchWithTimeout(
+		fetchImplementation,
+		`${config.apiBaseUrl}/api/auth/csrf`,
+		{
+			headers: {
+				accept: 'application/json',
+				origin: config.contactOrigin
+			}
+		},
+		config.requestTimeoutMs
+	);
+	const isolatedOriginPayload = await readExpectedJson(
+		isolatedOriginResponse,
+		'Sensitive origin isolation',
+		[403]
+	);
+	if (
+		isolatedOriginPayload.error?.code !== 'ORIGIN_NOT_ALLOWED' ||
+		isolatedOriginResponse.headers.has('access-control-allow-origin')
+	) {
+		throw new Error('Sensitive origin isolation did not reject the public form origin.');
+	}
+	result.sensitiveOriginIsolation = 'passed';
 
 	const csrfResponse = await apiRequest('/api/auth/csrf');
 	const csrfPayload = await readExpectedJson(csrfResponse, 'CSRF bootstrap', [200]);

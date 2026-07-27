@@ -54,6 +54,17 @@ type AppDependencies = {
 	registerCleanup?: (cleanup: () => void) => void;
 };
 
+const STOREFRONT_MAX_PENDING_LOADS = 10;
+
+function isSensitiveBrowserPath(path: string): boolean {
+	return (
+		path === '/api/auth' ||
+		path.startsWith('/api/auth/') ||
+		path === '/api/management' ||
+		path.startsWith('/api/management/')
+	);
+}
+
 export function createApp(dependencies: AppDependencies = {}) {
 	const config = dependencies.config ?? readAppConfig();
 	const database = getDatabaseClient({
@@ -160,6 +171,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 		{
 			ttlMs: config.storefrontCacheTtlSeconds * 1000,
 			maxEntries: config.storefrontCacheMaxEntries,
+			maxPending: Math.min(config.databaseMaxConnections, STOREFRONT_MAX_PENDING_LOADS),
 			logger
 		}
 	);
@@ -210,17 +222,25 @@ export function createApp(dependencies: AppDependencies = {}) {
 	app.use(helmet());
 
 	app.use(
-		cors({
-			credentials: true,
-			allowedHeaders: ['content-type', 'x-csrf-token', 'idempotency-key'],
-			origin(origin, callback) {
-				if (!origin || config.corsOrigins.includes(origin)) {
-					callback(null, true);
-					return;
-				}
+		cors((request, optionsCallback) => {
+			const allowedOrigins = isSensitiveBrowserPath(request.path)
+				? [config.webauthnOrigin]
+				: config.corsOrigins;
 
-				callback(new AppError(403, 'ORIGIN_NOT_ALLOWED', 'The request origin is not allowed.'));
-			}
+			optionsCallback(null, {
+				credentials: true,
+				allowedHeaders: ['content-type', 'x-csrf-token', 'idempotency-key'],
+				origin(origin, originCallback) {
+					if (!origin || allowedOrigins.includes(origin)) {
+						originCallback(null, true);
+						return;
+					}
+
+					originCallback(
+						new AppError(403, 'ORIGIN_NOT_ALLOWED', 'The request origin is not allowed.')
+					);
+				}
+			});
 		})
 	);
 	app.use(createGlobalRateLimiter(config));

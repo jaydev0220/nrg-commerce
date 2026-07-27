@@ -18,7 +18,7 @@ function createTestConfig() {
 		databaseUrl: 'postgresql://postgres:postgres@localhost:5432/nrg_commerce',
 		databaseMaxConnections: 10,
 		trustProxyHops: false as const,
-		corsOrigins: ['http://localhost:4173'],
+		corsOrigins: ['http://localhost:4173', 'http://localhost:5173'],
 		bodyLimit: '64kb',
 		cookieSecure: false,
 		cookieSameSite: 'lax' as const,
@@ -153,6 +153,40 @@ test('createApp rejects disallowed CORS origins with a controlled client error',
 	assert.equal(payload.error.code, 'ORIGIN_NOT_ALLOWED');
 	assert.equal(response.headers['access-control-allow-origin'], undefined);
 	assert.equal(response.headers['x-content-type-options'], 'nosniff');
+});
+
+test('createApp isolates sensitive browser routes from public storefront origins', async () => {
+	const app = createApp({
+		config: createTestConfig(),
+		health: {
+			isReady: async () => true
+		}
+	});
+
+	const authResponse = await requestApp(app, {
+		path: '/api/auth/csrf',
+		headers: { origin: 'http://localhost:5173' }
+	});
+	const adminAuthResponse = await requestApp(app, {
+		path: '/api/auth/state',
+		headers: { origin: 'http://localhost:4173' }
+	});
+	const storefrontPreflight = await requestApp(app, {
+		method: 'OPTIONS',
+		path: '/api/storefront/products',
+		headers: {
+			origin: 'http://localhost:5173',
+			'access-control-request-method': 'GET'
+		}
+	});
+
+	assert.equal(authResponse.status, 403);
+	assert.equal(authResponse.json<{ error: { code: string } }>().error.code, 'ORIGIN_NOT_ALLOWED');
+	assert.equal(authResponse.headers['access-control-allow-origin'], undefined);
+	assert.equal(adminAuthResponse.status, 200);
+	assert.equal(adminAuthResponse.headers['access-control-allow-origin'], 'http://localhost:4173');
+	assert.equal(storefrontPreflight.status, 204);
+	assert.equal(storefrontPreflight.headers['access-control-allow-origin'], 'http://localhost:5173');
 });
 
 test('management routes require a verified MFA claim', async () => {
