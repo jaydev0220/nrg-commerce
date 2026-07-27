@@ -26,8 +26,10 @@ const expectedFiles = [
 const robotDirectives = 'noindex, nofollow, noarchive, nosnippet, noimageindex';
 const securityHeaders = [
 	"  Content-Security-Policy: base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+	'  Cross-Origin-Opener-Policy: same-origin',
 	'  Permissions-Policy: camera=()',
 	'  Referrer-Policy: no-referrer',
+	'  Strict-Transport-Security: max-age=31536000; includeSubDomains',
 	'  X-Content-Type-Options: nosniff',
 	'  X-Frame-Options: DENY'
 ].join('\n');
@@ -61,6 +63,38 @@ test('accepts a complete admin SPA build', async () => {
 
 	assert.equal(result.files.length, expectedFiles.length);
 	assert.equal(result.scriptCount, 1);
+});
+
+test('rejects a build without transport security headers', async () => {
+	const directory = await createBuild();
+	await writeFile(
+		join(directory, '_headers'),
+		`/*\n  X-Robots-Tag: ${robotDirectives}\n${securityHeaders.replace(
+			'  Strict-Transport-Security: max-age=31536000; includeSubDomains\n',
+			''
+		)}\n`
+	);
+
+	await assert.rejects(
+		verifyAdminBuild(directory, 'https://api.example.test'),
+		/Strict-Transport-Security/u
+	);
+});
+
+test('rejects a build without cross-origin opener isolation', async () => {
+	const directory = await createBuild();
+	await writeFile(
+		join(directory, '_headers'),
+		`/*\n  X-Robots-Tag: ${robotDirectives}\n${securityHeaders.replace(
+			'  Cross-Origin-Opener-Policy: same-origin\n',
+			''
+		)}\n`
+	);
+
+	await assert.rejects(
+		verifyAdminBuild(directory, 'https://api.example.test'),
+		/Cross-Origin-Opener-Policy/u
+	);
 });
 
 test('rejects a build without a fixed route shell', async () => {

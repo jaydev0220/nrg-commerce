@@ -69,15 +69,26 @@ const routes = new Map<string, { kind: RequestKind; action: string; schema: ZodT
 	]
 );
 
+function securityHeaders(requestId: string, additionalHeaders?: HeadersInit): Headers {
+	const headers = new Headers(additionalHeaders);
+	headers.set('Cache-Control', 'no-store');
+	headers.set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+	headers.set('Referrer-Policy', 'no-referrer');
+	headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+	headers.set('X-Content-Type-Options', 'nosniff');
+	headers.set('X-Frame-Options', 'DENY');
+	headers.set('X-Request-Id', requestId);
+	return headers;
+}
+
 function corsHeaders(origin: string, requestId: string): Headers {
-	return new Headers({
-		'Access-Control-Allow-Origin': origin,
-		'Access-Control-Allow-Methods': 'POST, OPTIONS',
-		'Access-Control-Allow-Headers': 'Content-Type',
-		'Access-Control-Max-Age': '86400',
-		Vary: 'Origin',
-		'X-Request-Id': requestId
-	});
+	const headers = securityHeaders(requestId);
+	headers.set('Access-Control-Allow-Origin', origin);
+	headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+	headers.set('Access-Control-Allow-Headers', 'Content-Type');
+	headers.set('Access-Control-Max-Age', '86400');
+	headers.set('Vary', 'Origin');
+	return headers;
 }
 
 function jsonResponse(
@@ -90,7 +101,6 @@ function jsonResponse(
 	const headers = corsHeaders(origin, requestId);
 	for (const [name, value] of new Headers(additionalHeaders)) headers.set(name, value);
 	headers.set('Content-Type', 'application/json; charset=utf-8');
-	headers.set('Cache-Control', 'no-store');
 	return new Response(JSON.stringify(payload), { status, headers });
 }
 
@@ -269,10 +279,8 @@ export async function handleRequest(
 			if (origin && config.allowedOrigins.has(origin)) {
 				return jsonResponse(payload, status, origin, requestId, error.headers);
 			}
-			const headers = new Headers(error.headers);
+			const headers = securityHeaders(requestId, error.headers);
 			headers.set('Content-Type', 'application/json; charset=utf-8');
-			headers.set('Cache-Control', 'no-store');
-			headers.set('X-Request-Id', requestId);
 			return new Response(JSON.stringify(payload), {
 				status,
 				headers
@@ -286,14 +294,9 @@ export async function handleRequest(
 		if (origin && config.allowedOrigins.has(origin)) {
 			return jsonResponse(payload, status, origin, requestId);
 		}
-		return new Response(JSON.stringify(payload), {
-			status,
-			headers: {
-				'Content-Type': 'application/json; charset=utf-8',
-				'Cache-Control': 'no-store',
-				'X-Request-Id': requestId
-			}
-		});
+		const headers = securityHeaders(requestId);
+		headers.set('Content-Type', 'application/json; charset=utf-8');
+		return new Response(JSON.stringify(payload), { status, headers });
 	} finally {
 		dependencies.log({
 			requestId,

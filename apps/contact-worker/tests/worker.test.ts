@@ -98,6 +98,20 @@ async function errorPayload(response: Response): Promise<ErrorPayload> {
 	return (await response.json()) as ErrorPayload;
 }
 
+function expectSecurityHeaders(response: Response): void {
+	expect(response.headers.get('Cache-Control')).toBe('no-store');
+	expect(response.headers.get('Content-Security-Policy')).toBe(
+		"default-src 'none'; frame-ancestors 'none'"
+	);
+	expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
+	expect(response.headers.get('Strict-Transport-Security')).toBe(
+		'max-age=31536000; includeSubDomains'
+	);
+	expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+	expect(response.headers.get('X-Frame-Options')).toBe('DENY');
+	expect(response.headers.get('X-Request-Id')).toBe('request-123');
+}
+
 function runtimeEnv(
 	overrides: Record<string, unknown> = {}
 ): Parameters<typeof contactWorker.fetch>[1] {
@@ -152,6 +166,7 @@ describe('contact Worker request handler', () => {
 		expect(response.headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
 		expect(response.headers.get('Access-Control-Allow-Methods')).toBe('POST, OPTIONS');
 		expect(response.headers.get('Vary')).toBe('Origin');
+		expectSecurityHeaders(response);
 		expect(harness.deliveries).toHaveLength(0);
 	});
 
@@ -168,6 +183,7 @@ describe('contact Worker request handler', () => {
 
 		expect(response.status).toBe(403);
 		expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+		expectSecurityHeaders(response);
 		expect((await errorPayload(response)).error.code).toBe('ORIGIN_NOT_ALLOWED');
 	});
 

@@ -22,8 +22,13 @@ const expectedFiles = [
 const robotDirectives = ['noindex', 'nofollow', 'noarchive', 'nosnippet', 'noimageindex'];
 const securityHeaderPatterns = [
 	[/^\s*Content-Security-Policy:.*frame-ancestors\s+'none'/im, 'frame-ancestors CSP'],
+	[/^\s*Cross-Origin-Opener-Policy:\s*same-origin\s*$/im, 'Cross-Origin-Opener-Policy'],
 	[/^\s*Permissions-Policy:/im, 'Permissions-Policy'],
 	[/^\s*Referrer-Policy:\s*no-referrer\s*$/im, 'Referrer-Policy'],
+	[
+		/^\s*Strict-Transport-Security:\s*max-age=31536000;\s*includeSubDomains\s*$/im,
+		'Strict-Transport-Security'
+	],
 	[/^\s*X-Content-Type-Options:\s*nosniff\s*$/im, 'X-Content-Type-Options'],
 	[/^\s*X-Frame-Options:\s*DENY\s*$/im, 'X-Frame-Options']
 ];

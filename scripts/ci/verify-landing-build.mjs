@@ -18,6 +18,18 @@ const limits = {
 	inlineScriptsPerPage: 2
 };
 const serverOnlyAssets = ['_worker.js', '_routes.json', '_headers', '_redirects'];
+const securityHeaderPatterns = [
+	[/^\s*Content-Security-Policy:.*frame-ancestors\s+'none'/im, 'frame-ancestors CSP'],
+	[/^\s*Cross-Origin-Opener-Policy:\s*same-origin\s*$/im, 'Cross-Origin-Opener-Policy'],
+	[/^\s*Permissions-Policy:/im, 'Permissions-Policy'],
+	[/^\s*Referrer-Policy:\s*strict-origin-when-cross-origin\s*$/im, 'Referrer-Policy'],
+	[
+		/^\s*Strict-Transport-Security:\s*max-age=31536000;\s*includeSubDomains\s*$/im,
+		'Strict-Transport-Security'
+	],
+	[/^\s*X-Content-Type-Options:\s*nosniff\s*$/im, 'X-Content-Type-Options'],
+	[/^\s*X-Frame-Options:\s*DENY\s*$/im, 'X-Frame-Options']
+];
 
 async function assertServerAssetsExcluded(root) {
 	const ignoredAssets = new Set(
@@ -27,6 +39,15 @@ async function assertServerAssetsExcluded(root) {
 	for (const asset of serverOnlyAssets) {
 		if (!ignoredAssets.has(asset)) {
 			throw new Error(`Landing build must exclude ${asset} from static asset uploads.`);
+		}
+	}
+}
+
+async function assertSecurityHeaders(root) {
+	const headers = await readFile(resolve(root, '_headers'), 'utf8');
+	for (const [pattern, label] of securityHeaderPatterns) {
+		if (!pattern.test(headers)) {
+			throw new Error(`Landing Cloudflare headers do not include ${label}.`);
 		}
 	}
 }
@@ -91,6 +112,7 @@ function assertResourcePolicy(csp, page, expectedContactWorkerUrl) {
 export async function verifyLandingBuild(buildDirectory, expectedContactWorkerUrl) {
 	const root = resolve(buildDirectory);
 	await assertServerAssetsExcluded(root);
+	await assertSecurityHeaders(root);
 	const javascriptFiles = await listJavascriptFiles(resolve(root, '_app', 'immutable'));
 	const totalJavascriptBytes = (
 		await Promise.all(javascriptFiles.map(async (file) => (await stat(file)).size))

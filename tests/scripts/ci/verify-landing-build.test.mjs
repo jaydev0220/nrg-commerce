@@ -8,6 +8,15 @@ import { verifyLandingBuild } from '../../../scripts/ci/verify-landing-build.mjs
 
 const expectedContactWorkerUrl = 'https://contact.example.test';
 const cspMeta = `<meta http-equiv="content-security-policy" content="default-src 'self'; connect-src 'self' ${expectedContactWorkerUrl} https://challenges.cloudflare.com; object-src 'none'; script-src 'self' https://challenges.cloudflare.com 'sha256-example'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'">`;
+const securityHeaders = `/*
+  Content-Security-Policy: base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Cross-Origin-Opener-Policy: same-origin
+  Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=(), usb=()
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+`;
 
 async function createBuild(options = {}) {
 	const root = await mkdtemp(join(tmpdir(), 'landing-build-'));
@@ -17,6 +26,7 @@ async function createBuild(options = {}) {
 		join(root, '.assetsignore'),
 		options.assetsIgnore ?? '\n_worker.js\n_routes.json\n_headers\n_redirects\n'
 	);
+	await writeFile(join(root, '_headers'), options.headers ?? securityHeaders);
 	const scriptNames = options.scriptNames ?? ['app.js'];
 	for (const scriptName of scriptNames) {
 		await writeFile(join(assets, scriptName), options.scriptContent ?? 'export {};');
@@ -50,6 +60,20 @@ test('accepts rendered static pages within the JavaScript budgets', async () => 
 
 	assert.equal(result.pageCount, 6);
 	assert.equal(result.javascriptFileCount, 1);
+});
+
+test('rejects a build without transport security headers', async () => {
+	const root = await createBuild({
+		headers: securityHeaders.replace(
+			'  Strict-Transport-Security: max-age=31536000; includeSubDomains\n',
+			''
+		)
+	});
+
+	await assert.rejects(
+		() => verifyLandingBuild(root, expectedContactWorkerUrl),
+		/Strict-Transport-Security/u
+	);
 });
 
 test('rejects a build that can upload the generated Worker entry point as an asset', async () => {
