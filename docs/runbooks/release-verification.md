@@ -57,7 +57,7 @@ Every row must report `PASS`. Delete the session and token files after recording
 
 ## Post-deploy verification
 
-This verifier sends exactly one password login, one authenticator verification, one storefront list request, one product-detail request, one ranged image request, one inquiry, and one logout. It also checks liveness and database readiness. The staff account must already have authenticator MFA configured.
+This verifier sends exactly one public-origin isolation probe, one password login, one authenticator verification, one storefront list request, one product-detail request, one ranged image request, one inquiry, and one logout. It also checks liveness and database readiness. The staff account must already have authenticator MFA configured.
 
 Generate a fresh Turnstile token for the `inquiry` action immediately before running the command. Production tokens are single-use; the verifier never retries the inquiry.
 
@@ -85,7 +85,7 @@ Run:
 node --env-file=.release-secrets/verify.env scripts/operations/verify-deployment.mjs
 ```
 
-All eight checks must report `PASS`. Confirm the inquiry reached the delivery sink, then securely delete `verify.env`. If a check fails after authentication, the verifier still attempts logout and preserves the original failure message.
+All nine checks must report `PASS`. Confirm the inquiry reached the delivery sink, then securely delete `verify.env`. If a check fails after authentication, the verifier still attempts logout and preserves the original failure message.
 
 ## Release evidence
 

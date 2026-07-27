@@ -76,7 +76,7 @@ Use least-privilege, environment-specific tokens. Contact sender and recipient v
 
 Load secrets through the container platform secret manager. Do not bake them into the image or pass them as build arguments. Start from [`apps/api/.env.example`](../../apps/api/.env.example) and ensure:
 
-- `NODE_ENV=production`, secure cookies, and exact HTTPS CORS/WebAuthn origins;
+- `NODE_ENV=production`, secure cookies, exact HTTPS CORS origins for browser clients, and the admin origin in `WEBAUTHN_ORIGIN`; auth and management CORS/CSRF trust only that admin origin;
 - distinct random authentication and encryption secrets of at least 32 characters;
 - a pooled application `DATABASE_URL` with `sslmode=verify-full`; reserve a similarly secured
   `DIRECT_URL` for migrations and backup tooling;
