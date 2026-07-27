@@ -6,6 +6,7 @@ import {
 	booleanLikeSchema,
 	dateSchema,
 	jsonValueSchema,
+	resourceSlugSchema,
 	serializedDateSchema
 } from '../src/common.js';
 
@@ -25,6 +26,20 @@ test('normalizes boolean query values and validates recursive JSON', () => {
 	assert.deepEqual(jsonValueSchema.parse({ list: [1, true, null, 'value'] }), {
 		list: [1, true, null, 'value']
 	});
+});
+
+test('resourceSlugSchema only accepts canonical internal route segments', () => {
+	assert.equal(resourceSlugSchema.parse('glass-beaker-500'), 'glass-beaker-500');
+	for (const unsafeSlug of [
+		'//example.com',
+		'../admin',
+		'glass/beaker',
+		'glass beaker',
+		'Glass-Beaker',
+		'glass--beaker'
+	]) {
+		assert.equal(resourceSlugSchema.safeParse(unsafeSlug).success, false, unsafeSlug);
+	}
 });
 
 test('attributeMapSchema rejects deeply nested values without overflowing the call stack', () => {
