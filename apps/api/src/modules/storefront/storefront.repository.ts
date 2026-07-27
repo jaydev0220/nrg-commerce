@@ -1,4 +1,4 @@
-import type { DatabaseClient, Prisma } from '@packages/database';
+import { Prisma, type DatabaseClient } from '@packages/database';
 
 import type {
 	CatalogCategoryRecord,
@@ -30,10 +30,11 @@ type ListSkusInput = {
 	categorySlug?: string;
 	minPrice?: number;
 	maxPrice?: number;
+	attributes?: Record<string, CatalogJsonValue>;
 	sort: SkuSortField | StorefrontSkuSortField;
 	order: 'asc' | 'desc';
-	page?: number;
-	limit?: number;
+	page: number;
+	limit: number;
 };
 
 type ListProductsInput = {
@@ -71,7 +72,6 @@ type ListProductsOptions = {
 };
 
 type ListSkusOptions = {
-	paginate?: boolean;
 	includeImages: boolean;
 	publishedOnly?: boolean;
 };
@@ -311,6 +311,42 @@ function resolveSkuOrderBy(sort: SkuSortField | StorefrontSkuSortField, order: '
 	}
 }
 
+function isCatalogJsonObject(value: CatalogJsonValue): value is Record<string, CatalogJsonValue> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function buildAttributeWhereFilters(
+	attributes: Record<string, CatalogJsonValue> | undefined
+): Prisma.ProductSkuWhereInput[] {
+	if (!attributes) return [];
+
+	const filters: Prisma.ProductSkuWhereInput[] = [];
+	const stack = Object.entries(attributes)
+		.reverse()
+		.map(([key, value]) => ({ path: [key], value }));
+
+	while (stack.length > 0) {
+		const entry = stack.pop();
+		if (!entry) break;
+
+		if (isCatalogJsonObject(entry.value)) {
+			for (const [key, value] of Object.entries(entry.value).reverse()) {
+				stack.push({ path: [...entry.path, key], value });
+			}
+			continue;
+		}
+
+		filters.push({
+			attributes: {
+				path: entry.path,
+				equals: entry.value === null ? Prisma.JsonNull : entry.value
+			}
+		});
+	}
+
+	return filters;
+}
+
 export function createPrismaStorefrontCatalogRepository(database: DatabaseClient) {
 	const countAssignedSkus = async (categoryId: string, publishedOnly = false): Promise<number> =>
 		database.product.count({
@@ -486,22 +522,26 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 			} satisfies Prisma.ProductInclude;
 
 			if (input.sort === 'minPrice') {
+				const activeSkuWhere = {
+					...buildActiveSkuFilter(),
+					product: {
+						is: productWhere
+					}
+				};
 				const groupedSkus = await database.productSku.groupBy({
 					by: ['productId'],
-					where: {
-						...buildActiveSkuFilter(),
-						product: {
-							is: productWhere
-						}
-					},
+					where: activeSkuWhere,
 					_min: {
 						price: true
 					},
-					orderBy: {
-						_min: {
-							price: input.order
-						}
-					},
+					orderBy: [
+						{
+							_min: {
+								price: input.order
+							}
+						},
+						{ productId: 'asc' }
+					],
 					...(paginate && input.page && input.limit
 						? {
 								skip: (input.page - 1) * input.limit,
@@ -525,19 +565,7 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 						(productOrder.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
 						(productOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER)
 				);
-				const total = paginate
-					? (
-							await database.productSku.groupBy({
-								by: ['productId'],
-								where: {
-									...buildActiveSkuFilter(),
-									product: {
-										is: productWhere
-									}
-								}
-							})
-						).length
-					: products.length;
+				const total = paginate ? await database.product.count({ where }) : products.length;
 
 				return {
 					data: products.map(mapProductRecord),
@@ -815,17 +843,24 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 			categoryIds: string[],
 			publishedOnly = false
 		): Promise<Record<string, number>> {
-			const counts = await Promise.all(
-				categoryIds.map(async (categoryId) => ({
-					categoryId,
-					total: await countAssignedSkus(categoryId, publishedOnly)
-				}))
-			);
+			if (categoryIds.length === 0) return {};
 
-			return counts.reduce<Record<string, number>>((accumulator, entry) => {
-				accumulator[entry.categoryId] = entry.total;
-				return accumulator;
-			}, {});
+			const groupedProducts = await database.product.groupBy({
+				by: ['categoryId'],
+				where: {
+					categoryId: { in: categoryIds },
+					deletedAt: null,
+					...(publishedOnly ? { published: true } : {}),
+					skus: { some: buildActiveSkuFilter() }
+				},
+				_count: { _all: true }
+			});
+			const counts = Object.fromEntries(categoryIds.map((categoryId) => [categoryId, 0]));
+			for (const group of groupedProducts) {
+				if (group.categoryId) counts[group.categoryId] = group._count._all;
+			}
+
+			return counts;
 		},
 
 		async hasChildCategories(categoryId: string): Promise<boolean> {
@@ -893,10 +928,16 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 							]
 						}
 					: {}),
-				...(input.minPrice !== undefined ? { price: { gte: input.minPrice } } : {}),
-				...(input.maxPrice !== undefined ? { price: { lte: input.maxPrice } } : {})
+				...(input.minPrice !== undefined || input.maxPrice !== undefined
+					? {
+							price: {
+								...(input.minPrice !== undefined ? { gte: input.minPrice } : {}),
+								...(input.maxPrice !== undefined ? { lte: input.maxPrice } : {})
+							}
+						}
+					: {}),
+				AND: buildAttributeWhereFilters(input.attributes)
 			};
-			const paginate = options.paginate ?? true;
 			const skus = await database.productSku.findMany({
 				where,
 				orderBy: resolveSkuOrderBy(input.sort, input.order),
@@ -928,14 +969,10 @@ export function createPrismaStorefrontCatalogRepository(database: DatabaseClient
 							}
 						: {})
 				},
-				...(paginate && input.page && input.limit
-					? {
-							skip: (input.page - 1) * input.limit,
-							take: input.limit
-						}
-					: {})
+				skip: (input.page - 1) * input.limit,
+				take: input.limit
 			});
-			const total = paginate ? await database.productSku.count({ where }) : skus.length;
+			const total = await database.productSku.count({ where });
 
 			return {
 				data: skus.map(mapSkuRecord),

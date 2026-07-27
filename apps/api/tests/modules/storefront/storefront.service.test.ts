@@ -93,6 +93,45 @@ test('listSkus only returns published catalog items in storefront flows', async 
 	assert.equal(result.data[0]?.skuCode, 'SKU-001');
 });
 
+test('listSkus forwards attribute filters for database pagination', async () => {
+	let receivedInput: Record<string, unknown> | undefined;
+	let receivedOptions: Record<string, unknown> | undefined;
+	const storefrontService = createStorefrontCatalogService({
+		repository: {
+			listCategories: async () => ({ data: [], total: 0 }),
+			listProducts: async () => ({ data: [], total: 0 }),
+			listSkus: async (input, options) => {
+				receivedInput = { ...input };
+				receivedOptions = { ...options };
+				return { data: [], total: 0 };
+			},
+			findSkuByCode: async () => null,
+			findProductById: async () => null,
+			findProductBySlug: async () => null,
+			findCategoryBySlug: async () => null,
+			countProductsForCategoryIds: async () => ({}),
+			listChildCategories: async () => []
+		}
+	});
+
+	await storefrontService.listSkus({
+		page: 2,
+		limit: 20,
+		attributes: { material: 'glass', dimensions: { height: 10 } },
+		includeImages: false,
+		order: 'asc',
+		sort: 'name'
+	});
+
+	assert.deepEqual(receivedInput?.['attributes'], {
+		material: 'glass',
+		dimensions: { height: 10 }
+	});
+	assert.equal(receivedInput?.['page'], 2);
+	assert.equal(receivedInput?.['limit'], 20);
+	assert.deepEqual(receivedOptions, { includeImages: false, publishedOnly: true });
+});
+
 test('listProducts only returns published product profiles in storefront flows', async () => {
 	const storefrontService = createStorefrontCatalogService({
 		repository: {
@@ -240,6 +279,40 @@ test('listProducts expands a category filter to all descendant category ids', as
 	assert.deepEqual(receivedCategoryIds, ['root', 'child', 'leaf']);
 });
 
+test('listProducts fails closed when the category hierarchy contains a cycle', async () => {
+	const storefrontService = createStorefrontCatalogService({
+		repository: {
+			listCategories: async () => ({
+				data: [createCategory('first', 'second'), createCategory('second', 'first')],
+				total: 2
+			}),
+			listProducts: async () => {
+				throw new Error('listProducts should not run for an invalid hierarchy');
+			},
+			listSkus: async () => ({ data: [], total: 0 }),
+			findProductById: async () => null,
+			findProductBySlug: async () => null,
+			findSkuByCode: async () => null,
+			findCategoryBySlug: async () => null,
+			countProductsForCategoryIds: async () => ({}),
+			listChildCategories: async () => []
+		}
+	});
+
+	await assert.rejects(
+		storefrontService.listProducts({
+			page: 1,
+			limit: 18,
+			categorySlug: 'first',
+			includeSkus: false,
+			includeImages: false,
+			sort: 'createdAt',
+			order: 'desc'
+		}),
+		(error: { code?: string }) => error.code === 'CATEGORY_HIERARCHY_INVALID'
+	);
+});
+
 test('listProducts rejects unknown category filters', async () => {
 	const storefrontService = createStorefrontCatalogService({
 		repository: {
@@ -302,6 +375,30 @@ test('listCategories aggregates visible product counts through category descenda
 
 	assert.equal(root?.productCount, 6);
 	assert.equal(root?.children[0]?.productCount, 5);
+});
+
+test('listCategories fails closed instead of recursively aggregating a category cycle', async () => {
+	const storefrontService = createStorefrontCatalogService({
+		repository: {
+			listCategories: async () => ({
+				data: [createCategory('first', 'second'), createCategory('second', 'first')],
+				total: 2
+			}),
+			listProducts: async () => ({ data: [], total: 0 }),
+			listSkus: async () => ({ data: [], total: 0 }),
+			findProductById: async () => null,
+			findProductBySlug: async () => null,
+			findSkuByCode: async () => null,
+			findCategoryBySlug: async () => null,
+			countProductsForCategoryIds: async () => ({ first: 1, second: 1 }),
+			listChildCategories: async () => []
+		}
+	});
+
+	await assert.rejects(
+		storefrontService.listCategories({ includeTree: true, includeProductCount: true }),
+		(error: { code?: string }) => error.code === 'CATEGORY_HIERARCHY_INVALID'
+	);
 });
 
 test('getProductBySlug hides published products without active SKUs when details include SKUs', async () => {

@@ -79,18 +79,28 @@ test('managementProductListQuerySchema parses include flags from query strings',
 	assert.equal(parsedQuery.includeImages, true);
 });
 
-test('storefrontSkuListQuerySchema parses attribute filters from JSON strings', () => {
+test('storefrontSkuListQuerySchema parses bounded concrete attribute filters', () => {
 	const parsedQuery = storefrontSkuListQuerySchema.parse({
-		attributes: '{"material":"cotton","featured":true}',
+		attributes: '{"material":"cotton","featured":true,"size":{"height":10}}',
 		includeImages: 'true'
 	});
 
 	assert.deepEqual(parsedQuery.attributes, {
 		material: 'cotton',
-		featured: true
+		featured: true,
+		size: { height: 10 }
 	});
 	assert.equal(parsedQuery.includeImages, true);
 	assert.throws(() => storefrontSkuListQuerySchema.parse({ attributes: 'not-json' }));
+	assert.throws(() => storefrontSkuListQuerySchema.parse({ attributes: '{}' }));
+	assert.throws(() => storefrontSkuListQuerySchema.parse({ attributes: '{"size":{}}' }));
+	assert.throws(() =>
+		storefrontSkuListQuerySchema.parse({
+			attributes: Object.fromEntries(
+				Array.from({ length: 21 }, (_value, index) => [`attribute-${index}`, index])
+			)
+		})
+	);
 });
 
 test('productCategoryUpdateSchema requires at least one field', () => {

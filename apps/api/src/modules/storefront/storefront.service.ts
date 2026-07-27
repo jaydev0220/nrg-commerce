@@ -8,7 +8,7 @@ import type {
 	CatalogProductRecord,
 	CatalogSkuRecord
 } from '../../types/catalog.js';
-import { buildCategoryTree, matchesAttributes } from '../../utils/catalog.js';
+import { buildCategoryTree } from '../../utils/catalog.js';
 
 import type { StorefrontRepository } from './storefront.repository.js';
 
@@ -66,6 +66,14 @@ function ensurePublishedProduct(
 	return product;
 }
 
+function throwInvalidCategoryHierarchy(): never {
+	throw new AppError(
+		500,
+		'CATEGORY_HIERARCHY_INVALID',
+		'The storefront category hierarchy is invalid.'
+	);
+}
+
 function getCategoryDescendantIds(
 	categories: CatalogCategoryRecord[],
 	rootCategoryId: string
@@ -73,63 +81,79 @@ function getCategoryDescendantIds(
 	const childrenByParentId = new Map<string, CatalogCategoryRecord[]>();
 
 	for (const category of categories) {
-		if (!category.parentId) {
-			continue;
-		}
-
+		if (!category.parentId) continue;
 		const children = childrenByParentId.get(category.parentId) ?? [];
 		children.push(category);
 		childrenByParentId.set(category.parentId, children);
 	}
 
 	const ids: string[] = [];
-	const visit = (categoryId: string) => {
+	const visited = new Set<string>();
+	const pending = [rootCategoryId];
+	while (pending.length > 0) {
+		const categoryId = pending.pop();
+		if (!categoryId) continue;
+		if (visited.has(categoryId)) throwInvalidCategoryHierarchy();
+		visited.add(categoryId);
 		ids.push(categoryId);
-		for (const child of childrenByParentId.get(categoryId) ?? []) {
-			visit(child.id);
-		}
-	};
 
-	visit(rootCategoryId);
+		const children = childrenByParentId.get(categoryId) ?? [];
+		for (let index = children.length - 1; index >= 0; index -= 1) {
+			const child = children[index];
+			if (child) pending.push(child.id);
+		}
+	}
+
 	return ids;
+}
+
+function createCategoryAggregationState(
+	categories: CatalogCategoryRecord[],
+	directCounts: Record<string, number>
+) {
+	const categoriesById = new Map(categories.map((category) => [category.id, category]));
+	if (categoriesById.size !== categories.length) throwInvalidCategoryHierarchy();
+
+	const totals = new Map(
+		categories.map((category) => [category.id, directCounts[category.id] ?? 0])
+	);
+	const remainingChildren = new Map(categories.map((category) => [category.id, 0]));
+	for (const category of categories) {
+		if (!category.parentId || !categoriesById.has(category.parentId)) continue;
+		remainingChildren.set(category.parentId, (remainingChildren.get(category.parentId) ?? 0) + 1);
+	}
+
+	return { categoriesById, totals, remainingChildren };
 }
 
 function aggregateCategoryCounts(
 	categories: CatalogCategoryRecord[],
 	directCounts: Record<string, number>
 ): Record<string, number> {
-	const childrenByParentId = new Map<string, CatalogCategoryRecord[]>();
-	const totals = new Map<string, number>();
+	const state = createCategoryAggregationState(categories, directCounts);
+	const pending = categories
+		.filter((category) => state.remainingChildren.get(category.id) === 0)
+		.map((category) => category.id);
+	let processed = 0;
+	while (pending.length > 0) {
+		const categoryId = pending.pop();
+		if (!categoryId) continue;
+		const category = state.categoriesById.get(categoryId);
+		if (!category) throwInvalidCategoryHierarchy();
+		processed += 1;
 
-	for (const category of categories) {
-		if (category.parentId) {
-			const children = childrenByParentId.get(category.parentId) ?? [];
-			children.push(category);
-			childrenByParentId.set(category.parentId, children);
-		}
+		if (!category.parentId || !state.categoriesById.has(category.parentId)) continue;
+		state.totals.set(
+			category.parentId,
+			(state.totals.get(category.parentId) ?? 0) + (state.totals.get(categoryId) ?? 0)
+		);
+		const nextRemaining = (state.remainingChildren.get(category.parentId) ?? 0) - 1;
+		state.remainingChildren.set(category.parentId, nextRemaining);
+		if (nextRemaining === 0) pending.push(category.parentId);
 	}
 
-	const getTotal = (categoryId: string): number => {
-		const cachedTotal = totals.get(categoryId);
-		if (cachedTotal !== undefined) {
-			return cachedTotal;
-		}
-
-		const total =
-			(directCounts[categoryId] ?? 0) +
-			(childrenByParentId.get(categoryId) ?? []).reduce(
-				(sum, child) => sum + getTotal(child.id),
-				0
-			);
-		totals.set(categoryId, total);
-		return total;
-	};
-
-	for (const category of categories) {
-		getTotal(category.id);
-	}
-
-	return Object.fromEntries(totals);
+	if (processed !== categories.length) throwInvalidCategoryHierarchy();
+	return Object.fromEntries(state.totals);
 }
 
 function ensurePublishedSku(sku: CatalogSkuRecord | null): CatalogSkuRecord {
@@ -142,11 +166,6 @@ function ensurePublishedSku(sku: CatalogSkuRecord | null): CatalogSkuRecord {
 	}
 
 	return sku;
-}
-
-function paginateSkus(skus: CatalogSkuRecord[], page: number, limit: number): CatalogSkuRecord[] {
-	const startIndex = (page - 1) * limit;
-	return skus.slice(startIndex, startIndex + limit);
 }
 
 function ensureCategory(category: CatalogCategoryRecord | null): CatalogCategoryRecord {
@@ -234,34 +253,6 @@ export function createStorefrontCatalogService(dependencies: StorefrontServiceDe
 			data: CatalogSkuRecord[];
 			total: number;
 		}> {
-			const attributeFilters = query.attributes;
-
-			if (attributeFilters) {
-				const result = await dependencies.repository.listSkus(
-					{
-						search: query.search,
-						categorySlug: query.categorySlug,
-						minPrice: query.minPrice,
-						maxPrice: query.maxPrice,
-						sort: query.sort,
-						order: query.order
-					},
-					{
-						paginate: false,
-						includeImages: query.includeImages,
-						publishedOnly: true
-					}
-				);
-				const filteredSkus = result.data.filter(
-					(sku) => sku.published && matchesAttributes(sku.attributes, attributeFilters)
-				);
-
-				return {
-					data: paginateSkus(filteredSkus, query.page, query.limit),
-					total: filteredSkus.length
-				};
-			}
-
 			const result = await dependencies.repository.listSkus(query, {
 				includeImages: query.includeImages,
 				publishedOnly: true

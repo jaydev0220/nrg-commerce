@@ -34,20 +34,49 @@ const productDescriptionSchema = z.string().trim().min(1).max(10_000);
 const skuCodeSchema = z.string().trim().min(1).max(120);
 const imageAltTextSchema = z.string().trim().min(1).max(500);
 
+const maximumStorefrontAttributeFilterLeaves = 20;
+
+function isStorefrontAttributeFilter(value: Record<string, unknown>): boolean {
+	const stack = Object.values(value);
+	let leafCount = 0;
+	if (stack.length === 0) return false;
+
+	while (stack.length > 0) {
+		const entry = stack.pop();
+		if (entry !== null && typeof entry === 'object' && !Array.isArray(entry)) {
+			const nestedValues = Object.values(entry);
+			if (nestedValues.length === 0) return false;
+			stack.push(...nestedValues);
+			continue;
+		}
+
+		leafCount += 1;
+		if (leafCount > maximumStorefrontAttributeFilterLeaves) return false;
+	}
+
+	return true;
+}
+
+const storefrontAttributeFilterSchema = attributeMapSchema.refine(
+	isStorefrontAttributeFilter,
+	'Attribute filters must contain between 1 and 20 concrete values.'
+);
+
 const parsedAttributeQuerySchema = z
 	.string()
 	.max(8_192)
 	.transform((value, context) => {
 		try {
-			return attributeMapSchema.parse(JSON.parse(value));
+			return JSON.parse(value) as unknown;
 		} catch {
 			context.addIssue({
 				code: 'custom',
-				message: 'attributes must be a valid JSON object.'
+				message: 'attributes must be valid JSON.'
 			});
 			return z.NEVER;
 		}
-	});
+	})
+	.pipe(storefrontAttributeFilterSchema);
 
 export const productCategorySchema = z.object({
 	id: uuidSchema,
@@ -337,7 +366,7 @@ export const storefrontSkuListQuerySchema = paginationQuerySchema.extend({
 	categorySlug: resourceSlugSchema.optional(),
 	minPrice: moneySchema.optional(),
 	maxPrice: moneySchema.optional(),
-	attributes: z.union([attributeMapSchema, parsedAttributeQuerySchema]).optional(),
+	attributes: z.union([storefrontAttributeFilterSchema, parsedAttributeQuerySchema]).optional(),
 	includeImages: booleanLikeSchema.default(false),
 	sort: z.enum(['name', 'price', 'createdAt']).default('createdAt'),
 	order: sortOrderSchema.default('desc')
