@@ -1,4 +1,4 @@
-import type { DatabaseClient } from '@packages/database';
+import type { DatabaseClient, Prisma } from '@packages/database';
 
 import type {
 	CatalogCategoryRecord,
@@ -91,7 +91,8 @@ type CategoryDeletionInput = {
 	reassignToCategoryId?: string;
 };
 
-type CategoryDeletionStatus = 'deleted' | 'not_found' | 'has_children' | 'has_products';
+type CategoryDeletionStatus =
+	'deleted' | 'not_found' | 'has_children' | 'has_products' | 'reassign_not_found';
 
 type ListProductsOptions = {
 	paginate?: boolean;
@@ -348,6 +349,10 @@ function resolveImageOrderBy(sort: ImageSortField, order: 'asc' | 'desc') {
 		default:
 			return { position: order } as const;
 	}
+}
+
+async function lockCategoryHierarchy(transaction: Prisma.TransactionClient): Promise<void> {
+	await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('nrg-commerce:product-category-hierarchy', 0))::text`;
 }
 
 export function createPrismaCatalogRepository(database: DatabaseClient) {
@@ -764,20 +769,30 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			description?: string;
 			descriptionEn?: string;
 			position: number;
-		}): Promise<CatalogCategoryRecord> {
-			const category = await database.productCategory.create({
-				data: {
-					name: input.name,
-					nameEn: input.nameEn ?? null,
-					slug: input.slug,
-					parentId: input.parentId ?? null,
-					description: input.description ?? null,
-					descriptionEn: input.descriptionEn ?? null,
-					position: input.position
+		}): Promise<CatalogCategoryRecord | null> {
+			return database.$transaction(async (transaction) => {
+				await lockCategoryHierarchy(transaction);
+				if (input.parentId) {
+					const parent = await transaction.productCategory.findFirst({
+						where: { id: input.parentId, deletedAt: null },
+						select: { id: true }
+					});
+					if (!parent) return null;
 				}
-			});
 
-			return mapCategoryRecord(category);
+				const category = await transaction.productCategory.create({
+					data: {
+						name: input.name,
+						nameEn: input.nameEn ?? null,
+						slug: input.slug,
+						parentId: input.parentId ?? null,
+						description: input.description ?? null,
+						descriptionEn: input.descriptionEn ?? null,
+						position: input.position
+					}
+				});
+				return mapCategoryRecord(category);
+			});
 		},
 
 		async updateCategory(
@@ -791,27 +806,47 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				descriptionEn?: string | null;
 				position?: number;
 			}
-		): Promise<CatalogCategoryRecord> {
-			const category = await database.productCategory.update({
-				where: {
-					id: categoryId
-				},
-				data: {
-					name: input.name,
-					nameEn: input.nameEn,
-					slug: input.slug,
-					parentId: input.parentId,
-					description: input.description,
-					descriptionEn: input.descriptionEn,
-					position: input.position
-				}
-			});
+		): Promise<CatalogCategoryRecord | null> {
+			const data = {
+				name: input.name,
+				nameEn: input.nameEn,
+				slug: input.slug,
+				parentId: input.parentId,
+				description: input.description,
+				descriptionEn: input.descriptionEn,
+				position: input.position
+			};
+			if (input.parentId === undefined && input.position === undefined) {
+				const category = await database.productCategory.update({ where: { id: categoryId }, data });
+				return mapCategoryRecord(category);
+			}
 
-			return mapCategoryRecord(category);
+			return database.$transaction(async (transaction) => {
+				await lockCategoryHierarchy(transaction);
+				let currentParentId = input.parentId;
+				const visited = new Set<string>();
+				while (currentParentId) {
+					if (currentParentId === categoryId || visited.has(currentParentId)) return null;
+					visited.add(currentParentId);
+					const parent = await transaction.productCategory.findFirst({
+						where: { id: currentParentId, deletedAt: null },
+						select: { parentId: true }
+					});
+					if (!parent) return null;
+					currentParentId = parent.parentId;
+				}
+
+				const category = await transaction.productCategory.update({
+					where: { id: categoryId },
+					data
+				});
+				return mapCategoryRecord(category);
+			});
 		},
 
 		async reorderCategorySiblings(input: CategoryReorderInput): Promise<boolean> {
 			return database.$transaction(async (transaction) => {
+				await lockCategoryHierarchy(transaction);
 				const siblings = await transaction.productCategory.findMany({
 					where: {
 						parentId: input.parentId,
@@ -846,11 +881,22 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			input: CategoryDeletionInput
 		): Promise<CategoryDeletionStatus> {
 			return database.$transaction(async (transaction) => {
+				await lockCategoryHierarchy(transaction);
 				const category = await transaction.productCategory.findFirst({
 					where: { id: categoryId, deletedAt: null },
 					select: { parentId: true, position: true }
 				});
 				if (!category) return 'not_found';
+
+				if (input.productDisposition === 'reassign') {
+					const reassignTarget = input.reassignToCategoryId
+						? await transaction.productCategory.findFirst({
+								where: { id: input.reassignToCategoryId, deletedAt: null },
+								select: { id: true }
+							})
+						: null;
+					if (!reassignTarget || reassignTarget.id === categoryId) return 'reassign_not_found';
+				}
 
 				const [children, productCount, siblings] = await Promise.all([
 					transaction.productCategory.findMany({
@@ -964,11 +1010,14 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			parentId: string | null;
 		}): Promise<boolean> {
 			let currentParentId = input.parentId;
+			const visited = new Set<string>();
 
 			while (currentParentId) {
 				if (currentParentId === input.categoryId) {
 					return true;
 				}
+				if (visited.has(currentParentId)) return true;
+				visited.add(currentParentId);
 
 				const parent = await database.productCategory.findFirst({
 					where: {

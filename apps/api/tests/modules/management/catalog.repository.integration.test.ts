@@ -102,3 +102,49 @@ test(
 		}
 	}
 );
+
+test(
+	'catalog repository serializes concurrent category moves to prevent hierarchy cycles',
+	{ skip: databaseUrl ? false : 'TEST_DATABASE_URL is not configured.' },
+	async () => {
+		const pool = new Pool({ connectionString: databaseUrl, max: 3 });
+		const database = createDatabaseClient({ pool });
+		const repository = createPrismaCatalogRepository(database);
+		const unique = randomUUID();
+		const first = await database.productCategory.create({
+			data: { name: 'First concurrent category', slug: `first-concurrent-${unique}` }
+		});
+		const second = await database.productCategory.create({
+			data: { name: 'Second concurrent category', slug: `second-concurrent-${unique}` }
+		});
+
+		try {
+			const results = await Promise.all([
+				repository.updateCategory(first.id, { parentId: second.id }),
+				repository.updateCategory(second.id, { parentId: first.id })
+			]);
+			assert.equal(results.filter(Boolean).length, 1);
+
+			const stored = await database.productCategory.findMany({
+				where: { id: { in: [first.id, second.id] } },
+				select: { id: true, parentId: true }
+			});
+			const storedById = new Map(stored.map((category) => [category.id, category]));
+			assert.equal(
+				Number(storedById.get(first.id)?.parentId === second.id) +
+					Number(storedById.get(second.id)?.parentId === first.id),
+				1
+			);
+		} finally {
+			await database.productCategory.updateMany({
+				where: { id: { in: [first.id, second.id] } },
+				data: { parentId: null }
+			});
+			await database.productCategory.deleteMany({
+				where: { id: { in: [first.id, second.id] } }
+			});
+			await database.$disconnect();
+			await pool.end();
+		}
+	}
+);

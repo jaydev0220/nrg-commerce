@@ -39,6 +39,8 @@ type CategoryServiceDependencies = {
 	>;
 };
 
+type CategoryDeletionResult = Awaited<ReturnType<CatalogRepository['deleteCategory']>>;
+
 type CategoryListResult = {
 	data: Array<CatalogCategoryRecord | CatalogCategoryTreeRecord>;
 	total: number;
@@ -54,6 +56,49 @@ function ensureCategory(category: CatalogCategoryRecord | null): CatalogCategory
 	}
 
 	return category;
+}
+
+function throwCategoryHierarchyConflict(): never {
+	throw new AppError(
+		409,
+		'CATEGORY_HIERARCHY_CONFLICT',
+		'Circular category hierarchy is not allowed.'
+	);
+}
+
+function throwCategoryReassignConflict(): never {
+	throw new AppError(
+		409,
+		'CATEGORY_REASSIGN_CONFLICT',
+		'The reassignment category must be active and different from the deleted category.'
+	);
+}
+
+function ensureCategoryDeletionSucceeded(result: CategoryDeletionResult): void {
+	switch (result) {
+		case 'deleted':
+			return;
+		case 'not_found':
+			throw new AppError(
+				404,
+				'CATEGORY_NOT_FOUND',
+				'The requested product category could not be found.'
+			);
+		case 'reassign_not_found':
+			return throwCategoryReassignConflict();
+		case 'has_children':
+			throw new AppError(
+				409,
+				'CATEGORY_HAS_CHILDREN',
+				'The category cannot be deleted while child categories are assigned to it.'
+			);
+		case 'has_products':
+			throw new AppError(
+				409,
+				'CATEGORY_HAS_PRODUCTS',
+				'Products assigned to this category must be reassigned or uncategorized before deletion.'
+			);
+	}
 }
 
 export function createCategoryService(dependencies: CategoryServiceDependencies) {
@@ -120,7 +165,7 @@ export function createCategoryService(dependencies: CategoryServiceDependencies)
 				ensureCategory(await dependencies.repository.findCategoryById(input.parentId));
 			}
 
-			return dependencies.repository.createCategory(input);
+			return ensureCategory(await dependencies.repository.createCategory(input));
 		},
 
 		async updateCategory(
@@ -162,14 +207,12 @@ export function createCategoryService(dependencies: CategoryServiceDependencies)
 					parentId: nextParentId
 				}))
 			) {
-				throw new AppError(
-					409,
-					'CATEGORY_HIERARCHY_CONFLICT',
-					'Circular category hierarchy is not allowed.'
-				);
+				throwCategoryHierarchyConflict();
 			}
 
-			return dependencies.repository.updateCategory(categoryId, input);
+			const category = await dependencies.repository.updateCategory(categoryId, input);
+			if (!category) throwCategoryHierarchyConflict();
+			return category;
 		},
 
 		async reorderCategories(input: {
@@ -219,11 +262,7 @@ export function createCategoryService(dependencies: CategoryServiceDependencies)
 
 			if (productDisposition === 'reassign') {
 				if (!input.reassignToCategoryId || input.reassignToCategoryId === categoryId) {
-					throw new AppError(
-						409,
-						'CATEGORY_REASSIGN_CONFLICT',
-						'The reassignment category must be different from the deleted category.'
-					);
+					throwCategoryReassignConflict();
 				}
 				ensureCategory(await dependencies.repository.findCategoryById(input.reassignToCategoryId));
 			}
@@ -235,27 +274,7 @@ export function createCategoryService(dependencies: CategoryServiceDependencies)
 				reassignToCategoryId: input.reassignToCategoryId
 			});
 
-			if (result === 'not_found') {
-				throw new AppError(
-					404,
-					'CATEGORY_NOT_FOUND',
-					'The requested product category could not be found.'
-				);
-			}
-			if (result === 'has_children') {
-				throw new AppError(
-					409,
-					'CATEGORY_HAS_CHILDREN',
-					'The category cannot be deleted while child categories are assigned to it.'
-				);
-			}
-			if (result === 'has_products') {
-				throw new AppError(
-					409,
-					'CATEGORY_HAS_PRODUCTS',
-					'Products assigned to this category must be reassigned or uncategorized before deletion.'
-				);
-			}
+			ensureCategoryDeletionSucceeded(result);
 
 			return {
 				mode: 'soft',

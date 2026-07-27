@@ -41,6 +41,23 @@ function createRepository(overrides: Partial<CategoryRepository> = {}): Category
 	};
 }
 
+test('createCategory fails closed when its parent disappears before the atomic insert', async () => {
+	const categoryService = createCategoryService({
+		repository: createRepository({ createCategory: async () => null })
+	});
+
+	await assert.rejects(
+		() =>
+			categoryService.createCategory({
+				name: 'Child category',
+				slug: 'child-category',
+				parentId: 'category-1',
+				position: 0
+			}),
+		(error: unknown) => error instanceof AppError && error.code === 'CATEGORY_NOT_FOUND'
+	);
+});
+
 test('updateCategory rejects circular category parent changes', async () => {
 	const categoryService = createCategoryService({
 		repository: {
@@ -109,6 +126,20 @@ test('updateCategory rejects circular category parent changes', async () => {
 				parentId: 'category-2'
 			}),
 		(error: unknown) => error instanceof AppError && error.statusCode === 409
+	);
+});
+
+test('updateCategory maps an atomic repository hierarchy conflict', async () => {
+	const categoryService = createCategoryService({
+		repository: createRepository({ updateCategory: async () => null })
+	});
+
+	await assert.rejects(
+		() => categoryService.updateCategory('category-1', { parentId: 'category-1' }),
+		(error: unknown) =>
+			error instanceof AppError &&
+			error.statusCode === 409 &&
+			error.code === 'CATEGORY_HIERARCHY_CONFLICT'
 	);
 });
 
@@ -217,6 +248,29 @@ test('deleteCategory requires and validates a reassignment category', async () =
 				reassignToCategoryId: 'category-2'
 			}),
 		(error: unknown) => error instanceof AppError && error.code === 'CATEGORY_NOT_FOUND'
+	);
+});
+
+test('deleteCategory maps a reassignment target lost during the atomic delete', async () => {
+	const categoryService = createCategoryService({
+		repository: createRepository({
+			findCategoryById: async (categoryId) => createCategory(categoryId),
+			countAssignedSkus: async () => 1,
+			deleteCategory: async () => 'reassign_not_found'
+		})
+	});
+
+	await assert.rejects(
+		() =>
+			categoryService.deleteCategory('category-1', {
+				productDisposition: 'reassign',
+				childDisposition: 'promote',
+				reassignToCategoryId: 'category-2'
+			}),
+		(error: unknown) =>
+			error instanceof AppError &&
+			error.statusCode === 409 &&
+			error.code === 'CATEGORY_REASSIGN_CONFLICT'
 	);
 });
 
