@@ -18,7 +18,9 @@ const staffRoleIdsSchema = z
 	.array(uuidSchema)
 	.min(1)
 	.max(20)
-	.refine((roleIds) => new Set(roleIds).size === roleIds.length, 'Role ids must be unique.');
+	.refine((roleIds) => new Set(roleIds).size === roleIds.length, {
+		error: 'Role ids must be unique.'
+	});
 
 export const staffSchema = z.object({
 	id: uuidSchema,

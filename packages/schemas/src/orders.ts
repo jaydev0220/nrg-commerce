@@ -32,11 +32,14 @@ const orderCustomerPhoneSchema = z
 	.string()
 	.trim()
 	.max(32)
-	.regex(/^\+?[0-9()\s-]+$/, 'Phone number contains unsupported characters.')
-	.refine((value) => {
-		const digitCount = value.replace(/\D/g, '').length;
-		return digitCount >= 7 && digitCount <= 15;
-	}, 'Phone number must contain between 7 and 15 digits.');
+	.regex(/^\+?[0-9()\s-]+$/, { error: 'Phone number contains unsupported characters.' })
+	.refine(
+		(value) => {
+			const digitCount = value.replace(/\D/g, '').length;
+			return digitCount >= 7 && digitCount <= 15;
+		},
+		{ error: 'Phone number must contain between 7 and 15 digits.' }
+	);
 
 export const orderItemSchema = z.object({
 	id: uuidSchema,
@@ -45,7 +48,7 @@ export const orderItemSchema = z.object({
 	skuCode: orderSkuCodeSchema,
 	productName: orderProductNameSchema,
 	unitPrice: moneySchema,
-	quantity: z.number().int().min(1).max(1_000_000),
+	quantity: z.int().min(1).max(1_000_000),
 	lineTotal: moneySchema,
 	attributes: attributeMapSchema,
 	createdAt: dateSchema
@@ -59,7 +62,7 @@ export const orderSchema = z.object({
 	customerEmail: emailAddressSchema.nullable(),
 	customerPhone: orderCustomerPhoneSchema.nullable(),
 	customerAddress: orderAddressSchema.nullable(),
-	itemCount: z.number().int().min(0),
+	itemCount: z.int().min(0),
 	subtotalAmount: moneySchema,
 	discountLabelId: uuidSchema.nullable(),
 	discountLabelName: z.string().trim().min(1).max(200).nullable(),
@@ -67,7 +70,7 @@ export const orderSchema = z.object({
 	discountRate: moneySchema,
 	discountAmount: moneySchema,
 	totalAmount: moneySchema,
-	version: z.number().int().min(0),
+	version: z.int().min(0),
 	completedAt: dateSchema.nullable(),
 	cancelledAt: dateSchema.nullable(),
 	refundedAt: dateSchema.nullable(),

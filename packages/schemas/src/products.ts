@@ -57,10 +57,9 @@ function isStorefrontAttributeFilter(value: Record<string, unknown>): boolean {
 	return true;
 }
 
-const storefrontAttributeFilterSchema = attributeMapSchema.refine(
-	isStorefrontAttributeFilter,
-	'Attribute filters must contain between 1 and 20 concrete values.'
-);
+const storefrontAttributeFilterSchema = attributeMapSchema.refine(isStorefrontAttributeFilter, {
+	error: 'Attribute filters must contain between 1 and 20 concrete values.'
+});
 
 const parsedAttributeQuerySchema = z
 	.string()
@@ -85,7 +84,7 @@ export const productCategorySchema = z.object({
 	slug: resourceSlugSchema,
 	description: productDescriptionSchema.nullable(),
 	descriptionEn: productDescriptionSchema.nullable(),
-	position: z.number().int().min(0).max(maximumDatabaseInteger),
+	position: z.int().min(0).max(maximumDatabaseInteger),
 	parentId: uuidSchema.nullable(),
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
@@ -114,7 +113,7 @@ export const productImageSchema = z.object({
 	assetKey: z.string().min(1).max(1_024).nullable(),
 	altText: imageAltTextSchema,
 	placement: productImagePlacementSchema,
-	position: z.number().int().min(0).max(maximumDatabaseInteger),
+	position: z.int().min(0).max(maximumDatabaseInteger),
 	focusX: productImageFocusCoordinateSchema.nullable(),
 	focusY: productImageFocusCoordinateSchema.nullable(),
 	zoom: productImageZoomSchema.nullable(),
@@ -128,7 +127,7 @@ export const productSkuSchema = z.object({
 	productId: uuidSchema,
 	skuCode: skuCodeSchema,
 	price: moneySchema,
-	stockQuantity: z.number().int().min(0).max(maximumDatabaseInteger),
+	stockQuantity: z.int().min(0).max(maximumDatabaseInteger),
 	attributes: attributeMapSchema,
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
@@ -161,7 +160,7 @@ export const productSkuCreateSchema = z.object({
 	productId: uuidSchema,
 	skuCode: skuCodeSchema,
 	price: moneySchema,
-	stockQuantity: z.coerce.number().int().min(0).max(maximumDatabaseInteger),
+	stockQuantity: z.coerce.number().pipe(z.int().min(0).max(maximumDatabaseInteger)),
 	attributes: attributeMapSchema.default({})
 });
 
@@ -180,7 +179,7 @@ export const productSkuUpdateSchema = nonEmptyUpdate(
 		productId: uuidSchema.optional(),
 		skuCode: skuCodeSchema.optional(),
 		price: moneySchema.optional(),
-		stockQuantity: z.coerce.number().int().min(0).max(maximumDatabaseInteger).optional(),
+		stockQuantity: z.coerce.number().pipe(z.int().min(0).max(maximumDatabaseInteger)).optional(),
 		attributes: attributeMapSchema.optional()
 	})
 );
@@ -234,7 +233,7 @@ export const productCategoryCreateSchema = z.object({
 	parentId: uuidSchema.optional(),
 	description: productDescriptionSchema.optional(),
 	descriptionEn: productDescriptionSchema.optional(),
-	position: z.coerce.number().int().min(0).max(maximumDatabaseInteger).default(0)
+	position: z.coerce.number().pipe(z.int().min(0).max(maximumDatabaseInteger)).default(0)
 });
 
 export const productCategoryUpdateSchema = nonEmptyUpdate(
@@ -245,7 +244,7 @@ export const productCategoryUpdateSchema = nonEmptyUpdate(
 		parentId: uuidSchema.nullable().optional(),
 		description: productDescriptionSchema.nullable().optional(),
 		descriptionEn: productDescriptionSchema.nullable().optional(),
-		position: z.coerce.number().int().min(0).max(maximumDatabaseInteger).optional()
+		position: z.coerce.number().pipe(z.int().min(0).max(maximumDatabaseInteger)).optional()
 	})
 );
 
@@ -303,7 +302,7 @@ export const managementProductImageListQuerySchema = paginationQuerySchema.exten
 export const productImageUploadRequestSchema = z.object({
 	fileName: z.string().trim().min(1).max(255),
 	contentType: productImageContentTypeSchema,
-	fileSize: z.coerce.number().int().positive().max(productImageMaxFileSize)
+	fileSize: z.coerce.number().pipe(z.int().positive().max(productImageMaxFileSize))
 });
 
 export const productImageCreateSchema = z

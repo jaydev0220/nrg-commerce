@@ -25,10 +25,10 @@ import {
 } from './products.js';
 
 export const paginationResponseSchema = z.object({
-	page: z.number().int().min(1),
-	limit: z.number().int().min(1).max(100),
-	total: z.number().int().min(0),
-	totalPages: z.number().int().min(0)
+	page: z.int().min(1),
+	limit: z.int().min(1).max(100),
+	total: z.int().min(0),
+	totalPages: z.int().min(0)
 });
 
 export function paginatedResponseSchema<T extends z.ZodType>(itemSchema: T) {
@@ -53,8 +53,8 @@ export const currentStaffResponseSchema = z.object({
 	preferredMfaMethod: mfaMethodSchema.nullable(),
 	lastLoginAt: dateSchema.nullable(),
 	roles: z.array(managedRoleResponseSchema),
-	totpCredentialCount: z.number().int().min(0),
-	passkeyCredentialCount: z.number().int().min(0)
+	totpCredentialCount: z.int().min(0),
+	passkeyCredentialCount: z.int().min(0)
 });
 
 export const currentStaffEnvelopeResponseSchema = z.object({
@@ -118,12 +118,12 @@ export const passkeyOptionsResponseSchema = z.object({
 export const totpSetupResponseSchema = z.object({
 	secret: z.string().min(1),
 	otpauthUrl: z.url(),
-	digits: z.number().int().min(6).max(8),
-	period: z.number().int().min(15).max(120)
+	digits: z.int().min(6).max(8),
+	period: z.int().min(15).max(120)
 });
 
 export const managedCategoryResponseSchema = productCategorySchema.extend({
-	productCount: z.number().int().min(0).optional()
+	productCount: z.int().min(0).optional()
 });
 
 export const managedCategoryDetailResponseSchema = managedCategoryResponseSchema.extend({
@@ -143,8 +143,8 @@ export const managedProductSkuResponseSchema = z.object({
 	descriptionEn: z.string().min(1).nullable(),
 	categoryId: uuidSchema.nullable(),
 	categorySlug: z.string().min(1).nullable(),
-	price: z.number().finite().min(0),
-	stockQuantity: z.number().int().min(0),
+	price: z.number().min(0),
+	stockQuantity: z.int().min(0),
 	availability: z.enum(['in_stock', 'out_of_stock']),
 	published: z.boolean(),
 	attributes: attributeMapSchema,
@@ -200,7 +200,7 @@ export const managedOrderSkuLookupResponseSchema = z.object({
 	id: uuidSchema,
 	skuCode: z.string().min(1),
 	productName: z.string().min(1),
-	price: z.number().finite().min(0),
+	price: z.number().min(0),
 	attributes: attributeMapSchema
 });
 
@@ -277,15 +277,15 @@ export const managedLogResponseSchema = logSchema;
 export const dashboardRangeResponseSchema = z.enum(['days', 'months', 'quarters']);
 export const dashboardMetricResponseSchema = z.object({
 	key: z.enum(['completedSales', 'completedOrders', 'businessSalesShare']),
-	value: z.number().finite(),
-	comparison: z.number().finite(),
+	value: z.number(),
+	comparison: z.number(),
 	comparisonKind: z.enum(['percent', 'percentagePoint']),
 	reference: z.literal('previousMonth')
 });
 export const dashboardTrendPointResponseSchema = z.object({
 	startAt: dateSchema,
 	label: z.string().min(1),
-	value: z.number().finite()
+	value: z.number()
 });
 export const dashboardTrendSeriesResponseSchema = z.object({
 	key: z.enum(['total', 'business', 'consumer']),
@@ -300,8 +300,8 @@ export const dashboardResponseSchema = z.object({
 	topProducts: z.array(
 		z.object({
 			name: z.string().min(1),
-			value: z.number().finite(),
-			share: z.number().finite()
+			value: z.number(),
+			share: z.number()
 		})
 	)
 });
@@ -325,10 +325,10 @@ export const imageDeleteResponseSchema = z.object({
 	assetDeleted: z.boolean()
 });
 export const countResponseSchema = z.object({
-	updatedCount: z.number().int().min(0)
+	updatedCount: z.int().min(0)
 });
 export const revokedCountResponseSchema = z.object({
-	revokedCount: z.number().int().min(0)
+	revokedCount: z.int().min(0)
 });
 export const initialPasswordResponseSchema = z.object({
 	initialPassword: z.string().min(17)
@@ -359,7 +359,7 @@ export const storefrontSkuResponseSchema = z.object({
 	descriptionEn: z.string().min(1).nullable(),
 	categoryId: uuidSchema.nullable(),
 	categorySlug: z.string().min(1).nullable(),
-	price: z.number().finite().min(0),
+	price: z.number().min(0),
 	availability: z.enum(['in_stock', 'out_of_stock']),
 	published: z.boolean(),
 	attributes: attributeMapSchema,
@@ -391,7 +391,7 @@ export const storefrontCategoryResponseSchema = productCategorySchema.extend({
 	deletedAt: serializedDateSchema.nullable(),
 	createdAt: serializedDateSchema,
 	updatedAt: serializedDateSchema,
-	productCount: z.number().int().min(0).optional()
+	productCount: z.int().min(0).optional()
 });
 
 export type StorefrontCategoryNodeResponse = z.output<typeof storefrontCategoryResponseSchema> & {

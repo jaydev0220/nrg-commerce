@@ -23,7 +23,7 @@ export const logSchema = z.object({
 	requestId: z.string().min(1).nullable(),
 	method: z.string().min(1).nullable(),
 	path: z.string().min(1).nullable(),
-	statusCode: z.number().int().min(100).max(599).nullable(),
+	statusCode: z.int().min(100).max(599).nullable(),
 	entityType: z.string().min(1).nullable(),
 	entityId: z.string().min(1).nullable(),
 	metadata: jsonValueSchema.nullable(),

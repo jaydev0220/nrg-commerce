@@ -8,16 +8,14 @@ const optionalText = (maximum: number) =>
 		.transform((value) => value || undefined)
 		.optional();
 
-const baseRequestSchema = z
-	.object({
-		turnstileToken: z.string().trim().min(1).max(2048),
-		name: z.string().trim().min(1).max(120),
-		email: z.email().max(254),
-		company: optionalText(160),
-		phone: optionalText(40),
-		message: z.string().trim().min(1).max(5000)
-	})
-	.strict();
+const baseRequestSchema = z.strictObject({
+	turnstileToken: z.string().trim().min(1).max(2048),
+	name: z.string().trim().min(1).max(120),
+	email: z.email().max(254),
+	company: optionalText(160),
+	phone: optionalText(40),
+	message: z.string().trim().min(1).max(5000)
+});
 
 export const contactRequestSchema = baseRequestSchema.extend({
 	inquiryType: optionalText(120),

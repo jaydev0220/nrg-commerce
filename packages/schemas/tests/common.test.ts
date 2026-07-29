@@ -6,6 +6,7 @@ import {
 	booleanLikeSchema,
 	dateSchema,
 	jsonValueSchema,
+	moneySchema,
 	resourceSlugSchema,
 	serializedDateSchema
 } from '../src/common.js';
@@ -26,6 +27,12 @@ test('normalizes boolean query values and validates recursive JSON', () => {
 	assert.deepEqual(jsonValueSchema.parse({ list: [1, true, null, 'value'] }), {
 		list: [1, true, null, 'value']
 	});
+});
+
+test('moneySchema rejects non-finite numbers without an explicit finite check', () => {
+	assert.equal(moneySchema.safeParse(Number.POSITIVE_INFINITY).success, false);
+	assert.equal(moneySchema.safeParse(Number.NEGATIVE_INFINITY).success, false);
+	assert.equal(moneySchema.safeParse(Number.NaN).success, false);
 });
 
 test('resourceSlugSchema only accepts canonical internal route segments', () => {

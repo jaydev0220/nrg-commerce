@@ -92,10 +92,12 @@ export const resourceSlugSchema = z
 	.trim()
 	.min(1)
 	.max(160)
-	.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must use lowercase letters, numbers, and hyphens.');
+	.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
+		error: 'Slug must use lowercase letters, numbers, and hyphens.'
+	});
 export const paginationQuerySchema = z.object({
-	page: z.coerce.number().int().min(1).default(1),
-	limit: z.coerce.number().int().min(1).max(100).default(20)
+	page: z.coerce.number().pipe(z.int().min(1)).default(1),
+	limit: z.coerce.number().pipe(z.int().min(1).max(100)).default(20)
 });
 export const booleanLikeSchema = z.preprocess((value) => {
 	if (typeof value !== 'string') {
@@ -114,19 +116,17 @@ export const booleanLikeSchema = z.preprocess((value) => {
 
 	return value;
 }, z.boolean());
-export const moneySchema = z.coerce.number().finite().min(0).max(99_999_999.99).multipleOf(0.01);
-export const jsonValueSchema = z.custom<JsonValue>(
-	isBoundedJsonValue,
-	'JSON data exceeds the supported structure or size limits.'
-);
-export const attributeMapSchema = z.custom<Record<string, JsonValue>>(
-	isBoundedAttributeMap,
-	'Attributes exceed the supported structure or size limits.'
-);
+export const moneySchema = z.coerce.number().min(0).max(99_999_999.99).multipleOf(0.01);
+export const jsonValueSchema = z.custom<JsonValue>(isBoundedJsonValue, {
+	error: 'JSON data exceeds the supported structure or size limits.'
+});
+export const attributeMapSchema = z.custom<Record<string, JsonValue>>(isBoundedAttributeMap, {
+	error: 'Attributes exceed the supported structure or size limits.'
+});
 
 export function nonEmptyUpdate<T extends z.ZodRawShape>(schema: z.ZodObject<T>): z.ZodObject<T> {
 	return schema.refine(
 		(value) => Object.values(value).some((fieldValue) => fieldValue !== undefined),
-		'At least one field must be provided.'
+		{ error: 'At least one field must be provided.' }
 	) as z.ZodObject<T>;
 }

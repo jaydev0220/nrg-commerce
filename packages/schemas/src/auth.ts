@@ -82,8 +82,8 @@ export const totpCredentialSchema = z.object({
 	id: uuidSchema,
 	staffId: uuidSchema,
 	secretEncrypted: z.string().min(1),
-	digits: z.number().int().min(6).max(8),
-	period: z.number().int().min(15).max(120),
+	digits: z.int().min(6).max(8),
+	period: z.int().min(15).max(120),
 	verifiedAt: dateSchema.nullable(),
 	lastUsedAt: dateSchema.nullable(),
 	deletedAt: dateSchema.nullable(),
@@ -97,7 +97,7 @@ export const passkeyCredentialSchema = z.object({
 	credentialId: z.string().min(1),
 	publicKey: z.instanceof(Uint8Array),
 	userHandle: z.string().min(1).nullable(),
-	counter: z.number().int().min(0),
+	counter: z.int().min(0),
 	transports: z.array(z.string().min(1)).default([]),
 	aaguid: z.string().min(1).nullable(),
 	deviceType: passkeyDeviceTypeSchema.nullable(),
@@ -146,8 +146,8 @@ export const accessTokenClaimsSchema = z.object({
 	permissions: z.array(permissionKeySchema).default([]),
 	mfa: z.array(mfaMethodSchema).default([]),
 	primaryFactor: authPrimaryFactorSchema,
-	exp: z.number().int().positive(),
-	iat: z.number().int().positive()
+	exp: z.int().positive(),
+	iat: z.int().positive()
 });
 
 export const refreshTokenClaimsSchema = z.object({
@@ -157,11 +157,11 @@ export const refreshTokenClaimsSchema = z.object({
 	type: z.literal('refresh'),
 	mfa: z.array(mfaMethodSchema).default([]),
 	primaryFactor: authPrimaryFactorSchema,
-	exp: z.number().int().positive(),
-	iat: z.number().int().positive()
+	exp: z.int().positive(),
+	iat: z.int().positive()
 });
 
-export const refreshTokenRequestSchema = z.object({}).strict();
+export const refreshTokenRequestSchema = z.strictObject({});
 
 export const totpChallengeSchema = z.object({
 	code: z.string().regex(/^\d{6,8}$/)
@@ -190,11 +190,11 @@ export const passwordChangeSchema = z.object({
 	newPassword: strongPasswordSchema
 });
 
-export const pendingAuthTokenSchema = z.object({}).strict();
+export const pendingAuthTokenSchema = z.strictObject({});
 
-export const setupTokenRequestSchema = z.object({}).strict();
+export const setupTokenRequestSchema = z.strictObject({});
 
-export const passkeyAuthenticationStartSchema = z.object({}).strict();
+export const passkeyAuthenticationStartSchema = z.strictObject({});
 
 export const passkeyAuthenticationVerificationSchema = z.object({
 	credential: z.unknown()
