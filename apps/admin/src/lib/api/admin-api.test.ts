@@ -42,10 +42,12 @@ import {
 	formatDate,
 	getOptionalCurrentStaff,
 	loadOrderSkuLookups,
+	loadOrderDetail,
 	loadProductEditorData,
 	loadSecuritySettingsData,
 	loadStaffPageData,
 	registerProductImage,
+	previewOrderUpdate,
 	removeManagedPasskey,
 	removeSecurityTotp,
 	renameManagedPasskey,
@@ -57,6 +59,7 @@ import {
 	revokeOtherAuthSessions,
 	updateMfaPreference,
 	updateOrderStatus,
+	updateOrder,
 	updateProductImageCrop,
 	updateProductSku,
 	updateStaff,
@@ -207,6 +210,37 @@ const orderRecord = {
 	items: []
 };
 
+const orderPreviewRecord = {
+	current: orderRecord,
+	proposed: {
+		version: 1,
+		status: 'pending',
+		businessId: null,
+		customerName: 'Consumer',
+		customerEmail: null,
+		customerPhone: '1234567',
+		customerAddress: null,
+		itemCount: 0,
+		subtotalAmount: 0,
+		discountLabelId: null,
+		discountLabelName: null,
+		suggestedDiscountRate: null,
+		discountRate: 0,
+		discountAmount: 0,
+		totalAmount: 0,
+		items: []
+	},
+	changes: {
+		fields: [],
+		items: [],
+		totals: {
+			before: { itemCount: 0, subtotalAmount: 0, discountAmount: 0, totalAmount: 0 },
+			after: { itemCount: 0, subtotalAmount: 0, discountAmount: 0, totalAmount: 0 }
+		},
+		inventory: []
+	}
+};
+
 function paginated(data: unknown[]) {
 	return { data, pagination: { page: 1, limit: 20, total: data.length, totalPages: 1 } };
 }
@@ -273,6 +307,10 @@ const defaultApiResponses: ApiResponseHandler[] = [
 		response: paginated([
 			{ id: ids.sku, skuCode: 'SKU-1', productName: 'Glassware', price: 100, attributes: {} }
 		])
+	},
+	{
+		matches: (path) => path.endsWith('/preview'),
+		response: orderPreviewRecord
 	},
 	{
 		matches: (path) => path.startsWith('/api/management/orders'),
@@ -541,6 +579,41 @@ describe('admin API staff and order contracts', () => {
 				method: 'PATCH',
 				body: JSON.stringify({ status: 'completed' })
 			}),
+			{}
+		);
+	});
+
+	it('loads, previews, and updates orders with the versioned item contract', async () => {
+		const input = {
+			version: 3,
+			items: [
+				{
+					productSkuId: ids.sku,
+					quantity: 2,
+					expectedSnapshot: {
+						skuCode: 'SKU-1',
+						productName: 'Glassware',
+						unitPrice: 100,
+						attributes: {}
+					}
+				}
+			]
+		};
+
+		await loadOrderDetail(ids.order);
+		const preview = await previewOrderUpdate(ids.order, input);
+		await updateOrder(ids.order, input);
+
+		expect(preview.proposed.version).toBe(1);
+		expect(client.requestJson).toHaveBeenCalledWith(`/api/management/orders/${ids.order}`, {}, {});
+		expect(client.requestJson).toHaveBeenCalledWith(
+			`/api/management/orders/${ids.order}/preview`,
+			{ method: 'POST', body: JSON.stringify(input) },
+			{}
+		);
+		expect(client.requestJson).toHaveBeenCalledWith(
+			`/api/management/orders/${ids.order}`,
+			{ method: 'PATCH', body: JSON.stringify(input) },
 			{}
 		);
 	});

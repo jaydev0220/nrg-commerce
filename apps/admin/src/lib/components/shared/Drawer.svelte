@@ -6,8 +6,15 @@
 		open,
 		title,
 		onclose,
+		wide = false,
 		children
-	}: { open: boolean; title: string; onclose: () => void; children: Snippet } = $props();
+	}: {
+		open: boolean;
+		title: string;
+		onclose: () => void;
+		wide?: boolean;
+		children: Snippet;
+	} = $props();
 
 	let drawerElement = $state<HTMLElement>();
 	let closeButton = $state<HTMLButtonElement>();
@@ -64,7 +71,9 @@
 	></div>
 	<dialog
 		bind:this={drawerElement}
-		class="fixed inset-y-0 right-0 left-auto z-50 m-0 flex h-dvh max-h-none w-full max-w-xl flex-col border-l border-border bg-bg-surface shadow-xl"
+		class="fixed inset-y-0 right-0 left-auto z-50 m-0 flex h-dvh max-h-none w-full flex-col border-l border-border bg-bg-surface shadow-xl {wide
+			? 'max-w-3xl'
+			: 'max-w-xl'}"
 		open
 		aria-modal="true"
 		aria-label={title}

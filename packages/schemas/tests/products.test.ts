@@ -14,6 +14,7 @@ import {
 	productCategoryDeleteQuerySchema,
 	productCategoryReorderSchema,
 	productSkuCreateSchema,
+	productSkuUpdateSchema,
 	productUpdateSchema,
 	storefrontProductDetailQuerySchema,
 	storefrontProductListQuerySchema,
@@ -53,6 +54,13 @@ test('productSkuCreateSchema requires a productId and keeps attributes as an obj
 
 test('productUpdateSchema requires at least one field', () => {
 	assert.throws(() => productUpdateSchema.parse({}));
+});
+
+test('productSkuUpdateSchema accepts a bounded attribute update', () => {
+	assert.deepEqual(productSkuUpdateSchema.parse({ attributes: { color: 'black' } }), {
+		attributes: { color: 'black' }
+	});
+	assert.throws(() => productSkuUpdateSchema.parse({}));
 });
 
 test('productCreateSchema accepts optional English catalog content fields', () => {

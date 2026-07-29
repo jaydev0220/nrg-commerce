@@ -2,9 +2,14 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 
-import type { ManagedOrderRecord } from '../../../src/types/management.js';
+import type {
+	ManagedOrderRecord,
+	ManagedOrderUpdatePreviewRecord
+} from '../../../src/types/management.js';
 import { AppError } from '../../../src/errors/app-error.js';
 import { createOrderService } from '../../../src/modules/management/order/order.service.js';
+
+const emptyUpdatePreview = {} as ManagedOrderUpdatePreviewRecord;
 
 test('createOrder computes item count and total amount from line-item snapshots', async () => {
 	let persistedOrderInput:
@@ -403,18 +408,26 @@ test('updateOrder changes customer fields without replacing item snapshots', asy
 			updateOrder: async (_id, input) => {
 				updateInput = input;
 				return {
-					order: { ...existing, ...input },
-					previousStatus: existing.status
+					order: {
+						...existing,
+						customerName: input.customerName ?? existing.customerName,
+						status: input.status ?? existing.status,
+						version: existing.version + 1
+					},
+					previousStatus: existing.status,
+					preview: emptyUpdatePreview
 				};
 			}
 		}
 	});
 
 	const result = await orderService.updateOrder('order-1', {
+		version: 0,
 		customerName: 'New',
 		status: 'confirmed'
 	});
 	assert.deepEqual(updateInput, {
+		version: 0,
 		customerName: 'New',
 		status: 'confirmed'
 	});
@@ -429,7 +442,8 @@ test('updateOrder rejects removing a business without consumer contact', async (
 				({
 					businessId: 'business-1',
 					customerName: null,
-					customerPhone: null
+					customerPhone: null,
+					version: 0
 				}) as ManagedOrderRecord,
 			findBusinessById: async () => null,
 			findSkuById: async () => null,
@@ -447,7 +461,7 @@ test('updateOrder rejects removing a business without consumer contact', async (
 	});
 
 	await assert.rejects(
-		() => orderService.updateOrder('order-1', { businessId: null }),
+		() => orderService.updateOrder('order-1', { version: 0, businessId: null }),
 		(error: unknown) => error instanceof AppError && error.code === 'CUSTOMER_CONTACT_REQUIRED'
 	);
 });
@@ -538,7 +552,7 @@ test('updateOrderStatus returns the atomic repository transition result', async 
 			updateOrderStatus: async (orderId, status) => {
 				assert.equal(orderId, 'order-1');
 				assert.equal(status, 'completed');
-				return { order, previousStatus: 'processing' };
+				return { order, previousStatus: 'processing', preview: emptyUpdatePreview };
 			},
 			updateOrder: async () => {
 				throw new Error('not used');
@@ -548,5 +562,9 @@ test('updateOrderStatus returns the atomic repository transition result', async 
 
 	const result = await orderService.updateOrderStatus('order-1', 'completed');
 
-	assert.deepEqual(result, { order, previousStatus: 'processing' });
+	assert.deepEqual(result, {
+		order,
+		previousStatus: 'processing',
+		preview: emptyUpdatePreview
+	});
 });

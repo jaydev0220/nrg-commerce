@@ -5,14 +5,19 @@ import type { PaginatedResult } from '../../../types/catalog.js';
 import type {
 	ManagedBusinessRecord,
 	ManagedOrderItemRecord,
+	ManagedOrderPreviewItemRecord,
 	ManagedOrderRecord,
-	ManagedOrderSkuLookupRecord
+	ManagedOrderSkuLookupRecord,
+	ManagedOrderUpdatePreviewRecord
 } from '../../../types/management.js';
+import { aggregateSkuQuantities, isOrderStatusTransitionAllowed } from './order.inventory.js';
 import {
-	aggregateSkuQuantities,
-	isOrderStatusTransitionAllowed,
-	resolveInventoryAdjustment
-} from './order.inventory.js';
+	buildOrderUpdatePreview,
+	catalogSnapshotsEqual,
+	isCatalogOrderUpdateItem,
+	type OrderUpdateInput,
+	type ResolvedOrderUpdateItem
+} from './order.update.js';
 
 type OrderSortField = 'createdAt' | 'totalAmount';
 
@@ -277,88 +282,367 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 		}
 	};
 
-	const adjustInventoryForStatusTransition = async (
-		transaction: Prisma.TransactionClient,
-		currentStatus: OrderStatus,
-		nextStatus: OrderStatus,
-		items: Array<{ productSkuId: string | null; quantity: number }>
-	) => {
-		const direction = resolveInventoryAdjustment(currentStatus, nextStatus);
-		if (direction) await adjustInventory(transaction, items, direction);
+	type InternalOrderUpdateInput = Omit<OrderUpdateInput, 'version'> & { version?: number };
+
+	const assertConsumerContact = (input: {
+		businessId: string | null;
+		customerName: string | null;
+		customerPhone: string | null;
+	}) => {
+		if (input.businessId || (input.customerName?.trim() && input.customerPhone?.trim())) {
+			return;
+		}
+		throw new AppError(
+			400,
+			'CUSTOMER_CONTACT_REQUIRED',
+			'Customer name and phone are required for consumer orders.'
+		);
 	};
 
-	const updateOrderRecord = async (
-		orderId: string,
-		input: {
-			status?: OrderStatus;
-			businessId?: string | null;
-			customerName?: string | null;
-			customerEmail?: string | null;
-			customerPhone?: string | null;
-			customerAddress?: string | null;
+	const resolveUpdateItems = async (
+		transaction: Prisma.TransactionClient,
+		current: ManagedOrderRecord,
+		inputItems: OrderUpdateInput['items']
+	): Promise<ResolvedOrderUpdateItem[]> => {
+		if (!inputItems) {
+			return current.items.map((item) => ({
+				id: item.id,
+				productSkuId: item.productSkuId,
+				skuCode: item.skuCode,
+				productName: item.productName,
+				unitPrice: item.unitPrice,
+				quantity: item.quantity,
+				attributes: item.attributes
+			}));
 		}
-	) =>
-		database.$transaction(async (transaction) => {
-			const current = await transaction.order.findUnique({
-				where: { id: orderId },
-				select: {
-					status: true,
-					version: true,
-					completedAt: true,
-					cancelledAt: true,
-					refundedAt: true,
-					items: { select: { productSkuId: true, quantity: true } }
-				}
-			});
-			if (!current) {
-				throw new AppError(404, 'ORDER_NOT_FOUND', 'The requested order could not be found.');
-			}
-			const nextStatus = input.status ?? current.status;
 
-			if (!isOrderStatusTransitionAllowed(current.status, nextStatus)) {
+		const currentById = new Map(current.items.map((item) => [item.id, item]));
+		const requestedSkuIds = [
+			...new Set(inputItems.filter(isCatalogOrderUpdateItem).map((item) => item.productSkuId))
+		];
+		const catalogSkus = await transaction.productSku.findMany({
+			where: {
+				id: { in: requestedSkuIds },
+				deletedAt: null,
+				product: { is: { deletedAt: null } }
+			},
+			select: {
+				id: true,
+				skuCode: true,
+				price: true,
+				attributes: true,
+				product: { select: { name: true } }
+			}
+		});
+		const catalogById = new Map(catalogSkus.map((sku) => [sku.id, sku]));
+		const seenItemIds = new Set<string>();
+		const seenSkuIds = new Set<string>();
+		const seenSkuCodes = new Set<string>();
+		const resolvedItems: ResolvedOrderUpdateItem[] = [];
+
+		for (const inputItem of inputItems) {
+			const existing = inputItem.id ? currentById.get(inputItem.id) : undefined;
+			if (inputItem.id && !existing) {
 				throw new AppError(
-					409,
-					'INVALID_ORDER_STATUS_TRANSITION',
-					'The requested order status transition is not allowed.'
+					400,
+					'ORDER_ITEM_NOT_FOUND',
+					'One or more order items do not belong to this order.'
 				);
 			}
-
-			if (input.status !== undefined && input.status !== current.status) {
-				await adjustInventoryForStatusTransition(
-					transaction,
-					current.status,
-					nextStatus,
-					current.items
-				);
+			if (inputItem.id && seenItemIds.has(inputItem.id)) {
+				throw new AppError(400, 'DUPLICATE_ORDER_ITEM', 'An order item may only appear once.');
 			}
+			if (inputItem.id) seenItemIds.add(inputItem.id);
 
-			const transitionedAt = new Date();
-			const statusData =
-				input.status === undefined || input.status === current.status
-					? {}
-					: nextStatus === 'completed'
+			let resolved: ResolvedOrderUpdateItem;
+			if (isCatalogOrderUpdateItem(inputItem)) {
+				if (seenSkuIds.has(inputItem.productSkuId)) {
+					throw new AppError(
+						400,
+						'DUPLICATE_ORDER_ITEM',
+						'A catalog SKU may only appear once in an order.'
+					);
+				}
+				seenSkuIds.add(inputItem.productSkuId);
+
+				const catalogSku = catalogById.get(inputItem.productSkuId);
+				const actualSnapshot = catalogSku
+					? {
+							skuCode: catalogSku.skuCode,
+							productName: catalogSku.product.name,
+							unitPrice: Number(catalogSku.price.toString()),
+							attributes: catalogSku.attributes as Prisma.JsonValue
+						}
+					: existing?.productSkuId === inputItem.productSkuId
 						? {
-								completedAt: current.completedAt ?? transitionedAt,
-								cancelledAt: null,
-								refundedAt: null
+								skuCode: existing.skuCode,
+								productName: existing.productName,
+								unitPrice: existing.unitPrice,
+								attributes: existing.attributes
 							}
-						: nextStatus === 'cancelled'
-							? {
-									completedAt: null,
-									cancelledAt: current.cancelledAt ?? transitionedAt,
-									refundedAt: null
-								}
-							: nextStatus === 'refunded'
-								? {
-										completedAt: current.completedAt ?? transitionedAt,
-										cancelledAt: null,
-										refundedAt: current.refundedAt ?? transitionedAt
-									}
-								: { completedAt: null, cancelledAt: null, refundedAt: null };
+						: null;
+				if (!actualSnapshot) {
+					throw new AppError(
+						404,
+						'PRODUCT_SKU_NOT_FOUND',
+						'One or more referenced product SKUs could not be found.'
+					);
+				}
+				if (!catalogSnapshotsEqual(inputItem.expectedSnapshot, actualSnapshot)) {
+					throw new AppError(
+						409,
+						'ORDER_CATALOG_SNAPSHOT_CHANGED',
+						'A referenced product SKU changed while this order was being edited.'
+					);
+				}
+				resolved = {
+					id: inputItem.id ?? null,
+					productSkuId: inputItem.productSkuId,
+					skuCode: actualSnapshot.skuCode,
+					productName: actualSnapshot.productName,
+					unitPrice: actualSnapshot.unitPrice,
+					quantity: inputItem.quantity,
+					attributes: actualSnapshot.attributes
+				};
+			} else {
+				resolved = {
+					id: inputItem.id ?? null,
+					productSkuId: null,
+					skuCode: inputItem.skuCode,
+					productName: inputItem.productName,
+					unitPrice: inputItem.unitPrice,
+					quantity: inputItem.quantity,
+					attributes:
+						inputItem.attributes ?? (existing?.productSkuId === null ? existing.attributes : {})
+				};
+			}
 
+			const normalizedSkuCode = resolved.skuCode.toLowerCase();
+			if (seenSkuCodes.has(normalizedSkuCode)) {
+				throw new AppError(
+					400,
+					'DUPLICATE_ORDER_ITEM',
+					'An SKU code may only appear once in an order.'
+				);
+			}
+			seenSkuCodes.add(normalizedSkuCode);
+			resolvedItems.push(resolved);
+		}
+
+		return resolvedItems;
+	};
+
+	const assertInventoryAvailable = async (
+		transaction: Prisma.TransactionClient,
+		preview: ManagedOrderUpdatePreviewRecord
+	) => {
+		for (const change of preview.changes.inventory) {
+			if (change.stockDelta >= 0) continue;
+			const sku = await transaction.productSku.findUnique({
+				where: { id: change.productSkuId },
+				select: { stockQuantity: true }
+			});
+			if (!sku || sku.stockQuantity < -change.stockDelta) {
+				throw new AppError(409, 'INSUFFICIENT_STOCK', 'Insufficient stock for this order.');
+			}
+		}
+	};
+
+	const applyInventoryChanges = async (
+		transaction: Prisma.TransactionClient,
+		changes: ManagedOrderUpdatePreviewRecord['changes']['inventory']
+	) => {
+		for (const change of changes) {
+			const result =
+				change.stockDelta < 0
+					? await transaction.productSku.updateMany({
+							where: {
+								id: change.productSkuId,
+								stockQuantity: { gte: -change.stockDelta }
+							},
+							data: { stockQuantity: { decrement: -change.stockDelta } }
+						})
+					: await transaction.productSku.updateMany({
+							where: { id: change.productSkuId },
+							data: { stockQuantity: { increment: change.stockDelta } }
+						});
+			if (result.count !== 1) {
+				throw new AppError(409, 'INSUFFICIENT_STOCK', 'Insufficient stock for this order.');
+			}
+			await transaction.product.updateMany({
+				where: { skus: { some: { id: change.productSkuId } } },
+				data: { updatedAt: new Date() }
+			});
+		}
+	};
+
+	const prepareOrderUpdate = async (
+		transaction: Prisma.TransactionClient,
+		orderId: string,
+		input: InternalOrderUpdateInput
+	) => {
+		const order = await transaction.order.findUnique({
+			where: { id: orderId },
+			include: {
+				business: { include: { label: true } },
+				items: { orderBy: [{ createdAt: 'asc' }] }
+			}
+		});
+		if (!order) {
+			throw new AppError(404, 'ORDER_NOT_FOUND', 'The requested order could not be found.');
+		}
+		const current = mapOrder(order);
+		if (input.version !== undefined && input.version !== current.version) {
+			throw new AppError(
+				409,
+				'ORDER_CONCURRENTLY_MODIFIED',
+				'The order changed while this request was being processed.'
+			);
+		}
+
+		const status = input.status ?? current.status;
+		if (!isOrderStatusTransitionAllowed(current.status, status)) {
+			throw new AppError(
+				409,
+				'INVALID_ORDER_STATUS_TRANSITION',
+				'The requested order status transition is not allowed.'
+			);
+		}
+		const businessId = input.businessId === undefined ? current.businessId : input.businessId;
+		const customerName =
+			input.customerName === undefined ? current.customerName : input.customerName;
+		const customerEmail =
+			input.customerEmail === undefined ? current.customerEmail : input.customerEmail;
+		const customerPhone =
+			input.customerPhone === undefined ? current.customerPhone : input.customerPhone;
+		const customerAddress =
+			input.customerAddress === undefined ? current.customerAddress : input.customerAddress;
+
+		if (input.version !== undefined) {
+			assertConsumerContact({ businessId, customerName, customerPhone });
+			if (
+				businessId &&
+				!(await transaction.business.findFirst({
+					where: { id: businessId, deletedAt: null },
+					select: { id: true }
+				}))
+			) {
+				throw new AppError(
+					404,
+					'BUSINESS_NOT_FOUND',
+					'The requested business record could not be found.'
+				);
+			}
+		}
+
+		const items = await resolveUpdateItems(transaction, current, input.items);
+		const preview = buildOrderUpdatePreview(current, {
+			status,
+			businessId,
+			customerName,
+			customerEmail,
+			customerPhone,
+			customerAddress,
+			items
+		});
+		await assertInventoryAvailable(transaction, preview);
+		return { current, preview };
+	};
+
+	const statusTimestamps = (
+		current: ManagedOrderRecord,
+		nextStatus: OrderStatus,
+		statusChanged: boolean
+	) => {
+		if (!statusChanged) return {};
+		const transitionedAt = new Date();
+		if (nextStatus === 'completed') {
+			return {
+				completedAt: current.completedAt ?? transitionedAt,
+				cancelledAt: null,
+				refundedAt: null
+			};
+		}
+		if (nextStatus === 'cancelled') {
+			return {
+				completedAt: null,
+				cancelledAt: current.cancelledAt ?? transitionedAt,
+				refundedAt: null
+			};
+		}
+		if (nextStatus === 'refunded') {
+			return {
+				completedAt: current.completedAt ?? transitionedAt,
+				cancelledAt: null,
+				refundedAt: current.refundedAt ?? transitionedAt
+			};
+		}
+		return { completedAt: null, cancelledAt: null, refundedAt: null };
+	};
+
+	const persistOrderItems = async (
+		transaction: Prisma.TransactionClient,
+		orderId: string,
+		items: ManagedOrderPreviewItemRecord[]
+	) => {
+		const retainedIds = items.flatMap((item) => (item.id ? [item.id] : []));
+		await transaction.orderItem.deleteMany({
+			where: {
+				orderId,
+				...(retainedIds.length > 0 ? { id: { notIn: retainedIds } } : {})
+			}
+		});
+
+		for (const item of items) {
+			const data = {
+				productSkuId: item.productSkuId,
+				skuCode: item.skuCode,
+				productName: item.productName,
+				unitPrice: item.unitPrice,
+				quantity: item.quantity,
+				lineTotal: item.lineTotal,
+				attributes: item.attributes as Prisma.InputJsonValue
+			};
+			if (item.id) {
+				const result = await transaction.orderItem.updateMany({
+					where: { id: item.id, orderId },
+					data
+				});
+				if (result.count !== 1) {
+					throw new AppError(
+						409,
+						'ORDER_CONCURRENTLY_MODIFIED',
+						'The order changed while this request was being processed.'
+					);
+				}
+			} else {
+				await transaction.orderItem.create({ data: { ...data, orderId } });
+			}
+		}
+	};
+
+	const persistOrderUpdate = (orderId: string, input: InternalOrderUpdateInput) =>
+		database.$transaction(async (transaction) => {
+			const { current, preview } = await prepareOrderUpdate(transaction, orderId, input);
+			await applyInventoryChanges(transaction, preview.changes.inventory);
+			const proposed = preview.proposed;
+			const statusChanged = proposed.status !== current.status;
 			const result = await transaction.order.updateMany({
 				where: { id: orderId, version: current.version },
-				data: { ...input, ...statusData, version: { increment: 1 } }
+				data: {
+					status: proposed.status,
+					businessId: proposed.businessId,
+					customerName: proposed.customerName,
+					customerEmail: proposed.customerEmail,
+					customerPhone: proposed.customerPhone,
+					customerAddress: proposed.customerAddress,
+					itemCount: proposed.itemCount,
+					subtotalAmount: proposed.subtotalAmount,
+					discountAmount: proposed.discountAmount,
+					totalAmount: proposed.totalAmount,
+					...statusTimestamps(current, proposed.status, statusChanged),
+					version: { increment: 1 }
+				}
 			});
 			if (result.count !== 1) {
 				throw new AppError(
@@ -367,16 +651,40 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 					'The order changed while this request was being processed.'
 				);
 			}
+			if (input.items) {
+				await persistOrderItems(transaction, orderId, proposed.items);
+			}
 
-			const order = await transaction.order.findUniqueOrThrow({
+			const updated = await transaction.order.findUniqueOrThrow({
 				where: { id: orderId },
 				include: {
 					business: { include: { label: true } },
 					items: { orderBy: [{ createdAt: 'asc' }] }
 				}
 			});
-
-			return { order: mapOrder(order), previousStatus: current.status };
+			const orderRecord = mapOrder(updated);
+			const persistedPreview = buildOrderUpdatePreview(current, {
+				status: orderRecord.status,
+				businessId: orderRecord.businessId,
+				customerName: orderRecord.customerName,
+				customerEmail: orderRecord.customerEmail,
+				customerPhone: orderRecord.customerPhone,
+				customerAddress: orderRecord.customerAddress,
+				items: orderRecord.items.map((item) => ({
+					id: item.id,
+					productSkuId: item.productSkuId,
+					skuCode: item.skuCode,
+					productName: item.productName,
+					unitPrice: item.unitPrice,
+					quantity: item.quantity,
+					attributes: item.attributes
+				}))
+			});
+			return {
+				order: orderRecord,
+				previousStatus: current.status,
+				preview: persistedPreview
+			};
 		});
 
 	return {
@@ -592,21 +900,18 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 		},
 
 		async updateOrderStatus(orderId: string, status: OrderStatus) {
-			return updateOrderRecord(orderId, { status });
+			return persistOrderUpdate(orderId, { status });
 		},
 
-		async updateOrder(
-			orderId: string,
-			input: {
-				status?: OrderStatus;
-				businessId?: string | null;
-				customerName?: string | null;
-				customerEmail?: string | null;
-				customerPhone?: string | null;
-				customerAddress?: string | null;
-			}
-		) {
-			return updateOrderRecord(orderId, input);
+		async previewOrderUpdate(orderId: string, input: OrderUpdateInput) {
+			return database.$transaction(async (transaction) => {
+				const { preview } = await prepareOrderUpdate(transaction, orderId, input);
+				return preview;
+			});
+		},
+
+		async updateOrder(orderId: string, input: OrderUpdateInput) {
+			return persistOrderUpdate(orderId, input);
 		}
 	};
 }

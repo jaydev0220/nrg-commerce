@@ -5,7 +5,6 @@ import {
 	dateSchema,
 	emailAddressSchema,
 	moneySchema,
-	nonEmptyUpdate,
 	paginationQuerySchema,
 	searchQuerySchema,
 	sortOrderSchema,
@@ -78,7 +77,14 @@ export const orderSchema = z.object({
 	items: z.array(orderItemSchema).default([])
 });
 
-const orderItemQuantitySchema = z.coerce.number().int().min(1).max(1_000_000);
+const orderItemQuantitySchema = z.coerce.number().pipe(z.int().min(1).max(1_000_000));
+
+export const orderCatalogSnapshotSchema = z.object({
+	skuCode: orderSkuCodeSchema,
+	productName: orderProductNameSchema,
+	unitPrice: moneySchema,
+	attributes: attributeMapSchema
+});
 
 export const orderLineItemCreateSchema = z.union([
 	z.object({
@@ -92,6 +98,24 @@ export const orderLineItemCreateSchema = z.union([
 		unitPrice: moneySchema,
 		quantity: orderItemQuantitySchema,
 		attributes: attributeMapSchema.default({})
+	})
+]);
+
+export const orderLineItemUpdateSchema = z.union([
+	z.object({
+		id: uuidSchema.optional(),
+		productSkuId: uuidSchema,
+		quantity: orderItemQuantitySchema,
+		expectedSnapshot: orderCatalogSnapshotSchema
+	}),
+	z.object({
+		id: uuidSchema.optional(),
+		productSkuId: z.undefined().optional(),
+		skuCode: orderSkuCodeSchema,
+		productName: orderProductNameSchema,
+		unitPrice: moneySchema,
+		quantity: orderItemQuantitySchema,
+		attributes: attributeMapSchema.optional()
 	})
 ]);
 
@@ -143,13 +167,25 @@ export const orderStatusUpdateSchema = z.object({
 	status: orderStatusSchema
 });
 
-export const orderUpdateSchema = nonEmptyUpdate(
-	z.object({
+export const orderUpdateSchema = z
+	.object({
+		version: z.int().min(0),
 		status: orderStatusSchema.optional(),
 		businessId: uuidSchema.nullable().optional(),
 		customerName: orderCustomerNameSchema.nullable().optional(),
 		customerEmail: emailAddressSchema.nullable().optional(),
 		customerPhone: orderCustomerPhoneSchema.nullable().optional(),
-		customerAddress: orderAddressSchema.nullable().optional()
+		customerAddress: orderAddressSchema.nullable().optional(),
+		items: z.array(orderLineItemUpdateSchema).min(1).max(100).optional()
 	})
-);
+	.superRefine((order, context) => {
+		const hasUpdate = Object.entries(order).some(
+			([field, value]) => field !== 'version' && value !== undefined
+		);
+		if (!hasUpdate) {
+			context.addIssue({
+				code: 'custom',
+				message: 'At least one field must be provided.'
+			});
+		}
+	});

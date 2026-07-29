@@ -75,15 +75,86 @@ function createOrderRecord(status: 'pending' | 'confirmed' = 'pending') {
 	};
 }
 
+function createUpdatePreview(
+	status: 'pending' | 'confirmed' = 'pending'
+): Awaited<ReturnType<OrderService['previewOrderUpdate']>> {
+	const current = createOrderRecord();
+	const proposedOrder = createOrderRecord(status);
+	const previewItems = proposedOrder.items.map((item) => ({
+		id: item.id,
+		productSkuId: item.productSkuId,
+		skuCode: item.skuCode,
+		productName: item.productName,
+		unitPrice: item.unitPrice,
+		quantity: item.quantity,
+		lineTotal: item.lineTotal,
+		attributes: item.attributes
+	}));
+	return {
+		current,
+		proposed: {
+			version: current.version + 1,
+			status,
+			businessId: proposedOrder.businessId,
+			customerName: proposedOrder.customerName,
+			customerEmail: proposedOrder.customerEmail,
+			customerPhone: proposedOrder.customerPhone,
+			customerAddress: proposedOrder.customerAddress,
+			itemCount: proposedOrder.itemCount,
+			subtotalAmount: proposedOrder.subtotalAmount,
+			discountLabelId: proposedOrder.discountLabelId,
+			discountLabelName: proposedOrder.discountLabelName,
+			suggestedDiscountRate: proposedOrder.suggestedDiscountRate,
+			discountRate: proposedOrder.discountRate,
+			discountAmount: proposedOrder.discountAmount,
+			totalAmount: proposedOrder.totalAmount,
+			items: previewItems
+		},
+		changes: {
+			fields:
+				status === current.status
+					? []
+					: [{ field: 'status' as const, before: current.status, after: status }],
+			items: [],
+			totals: {
+				before: {
+					itemCount: current.itemCount,
+					subtotalAmount: current.subtotalAmount,
+					discountAmount: current.discountAmount,
+					totalAmount: current.totalAmount
+				},
+				after: {
+					itemCount: proposedOrder.itemCount,
+					subtotalAmount: proposedOrder.subtotalAmount,
+					discountAmount: proposedOrder.discountAmount,
+					totalAmount: proposedOrder.totalAmount
+				}
+			},
+			inventory: []
+		}
+	};
+}
+
+function createUpdateResult(status: 'pending' | 'confirmed' = 'pending') {
+	return {
+		order: { ...createOrderRecord(status), version: 1 },
+		previousStatus: 'pending' as const,
+		preview: createUpdatePreview(status)
+	};
+}
+
 function createAppWithOrders(
-	orderService: Pick<
-		OrderService,
-		| 'listOrders'
-		| 'listOrderSkuLookups'
-		| 'createOrder'
-		| 'getOrder'
-		| 'updateOrderStatus'
-		| 'updateOrder'
+	orderService: Partial<
+		Pick<
+			OrderService,
+			| 'listOrders'
+			| 'listOrderSkuLookups'
+			| 'createOrder'
+			| 'getOrder'
+			| 'updateOrderStatus'
+			| 'previewOrderUpdate'
+			| 'updateOrder'
+		>
 	>,
 	logService: Pick<LogService, 'recordAuditLog'>,
 	permissions = authContext.permissions
@@ -101,7 +172,16 @@ function createAppWithOrders(
 	app.use(
 		'/api/management/orders',
 		createOrderManagementRouter({
-			orderService: orderService as OrderService,
+			orderService: {
+				listOrders: async () => ({ data: [], total: 0 }),
+				listOrderSkuLookups: async () => ({ data: [], total: 0 }),
+				createOrder: async () => createOrderRecord(),
+				getOrder: async () => createOrderRecord(),
+				updateOrderStatus: async () => createUpdateResult('confirmed'),
+				previewOrderUpdate: async () => createUpdatePreview(),
+				updateOrder: async () => createUpdateResult(),
+				...orderService
+			} as OrderService,
 			logService
 		})
 	);
@@ -118,11 +198,7 @@ test('management order route creates an order and records an audit log', async (
 			listOrderSkuLookups: async () => ({ data: [], total: 0 }),
 			createOrder: async () => createOrderRecord(),
 			getOrder: async () => createOrderRecord(),
-			updateOrderStatus: async () => ({
-				order: createOrderRecord('confirmed'),
-				previousStatus: 'pending'
-			}),
-			updateOrder: async () => ({ order: createOrderRecord(), previousStatus: 'pending' })
+			updateOrderStatus: async () => createUpdateResult('confirmed')
 		},
 		{
 			recordAuditLog: async (input) => {
@@ -169,11 +245,7 @@ test('management order route updates order status and records transition metadat
 			listOrderSkuLookups: async () => ({ data: [], total: 0 }),
 			createOrder: async () => createOrderRecord(),
 			getOrder: async () => createOrderRecord(),
-			updateOrderStatus: async () => ({
-				order: createOrderRecord('confirmed'),
-				previousStatus: 'pending'
-			}),
-			updateOrder: async () => ({ order: createOrderRecord(), previousStatus: 'pending' })
+			updateOrderStatus: async () => createUpdateResult('confirmed')
 		},
 		{
 			recordAuditLog: async (input) => {
@@ -202,6 +274,122 @@ test('management order route updates order status and records transition metadat
 	});
 });
 
+test('management order route previews a versioned item replacement without an audit log', async () => {
+	let receivedInput: Parameters<OrderService['previewOrderUpdate']>[1] | undefined;
+	let auditCount = 0;
+	const app = createAppWithOrders(
+		{
+			previewOrderUpdate: async (_orderId, input) => {
+				receivedInput = input;
+				return createUpdatePreview();
+			}
+		},
+		{
+			recordAuditLog: async () => {
+				auditCount += 1;
+				return createAuditRecord();
+			}
+		}
+	);
+
+	const response = await requestApp(app, {
+		method: 'POST',
+		path: `/api/management/orders/${createOrderRecord().id}/preview`,
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			version: 0,
+			items: [
+				{
+					id: createOrderRecord().items[0]?.id,
+					skuCode: 'CUSTOM-001',
+					productName: 'Custom Item',
+					unitPrice: 9.99,
+					quantity: 3
+				}
+			]
+		})
+	});
+
+	assert.equal(response.status, 200, response.text());
+	assert.equal(receivedInput?.version, 0);
+	assert.equal(receivedInput?.items?.length, 1);
+	assert.equal(auditCount, 0);
+
+	const invalidResponse = await requestApp(app, {
+		method: 'POST',
+		path: `/api/management/orders/${createOrderRecord().id}/preview`,
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ customerName: 'Missing version' })
+	});
+	assert.equal(invalidResponse.status, 422, invalidResponse.text());
+});
+
+test('management order route records the server-derived item diff after an update', async () => {
+	let auditInput: Parameters<LogService['recordAuditLog']>[0] | undefined;
+	const result = createUpdateResult();
+	const before = result.preview.proposed.items[0];
+	assert.ok(before);
+	const after = { ...before, quantity: 4, lineTotal: 39.96 };
+	result.preview.changes.items = [
+		{
+			kind: 'modified',
+			itemId: before.id,
+			before,
+			after
+		}
+	];
+	result.preview.changes.totals.after = {
+		itemCount: 4,
+		subtotalAmount: 39.96,
+		discountAmount: 0,
+		totalAmount: 39.96
+	};
+	result.order = {
+		...result.order,
+		itemCount: 4,
+		subtotalAmount: 39.96,
+		totalAmount: 39.96,
+		items: result.order.items.map((item) => ({
+			...item,
+			quantity: 4,
+			lineTotal: 39.96
+		}))
+	};
+
+	const app = createAppWithOrders(
+		{ updateOrder: async () => result },
+		{
+			recordAuditLog: async (input) => {
+				auditInput = input;
+				return createAuditRecord();
+			}
+		}
+	);
+	const response = await requestApp(app, {
+		method: 'PATCH',
+		path: `/api/management/orders/${createOrderRecord().id}`,
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			version: 0,
+			items: [
+				{
+					id: before.id,
+					skuCode: before.skuCode,
+					productName: before.productName,
+					unitPrice: before.unitPrice,
+					quantity: 4
+				}
+			]
+		})
+	});
+
+	assert.equal(response.status, 200, response.text());
+	const metadata = auditInput?.metadata as Record<string, unknown> | undefined;
+	assert.equal(metadata?.['versionBefore'], 0);
+	assert.equal(metadata?.['versionAfter'], 1);
+	assert.deepEqual(metadata?.['items'], result.preview.changes.items);
+});
+
 test('management order route requires read permission for list', async () => {
 	const app = createAppWithOrders(
 		{
@@ -209,11 +397,7 @@ test('management order route requires read permission for list', async () => {
 			listOrderSkuLookups: async () => ({ data: [], total: 0 }),
 			createOrder: async () => createOrderRecord(),
 			getOrder: async () => createOrderRecord(),
-			updateOrderStatus: async () => ({
-				order: createOrderRecord('confirmed'),
-				previousStatus: 'pending'
-			}),
-			updateOrder: async () => ({ order: createOrderRecord(), previousStatus: 'pending' })
+			updateOrderStatus: async () => createUpdateResult('confirmed')
 		},
 		{
 			recordAuditLog: async () => createAuditRecord()
@@ -252,11 +436,7 @@ test('management order route lists SKU lookup records with order permission', as
 			},
 			createOrder: async () => createOrderRecord(),
 			getOrder: async () => createOrderRecord(),
-			updateOrderStatus: async () => ({
-				order: createOrderRecord('confirmed'),
-				previousStatus: 'pending'
-			}),
-			updateOrder: async () => ({ order: createOrderRecord(), previousStatus: 'pending' })
+			updateOrderStatus: async () => createUpdateResult('confirmed')
 		},
 		{ recordAuditLog: async () => createAuditRecord() },
 		['order.write']

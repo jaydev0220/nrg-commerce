@@ -4,6 +4,8 @@ import type { Prisma } from '@packages/database';
 
 import { AppError } from '../../../errors/app-error.js';
 import type { OrderRepository } from './order.repository.js';
+import { calculateOrderFinancials, resolveDiscountRate } from './order.calculations.js';
+import type { OrderUpdateInput } from './order.update.js';
 
 type OrderServiceDependencies = {
 	repository: Pick<
@@ -17,7 +19,7 @@ type OrderServiceDependencies = {
 		| 'updateOrder'
 		| 'updateOrderStatus'
 	> &
-		Partial<Pick<OrderRepository, 'findOrderByIdempotencyKey'>>;
+		Partial<Pick<OrderRepository, 'findOrderByIdempotencyKey' | 'previewOrderUpdate'>>;
 };
 
 type CreateOrderResult = Awaited<ReturnType<OrderRepository['createOrder']>> & {
@@ -75,47 +77,6 @@ function isUniqueConstraintError(error: unknown): boolean {
 	return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'P2002');
 }
 
-const maxMoneyMinorUnits = 9_999_999_999n;
-
-function roundRate(value: number): number {
-	return Math.round(value * 100) / 100;
-}
-
-function toMinorUnits(value: number): bigint {
-	const minorUnits = Math.round(value * 100);
-	if (!Number.isSafeInteger(minorUnits) || minorUnits < 0) {
-		throw new AppError(
-			400,
-			'ORDER_AMOUNT_OUT_OF_RANGE',
-			'An order amount is outside the supported range.'
-		);
-	}
-	return BigInt(minorUnits);
-}
-
-function fromMinorUnits(value: bigint): number {
-	if (value < 0n || value > maxMoneyMinorUnits) {
-		throw new AppError(
-			400,
-			'ORDER_AMOUNT_OUT_OF_RANGE',
-			'An order amount is outside the supported range.'
-		);
-	}
-	return Number(value) / 100;
-}
-
-function resolveDiscountRate(value: number | undefined, suggestedRate: number | null): number {
-	const rate = value ?? suggestedRate ?? 0;
-	if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
-		throw new AppError(
-			400,
-			'INVALID_DISCOUNT_RATE',
-			'The discount rate must be between 0 and 100 percent.'
-		);
-	}
-	return roundRate(rate);
-}
-
 function ensureOrder<T>(order: T | null): T {
 	if (!order) {
 		throw new AppError(404, 'ORDER_NOT_FOUND', 'The requested order record could not be found.');
@@ -145,6 +106,31 @@ function assertConsumerContact(input: {
 }
 
 export function createOrderService(dependencies: OrderServiceDependencies) {
+	const validateOrderUpdate = async (orderId: string, input: OrderUpdateInput) => {
+		const existingOrder = ensureOrder(await dependencies.repository.findOrderById(orderId));
+		if (existingOrder.version !== input.version) {
+			throw new AppError(
+				409,
+				'ORDER_CONCURRENTLY_MODIFIED',
+				'The order changed while this request was being processed.'
+			);
+		}
+		const businessId = input.businessId === undefined ? existingOrder.businessId : input.businessId;
+		const customerName =
+			input.customerName === undefined ? existingOrder.customerName : input.customerName;
+		const customerPhone =
+			input.customerPhone === undefined ? existingOrder.customerPhone : input.customerPhone;
+		assertConsumerContact({ businessId, customerName, customerPhone });
+
+		if (businessId && !(await dependencies.repository.findBusinessById(businessId))) {
+			throw new AppError(
+				404,
+				'BUSINESS_NOT_FOUND',
+				'The requested business record could not be found.'
+			);
+		}
+	};
+
 	return {
 		listOrders(query: Parameters<OrderRepository['listOrders']>[0]) {
 			return dependencies.repository.listOrders(query);
@@ -232,31 +218,12 @@ export function createOrderService(dependencies: OrderServiceDependencies) {
 					attributes: sku.attributes
 				};
 			});
-			const itemCalculations = resolvedItems.map((item) => {
-				const lineTotalMinorUnits = toMinorUnits(item.unitPrice) * BigInt(item.quantity);
-				return {
-					item: {
-						...item,
-						lineTotal: fromMinorUnits(lineTotalMinorUnits)
-					},
-					lineTotalMinorUnits
-				};
-			});
-			const items = itemCalculations.map(({ item }) => item);
-			const itemCount = items.reduce((total, item) => total + item.quantity, 0);
-			const subtotalMinorUnits = itemCalculations.reduce(
-				(total, item) => total + item.lineTotalMinorUnits,
-				0n
-			);
-			const subtotalAmount = fromMinorUnits(subtotalMinorUnits);
 			const suggestedDiscountRate = business?.label?.deletedAt
 				? null
 				: (business?.label?.discountRate ?? null);
 			const discountRate = resolveDiscountRate(input.discountRate, suggestedDiscountRate);
-			const discountBasisPoints = BigInt(Math.round(discountRate * 100));
-			const discountMinorUnits = (subtotalMinorUnits * discountBasisPoints + 5_000n) / 10_000n;
-			const discountAmount = fromMinorUnits(discountMinorUnits);
-			const totalAmount = fromMinorUnits(subtotalMinorUnits - discountMinorUnits);
+			const financials = calculateOrderFinancials(resolvedItems, discountRate);
+			const { items, itemCount, subtotalAmount, discountAmount, totalAmount } = financials;
 
 			try {
 				return {
@@ -299,33 +266,16 @@ export function createOrderService(dependencies: OrderServiceDependencies) {
 			return dependencies.repository.updateOrderStatus(orderId, status);
 		},
 
-		async updateOrder(
-			orderId: string,
-			input: {
-				status?: Parameters<OrderRepository['updateOrderStatus']>[1];
-				businessId?: string | null;
-				customerName?: string | null;
-				customerEmail?: string | null;
-				customerPhone?: string | null;
-				customerAddress?: string | null;
+		async previewOrderUpdate(orderId: string, input: OrderUpdateInput) {
+			await validateOrderUpdate(orderId, input);
+			if (!dependencies.repository.previewOrderUpdate) {
+				throw new Error('Order update preview repository is not configured.');
 			}
-		) {
-			const existingOrder = ensureOrder(await dependencies.repository.findOrderById(orderId));
-			const businessId =
-				input.businessId === undefined ? existingOrder.businessId : input.businessId;
-			const customerName =
-				input.customerName === undefined ? existingOrder.customerName : input.customerName;
-			const customerPhone =
-				input.customerPhone === undefined ? existingOrder.customerPhone : input.customerPhone;
-			assertConsumerContact({ businessId, customerName, customerPhone });
+			return dependencies.repository.previewOrderUpdate(orderId, input);
+		},
 
-			if (businessId && !(await dependencies.repository.findBusinessById(businessId))) {
-				throw new AppError(
-					404,
-					'BUSINESS_NOT_FOUND',
-					'The requested business record could not be found.'
-				);
-			}
+		async updateOrder(orderId: string, input: OrderUpdateInput) {
+			await validateOrderUpdate(orderId, input);
 			return dependencies.repository.updateOrder(orderId, input);
 		}
 	};

@@ -204,6 +204,74 @@ export const managedOrderSkuLookupResponseSchema = z.object({
 	attributes: attributeMapSchema
 });
 
+export const managedOrderPreviewItemResponseSchema = managedOrderItemResponseSchema
+	.omit({ id: true, orderId: true, createdAt: true })
+	.extend({ id: uuidSchema.nullable() });
+
+export const managedOrderTotalsResponseSchema = z.object({
+	itemCount: z.int().min(0),
+	subtotalAmount: z.number().min(0),
+	discountAmount: z.number().min(0),
+	totalAmount: z.number().min(0)
+});
+
+export const managedOrderUpdatePreviewResponseSchema = z.object({
+	current: managedOrderResponseSchema,
+	proposed: z.object({
+		version: z.int().min(0),
+		status: orderSchema.shape.status,
+		businessId: uuidSchema.nullable(),
+		customerName: orderSchema.shape.customerName,
+		customerEmail: orderSchema.shape.customerEmail,
+		customerPhone: orderSchema.shape.customerPhone,
+		customerAddress: orderSchema.shape.customerAddress,
+		itemCount: z.int().min(0),
+		subtotalAmount: z.number().min(0),
+		discountLabelId: uuidSchema.nullable(),
+		discountLabelName: z.string().min(1).nullable(),
+		suggestedDiscountRate: z.number().min(0).nullable(),
+		discountRate: z.number().min(0),
+		discountAmount: z.number().min(0),
+		totalAmount: z.number().min(0),
+		items: z.array(managedOrderPreviewItemResponseSchema)
+	}),
+	changes: z.object({
+		fields: z.array(
+			z.object({
+				field: z.enum([
+					'status',
+					'businessId',
+					'customerName',
+					'customerEmail',
+					'customerPhone',
+					'customerAddress'
+				]),
+				before: z.string().nullable(),
+				after: z.string().nullable()
+			})
+		),
+		items: z.array(
+			z.object({
+				kind: z.enum(['added', 'removed', 'modified']),
+				itemId: uuidSchema.nullable(),
+				before: managedOrderPreviewItemResponseSchema.nullable(),
+				after: managedOrderPreviewItemResponseSchema.nullable()
+			})
+		),
+		totals: z.object({
+			before: managedOrderTotalsResponseSchema,
+			after: managedOrderTotalsResponseSchema
+		}),
+		inventory: z.array(
+			z.object({
+				productSkuId: uuidSchema,
+				skuCode: z.string().min(1),
+				stockDelta: z.int()
+			})
+		)
+	})
+});
+
 export const managedLogResponseSchema = logSchema;
 
 export const dashboardRangeResponseSchema = z.enum(['days', 'months', 'quarters']);

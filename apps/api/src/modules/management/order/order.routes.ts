@@ -56,6 +56,13 @@ export function createOrderManagementRouter(dependencies: OrderRouterDependencie
 		controller.getOrder
 	);
 
+	router.post(
+		'/:orderId/preview',
+		requirePermission('order.write'),
+		validateRequest({ params: orderParamsSchema, body: orderUpdateSchema }),
+		controller.previewOrderUpdate
+	);
+
 	router.patch(
 		'/:orderId',
 		requirePermission('order.write'),

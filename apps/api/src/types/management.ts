@@ -117,3 +117,72 @@ export type ManagedOrderRecord = {
 	business: ManagedBusinessRecord | null;
 	items: ManagedOrderItemRecord[];
 };
+
+export type ManagedOrderPreviewItemRecord = Omit<
+	ManagedOrderItemRecord,
+	'id' | 'orderId' | 'createdAt'
+> & {
+	id: string | null;
+};
+
+export type ManagedOrderUpdateField =
+	'status' | 'businessId' | 'customerName' | 'customerEmail' | 'customerPhone' | 'customerAddress';
+
+export type ManagedOrderFieldChangeRecord = {
+	field: ManagedOrderUpdateField;
+	before: string | null;
+	after: string | null;
+};
+
+export type ManagedOrderItemChangeRecord = {
+	kind: 'added' | 'removed' | 'modified';
+	itemId: string | null;
+	before: ManagedOrderPreviewItemRecord | null;
+	after: ManagedOrderPreviewItemRecord | null;
+};
+
+export type ManagedOrderTotalsRecord = {
+	itemCount: number;
+	subtotalAmount: number;
+	discountAmount: number;
+	totalAmount: number;
+};
+
+export type ManagedOrderInventoryChangeRecord = {
+	productSkuId: string;
+	skuCode: string;
+	stockDelta: number;
+};
+
+export type ManagedOrderUpdateProposalRecord = {
+	version: number;
+	status: OrderStatus;
+	businessId: string | null;
+	customerName: string | null;
+	customerEmail: string | null;
+	customerPhone: string | null;
+	customerAddress: string | null;
+	itemCount: number;
+	subtotalAmount: number;
+	discountLabelId: string | null;
+	discountLabelName: string | null;
+	suggestedDiscountRate: number | null;
+	discountRate: number;
+	discountAmount: number;
+	totalAmount: number;
+	items: ManagedOrderPreviewItemRecord[];
+};
+
+export type ManagedOrderUpdatePreviewRecord = {
+	current: ManagedOrderRecord;
+	proposed: ManagedOrderUpdateProposalRecord;
+	changes: {
+		fields: ManagedOrderFieldChangeRecord[];
+		items: ManagedOrderItemChangeRecord[];
+		totals: {
+			before: ManagedOrderTotalsRecord;
+			after: ManagedOrderTotalsRecord;
+		};
+		inventory: ManagedOrderInventoryChangeRecord[];
+	};
+};

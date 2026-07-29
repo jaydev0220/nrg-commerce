@@ -87,11 +87,36 @@ test('orderCreateSchema requires consumer name and phone and validates phone for
 	);
 });
 
-test('orderUpdateSchema accepts customer updates and rejects item replacement', () => {
-	assert.deepEqual(orderUpdateSchema.parse({ customerName: 'Updated buyer' }), {
-		customerName: 'Updated buyer'
+test('orderUpdateSchema requires a version and accepts full item replacement', () => {
+	const update = orderUpdateSchema.parse({
+		version: 3,
+		customerName: 'Updated buyer',
+		items: [
+			{
+				id: '0189076c-4f2a-7fe1-b9fd-2d68df455302',
+				productSkuId: '0189076c-4f2a-7fe1-b9fd-2d68df455301',
+				quantity: 2,
+				expectedSnapshot: {
+					skuCode: 'SKU-001',
+					productName: 'Catalog item',
+					unitPrice: 12.5,
+					attributes: { size: 'M' }
+				}
+			},
+			{
+				skuCode: 'CUSTOM-002',
+				productName: 'Custom item',
+				unitPrice: 5,
+				quantity: 1
+			}
+		]
 	});
-	assert.throws(() => orderUpdateSchema.parse({ items: [] }));
+
+	assert.equal(update.version, 3);
+	assert.equal(update.items?.length, 2);
+	assert.throws(() => orderUpdateSchema.parse({ customerName: 'Missing version' }));
+	assert.throws(() => orderUpdateSchema.parse({ version: 3 }));
+	assert.throws(() => orderUpdateSchema.parse({ version: 3, items: [] }));
 });
 
 test('bulk business label updates require unique business ids and allow clearing a label', () => {

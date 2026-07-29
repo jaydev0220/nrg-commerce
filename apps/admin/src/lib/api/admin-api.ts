@@ -19,6 +19,7 @@ import {
 	managedCategoryResponseSchema,
 	managedLogResponseSchema,
 	managedOrderResponseSchema,
+	managedOrderUpdatePreviewResponseSchema,
 	managedOrderSkuLookupResponseSchema,
 	managedPasskeyResponseSchema,
 	managedProductImageResponseSchema,
@@ -74,6 +75,7 @@ export type ManagedBusinessLabel = z.infer<typeof managedBusinessLabelResponseSc
 export type ManagedOrder = z.infer<typeof managedOrderResponseSchema>;
 export type ManagedOrderItem = ManagedOrder['items'][number];
 export type ManagedOrderSkuLookup = z.infer<typeof managedOrderSkuLookupResponseSchema>;
+export type ManagedOrderUpdatePreview = z.infer<typeof managedOrderUpdatePreviewResponseSchema>;
 export type ManagedLog = z.infer<typeof managedLogResponseSchema>;
 export type DashboardRange = z.infer<typeof dashboardRangeResponseSchema>;
 export type DashboardData = z.infer<typeof dashboardResponseSchema>;
@@ -774,6 +776,10 @@ export async function loadOrderPageData(searchParams = new URLSearchParams()) {
 	return { businesses, orders: orders.data, pagination: orders.pagination };
 }
 
+export function loadOrderDetail(orderId: string) {
+	return json(`/api/management/orders/${orderId}`, managedOrderResponseSchema);
+}
+
 export async function loadOrderSkuLookups(search = '') {
 	const params = new URLSearchParams();
 	if (search.trim()) params.set('search', search.trim());
@@ -802,6 +808,38 @@ export type OrderInput = {
 	}>;
 };
 
+export type OrderUpdateItemInput =
+	| {
+			id?: string;
+			productSkuId: string;
+			quantity: number;
+			expectedSnapshot: {
+				skuCode: string;
+				productName: string;
+				unitPrice: number;
+				attributes: unknown;
+			};
+	  }
+	| {
+			id?: string;
+			skuCode: string;
+			productName: string;
+			unitPrice: number;
+			quantity: number;
+			attributes?: unknown;
+	  };
+
+export type OrderUpdateInput = {
+	version: number;
+	status?: OrderStatus;
+	businessId?: string | null;
+	customerName?: string | null;
+	customerEmail?: string | null;
+	customerPhone?: string | null;
+	customerAddress?: string | null;
+	items?: OrderUpdateItemInput[];
+};
+
 export function createOrder(
 	input: OrderInput,
 	idempotencyKey: string = globalThis.crypto.randomUUID()
@@ -827,10 +865,15 @@ export function updateOrderStatus(orderId: string, status: OrderStatus) {
 	);
 }
 
-export function updateOrder(
-	orderId: string,
-	input: Omit<OrderInput, 'items'> & { status: OrderStatus }
-) {
+export function previewOrderUpdate(orderId: string, input: OrderUpdateInput) {
+	return json(
+		`/api/management/orders/${orderId}/preview`,
+		managedOrderUpdatePreviewResponseSchema,
+		body('POST', input)
+	);
+}
+
+export function updateOrder(orderId: string, input: OrderUpdateInput) {
 	return json(
 		`/api/management/orders/${orderId}`,
 		managedOrderResponseSchema,

@@ -62,10 +62,53 @@ test(
 				}
 			});
 
+			const existingOrder = await repository.findOrderById(order.id);
+			assert.ok(existingOrder);
+			const existingItem = existingOrder.items[0];
+			assert.ok(existingItem);
+			const itemUpdate = {
+				version: 0,
+				items: [
+					{
+						id: existingItem.id,
+						productSkuId: sku.id,
+						quantity: 4,
+						expectedSnapshot: {
+							skuCode: sku.skuCode,
+							productName: product.name,
+							unitPrice: 10,
+							attributes: {}
+						}
+					}
+				]
+			};
+			const preview = await repository.previewOrderUpdate(order.id, itemUpdate);
+			assert.deepEqual(preview.changes.inventory, [
+				{ productSkuId: sku.id, skuCode: sku.skuCode, stockDelta: -2 }
+			]);
+			assert.equal(
+				(await database.productSku.findUniqueOrThrow({ where: { id: sku.id } })).stockQuantity,
+				8
+			);
+
+			const itemUpdated = await repository.updateOrder(order.id, itemUpdate);
+			assert.equal(itemUpdated.order.version, 1);
+			assert.equal(itemUpdated.order.items[0]?.quantity, 4);
+			assert.equal(itemUpdated.order.totalAmount, 40);
+			assert.equal(
+				(await database.productSku.findUniqueOrThrow({ where: { id: sku.id } })).stockQuantity,
+				6
+			);
+			await assert.rejects(
+				() => repository.updateOrder(order.id, itemUpdate),
+				(error: unknown) =>
+					error instanceof AppError && error.code === 'ORDER_CONCURRENTLY_MODIFIED'
+			);
+
 			const completed = await repository.updateOrderStatus(order.id, 'completed');
 			assert.equal(completed.previousStatus, 'processing');
 			assert.equal(completed.order.status, 'completed');
-			assert.equal(completed.order.version, 1);
+			assert.equal(completed.order.version, 2);
 			assert.ok(completed.order.completedAt);
 			assert.equal(completed.order.cancelledAt, null);
 			assert.equal(completed.order.refundedAt, null);
@@ -74,7 +117,7 @@ test(
 			const refunded = await repository.updateOrderStatus(order.id, 'refunded');
 			assert.equal(refunded.previousStatus, 'completed');
 			assert.equal(refunded.order.status, 'refunded');
-			assert.equal(refunded.order.version, 2);
+			assert.equal(refunded.order.version, 3);
 			assert.ok(refunded.order.refundedAt);
 			assert.doesNotThrow(() => managedOrderResponseSchema.parse(refunded.order));
 			assert.equal(

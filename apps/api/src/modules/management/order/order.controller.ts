@@ -95,6 +95,13 @@ export function createOrderManagementController(dependencies: OrderControllerDep
 			response.status(200).json(order);
 		}) satisfies RequestHandler,
 
+		previewOrderUpdate: (async (request, response) => {
+			const params = getValidatedParams<OrderParams>(request);
+			const body = getValidatedBody<Parameters<OrderService['previewOrderUpdate']>[1]>(request);
+			const preview = await dependencies.orderService.previewOrderUpdate(params.orderId, body);
+			response.status(200).json(preview);
+		}) satisfies RequestHandler,
+
 		updateOrderStatus: (async (request, response) => {
 			const authContext = requireAuthContext(response);
 			const params = getValidatedParams<OrderParams>(request);
@@ -141,10 +148,12 @@ export function createOrderManagementController(dependencies: OrderControllerDep
 				metadata: {
 					previousStatus: result.previousStatus,
 					status: result.order.status,
-					inventoryAdjustment: resolveInventoryAdjustment(
-						result.previousStatus,
-						result.order.status
-					)
+					versionBefore: result.preview.current.version,
+					versionAfter: result.order.version,
+					fields: result.preview.changes.fields,
+					items: result.preview.changes.items,
+					totals: result.preview.changes.totals,
+					inventory: result.preview.changes.inventory
 				}
 			});
 			response.status(200).json(result.order);

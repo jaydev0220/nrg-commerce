@@ -8,8 +8,12 @@
 		AdminApiError,
 		createOrder,
 		formatDateTime,
+		loadOrderDetail,
+		previewOrderUpdate,
 		updateOrder,
-		type OrderInput
+		type OrderInput,
+		type OrderUpdateInput,
+		type ManagedOrder
 	} from '$lib/api/admin-api';
 	import OrderCreateDrawer from '$lib/components/orders/OrderCreateDrawer.svelte';
 	import OrderDetailDrawer from '$lib/components/orders/OrderDetailDrawer.svelte';
@@ -17,14 +21,11 @@
 	import Pagination from '$lib/components/shared/Pagination.svelte';
 	import { applyFilters, scheduleFilters } from '$lib/filter-navigation';
 	import { localizeAdminLabel } from '$lib/labels';
-	import { validateOrderCustomerContact } from '$lib/order-validation';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let formError = $state('');
 	let createOpen = $state(false);
-	let selected = $state<PageData['orders'][number] | null>(null);
-	let editBusinessId = $state('');
+	let selected = $state<ManagedOrder | null>(null);
 
 	const permissions = $derived(
 		new Set(data.currentStaff?.roles.flatMap((role) => role.permissions) ?? [])
@@ -32,13 +33,10 @@
 	const canWrite = $derived(permissions.has('order.write'));
 
 	function openCreate() {
-		formError = '';
 		createOpen = true;
 	}
 
 	function openEdit(order: PageData['orders'][number]) {
-		formError = '';
-		editBusinessId = order.businessId ?? '';
 		selected = order;
 	}
 
@@ -50,11 +48,6 @@
 				: status === 'processing'
 					? 'warning'
 					: 'neutral';
-	}
-
-	function optional(value: FormDataEntryValue | null): string | null {
-		const normalized = String(value ?? '').trim();
-		return normalized || null;
 	}
 
 	function apiMessage(error: unknown, fallback: string): string {
@@ -71,34 +64,14 @@
 		}
 	}
 
-	async function submitUpdate(event: SubmitEvent) {
-		event.preventDefault();
-		if (!selected) return;
-		formError = '';
-		const values = new FormData(event.currentTarget as HTMLFormElement);
-		try {
-			const businessId = optional(values.get('businessId'));
-			const customerName = optional(values.get('customerName'));
-			const customerPhone = optional(values.get('customerPhone'));
-			const contactError = validateOrderCustomerContact({
-				businessId,
-				customerName,
-				customerPhone
-			});
-			if (contactError) throw new Error(contactError);
-			await updateOrder(selected.id, {
-				status: String(values.get('status')) as PageData['orders'][number]['status'],
-				businessId,
-				customerName,
-				customerEmail: optional(values.get('customerEmail')),
-				customerPhone,
-				customerAddress: optional(values.get('customerAddress'))
-			});
-			selected = null;
-			await invalidateAll();
-		} catch (error) {
-			formError = apiMessage(error, '無法更新訂單。');
-		}
+	async function submitUpdate(orderId: string, input: OrderUpdateInput) {
+		await updateOrder(orderId, input);
+		selected = null;
+		await invalidateAll();
+	}
+
+	async function reloadOrder(orderId: string) {
+		selected = await loadOrderDetail(orderId);
 	}
 </script>
 
@@ -117,12 +90,6 @@
 			</button>
 		{/if}
 	</header>
-	{#if formError}<p
-			class="rounded-md border border-danger/30 bg-danger-bg p-3 text-sm text-danger"
-			role="alert"
-		>
-			{formError}
-		</p>{/if}
 
 	<section class="rounded-lg border border-border bg-bg-surface shadow-xs">
 		<form
@@ -246,11 +213,14 @@
 	onclose={() => (createOpen = false)}
 	oncreate={submitCreate}
 />
-<OrderDetailDrawer
-	order={selected}
-	businessOptions={data.businessOptions}
-	statusOptions={data.statusOptions}
-	bind:businessId={editBusinessId}
-	onclose={() => (selected = null)}
-	onsave={submitUpdate}
-/>
+{#if selected}
+	<OrderDetailDrawer
+		order={selected}
+		businessOptions={data.businessOptions}
+		statusOptions={data.statusOptions}
+		onclose={() => (selected = null)}
+		onpreview={previewOrderUpdate}
+		onsave={submitUpdate}
+		onreload={reloadOrder}
+	/>
+{/if}
