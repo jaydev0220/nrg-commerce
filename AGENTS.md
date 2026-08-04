@@ -295,10 +295,6 @@ Keep test files the same structure as src.
 
 - **Testing:** Node.js built-in test runner
 
-## Breaking Changes
-
-The project is still under active development. Do not preserve backward compatibility when it would compromise code quality, maintainability, performance, or architectural clarity. Make breaking changes when they improve the program overall, and update all affected code, tests, and schemas accordingly.
-
 ## Verifications
 
 If you are on a task that changes code, you must run the following commands to ensure code quality:
