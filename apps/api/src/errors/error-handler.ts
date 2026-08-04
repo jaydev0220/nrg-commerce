@@ -76,9 +76,27 @@ function getRequestBodyError(error: unknown) {
 	return requestBodyErrors[type as keyof typeof requestBodyErrors];
 }
 
+function isInvoiceNumberConflict(error: unknown): boolean {
+	if (!error || typeof error !== 'object' || !('meta' in error)) return false;
+	const meta = error.meta;
+	if (!meta || typeof meta !== 'object' || !('target' in meta)) return false;
+	const target = meta.target;
+	const targets = Array.isArray(target) ? target : [target];
+	return targets.some(
+		(value) => typeof value === 'string' && value.toLowerCase().includes('invoicenumber')
+	);
+}
+
 function getDatabaseError(error: unknown) {
 	if (!error || typeof error !== 'object' || !('code' in error)) return null;
 	const code = error.code;
+	if (code === 'P2002' && isInvoiceNumberConflict(error)) {
+		return {
+			statusCode: 409,
+			code: 'ORDER_INVOICE_NUMBER_CONFLICT',
+			message: 'The invoice number is already assigned to another order.'
+		} as const;
+	}
 	if (typeof code !== 'string' || !(code in databaseErrors)) return null;
 
 	return databaseErrors[code as keyof typeof databaseErrors];

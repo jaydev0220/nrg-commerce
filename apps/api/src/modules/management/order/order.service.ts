@@ -146,6 +146,7 @@ export function createOrderService(dependencies: OrderServiceDependencies) {
 
 		async createOrder(input: {
 			idempotencyKey?: string;
+			invoiceNumber?: string | null;
 			businessId?: string | null;
 			customerName?: string | null;
 			customerEmail?: string | null;

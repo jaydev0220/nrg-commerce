@@ -94,6 +94,7 @@ export type ManagedOrderSkuLookupRecord = {
 
 export type ManagedOrderRecord = {
 	id: string;
+	invoiceNumber: string | null;
 	businessId: string | null;
 	status: OrderStatus;
 	customerName: string | null;
@@ -126,7 +127,13 @@ export type ManagedOrderPreviewItemRecord = Omit<
 };
 
 export type ManagedOrderUpdateField =
-	'status' | 'businessId' | 'customerName' | 'customerEmail' | 'customerPhone' | 'customerAddress';
+	| 'status'
+	| 'invoiceNumber'
+	| 'businessId'
+	| 'customerName'
+	| 'customerEmail'
+	| 'customerPhone'
+	| 'customerAddress';
 
 export type ManagedOrderFieldChangeRecord = {
 	field: ManagedOrderUpdateField;
@@ -157,6 +164,7 @@ export type ManagedOrderInventoryChangeRecord = {
 export type ManagedOrderUpdateProposalRecord = {
 	version: number;
 	status: OrderStatus;
+	invoiceNumber: string | null;
 	businessId: string | null;
 	customerName: string | null;
 	customerEmail: string | null;

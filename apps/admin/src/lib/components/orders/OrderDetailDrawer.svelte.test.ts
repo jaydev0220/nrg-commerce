@@ -7,6 +7,7 @@ import OrderDetailDrawer from './OrderDetailDrawer.svelte';
 const order = {
 	id: '00000000-0000-4000-8000-000000000001',
 	businessId: null,
+	invoiceNumber: null,
 	status: 'pending',
 	customerName: 'Consumer',
 	customerEmail: null,
@@ -61,6 +62,7 @@ function createPreview(): ManagedOrderUpdatePreview {
 			version: 4,
 			status: 'pending',
 			businessId: null,
+			invoiceNumber: null,
 			customerName: 'Consumer',
 			customerEmail: null,
 			customerPhone: '0912345678',
@@ -93,7 +95,6 @@ describe('order detail drawer', () => {
 		const onsave = vi.fn().mockResolvedValue(undefined);
 		const screen = await render(OrderDetailDrawer, {
 			order,
-			businessOptions: [],
 			statusOptions: [{ value: 'pending', label: '待處理' }],
 			onclose: vi.fn(),
 			onpreview,

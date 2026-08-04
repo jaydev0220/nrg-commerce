@@ -1,6 +1,20 @@
 export const customerPhonePattern = '^\\+?[0-9()\\s-]+$';
 
 const customerPhoneRegex = /^\+?[0-9()\s-]+$/;
+const invoiceNumberRegex = /^[A-Z0-9]{1,50}$/;
+
+export function normalizeInvoiceNumber(value: string | null | undefined): string | null {
+	const normalized = value?.trim().toUpperCase() ?? '';
+	return normalized || null;
+}
+
+export function validateInvoiceNumber(value: string | null | undefined): string | null {
+	const normalized = normalizeInvoiceNumber(value);
+	if (normalized && !invoiceNumberRegex.test(normalized)) {
+		return '發票號碼只能包含英文字母與數字，且長度不可超過 50 碼。';
+	}
+	return null;
+}
 
 type OrderCustomerContact = {
 	businessId?: string | null;

@@ -25,6 +25,14 @@ export const orderStatusSchema = z.enum(orderStatusValues);
 
 const orderCustomerNameSchema = z.string().trim().min(1).max(200);
 const orderAddressSchema = z.string().trim().min(1).max(1_000);
+
+export const invoiceNumberSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.max(50)
+	.transform((value) => value.toUpperCase())
+	.pipe(z.string().regex(/^[A-Z0-9]+$/));
 const orderSkuCodeSchema = z.string().trim().min(1).max(120);
 const orderProductNameSchema = z.string().trim().min(1).max(200);
 
@@ -56,6 +64,7 @@ export const orderItemSchema = z.object({
 
 export const orderSchema = z.object({
 	id: uuidSchema,
+	invoiceNumber: invoiceNumberSchema.nullable(),
 	businessId: uuidSchema.nullable(),
 	status: orderStatusSchema,
 	customerName: orderCustomerNameSchema.nullable(),
@@ -125,6 +134,7 @@ export const orderLineItemUpdateSchema = z.union([
 export const orderCreateSchema = z
 	.object({
 		businessId: uuidSchema.nullable().optional(),
+		invoiceNumber: invoiceNumberSchema.nullable().optional(),
 		customerName: orderCustomerNameSchema.nullable().optional(),
 		customerEmail: emailAddressSchema.nullable().optional(),
 		customerPhone: orderCustomerPhoneSchema.nullable().optional(),
@@ -175,6 +185,7 @@ export const orderUpdateSchema = z
 		version: z.int().min(0),
 		status: orderStatusSchema.optional(),
 		businessId: uuidSchema.nullable().optional(),
+		invoiceNumber: invoiceNumberSchema.nullable().optional(),
 		customerName: orderCustomerNameSchema.nullable().optional(),
 		customerEmail: emailAddressSchema.nullable().optional(),
 		customerPhone: orderCustomerPhoneSchema.nullable().optional(),

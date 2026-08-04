@@ -11,6 +11,7 @@ import {
 function createOrder(status: ManagedOrderRecord['status'] = 'pending'): ManagedOrderRecord {
 	return {
 		id: 'order-1',
+		invoiceNumber: null,
 		businessId: null,
 		status,
 		customerName: 'Buyer',
@@ -49,9 +50,15 @@ function createOrder(status: ManagedOrderRecord['status'] = 'pending'): ManagedO
 	};
 }
 
-function preview(order: ManagedOrderRecord, quantity: number, status = order.status) {
+function preview(
+	order: ManagedOrderRecord,
+	quantity: number,
+	status = order.status,
+	invoiceNumber = order.invoiceNumber
+) {
 	return buildOrderUpdatePreview(order, {
 		status,
+		invoiceNumber,
 		businessId: order.businessId,
 		customerName: order.customerName,
 		customerEmail: order.customerEmail,
@@ -125,6 +132,15 @@ test('order update preview reports item, total, and active inventory changes', (
 	});
 	assert.equal(result.proposed.discountLabelName, 'Preferred');
 	assert.equal(result.proposed.discountRate, 10);
+});
+
+test('order update preview reports invoice number changes', () => {
+	const result = preview(createOrder(), 2, 'pending', 'INV001');
+
+	assert.equal(result.proposed.invoiceNumber, 'INV001');
+	assert.deepEqual(result.changes.fields, [
+		{ field: 'invoiceNumber', before: null, after: 'INV001' }
+	]);
 });
 
 test('released orders do not reserve inventory when line quantities change', () => {

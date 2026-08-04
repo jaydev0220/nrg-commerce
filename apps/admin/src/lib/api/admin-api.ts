@@ -768,12 +768,32 @@ export function restoreBusinessLabel(labelId: string) {
 	);
 }
 
+export function loadBusinessDetail(businessId: string) {
+	return json(`/api/management/businesses/${businessId}`, managedBusinessResponseSchema);
+}
+
+export function loadBusinessLookups(search = '') {
+	const params = new URLSearchParams();
+	const normalizedSearch = search.trim();
+	if (normalizedSearch) params.set('search', normalizedSearch);
+	params.set('includeDeleted', 'false');
+	params.set('sort', 'name');
+	params.set('order', 'asc');
+	params.set('page', '1');
+	params.set('limit', String(managementPageSize));
+	return json(
+		`/api/management/businesses?${params}`,
+		paginatedResponseSchema(managedBusinessResponseSchema)
+	);
+}
+
 export async function loadOrderPageData(searchParams = new URLSearchParams()) {
-	const [businesses, orders] = await Promise.all([
-		collectPaginatedData('/api/management/businesses', managedBusinessResponseSchema),
-		loadPaginatedData('/api/management/orders', managedOrderResponseSchema, searchParams)
+	const businessId = searchParams.get('businessId')?.trim();
+	const [orders, business] = await Promise.all([
+		loadPaginatedData('/api/management/orders', managedOrderResponseSchema, searchParams),
+		businessId ? loadBusinessDetail(businessId) : Promise.resolve(null)
 	]);
-	return { businesses, orders: orders.data, pagination: orders.pagination };
+	return { business, orders: orders.data, pagination: orders.pagination };
 }
 
 export function loadOrderDetail(orderId: string) {
@@ -793,6 +813,7 @@ export async function loadOrderSkuLookups(search = '') {
 
 export type OrderInput = {
 	businessId?: string | null;
+	invoiceNumber?: string | null;
 	customerName?: string | null;
 	customerEmail?: string | null;
 	customerPhone?: string | null;
@@ -832,6 +853,7 @@ export type OrderUpdateItemInput =
 export type OrderUpdateInput = {
 	version: number;
 	status?: OrderStatus;
+	invoiceNumber?: string | null;
 	businessId?: string | null;
 	customerName?: string | null;
 	customerEmail?: string | null;

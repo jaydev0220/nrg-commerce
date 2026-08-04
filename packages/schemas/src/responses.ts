@@ -17,7 +17,7 @@ import {
 	uuidSchema
 } from './common.js';
 import { logSchema } from './logs.js';
-import { orderItemSchema, orderSchema } from './orders.js';
+import { invoiceNumberSchema, orderItemSchema, orderSchema } from './orders.js';
 import {
 	productCategorySchema,
 	productImageSchema,
@@ -220,6 +220,7 @@ export const managedOrderUpdatePreviewResponseSchema = z.object({
 	proposed: z.object({
 		version: z.int().min(0),
 		status: orderSchema.shape.status,
+		invoiceNumber: invoiceNumberSchema.nullable(),
 		businessId: uuidSchema.nullable(),
 		customerName: orderSchema.shape.customerName,
 		customerEmail: orderSchema.shape.customerEmail,
@@ -240,6 +241,7 @@ export const managedOrderUpdatePreviewResponseSchema = z.object({
 			z.object({
 				field: z.enum([
 					'status',
+					'invoiceNumber',
 					'businessId',
 					'customerName',
 					'customerEmail',

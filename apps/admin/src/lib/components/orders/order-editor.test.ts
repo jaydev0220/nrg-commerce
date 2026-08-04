@@ -12,6 +12,7 @@ import {
 const order = {
 	id: '00000000-0000-4000-8000-000000000001',
 	businessId: null,
+	invoiceNumber: null,
 	status: 'pending',
 	customerName: 'Consumer',
 	customerEmail: null,

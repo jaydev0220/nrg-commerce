@@ -2,12 +2,19 @@
 	import { ArrowLeft, Check, LoaderCircle, RefreshCw } from '@lucide/svelte';
 
 	import type {
+		ManagedBusiness,
 		ManagedOrder,
 		ManagedOrderUpdatePreview,
 		OrderUpdateInput
 	} from '$lib/api/admin-api';
+	import BusinessCombobox from '$lib/components/orders/BusinessCombobox.svelte';
 	import Drawer from '$lib/components/shared/Drawer.svelte';
-	import { customerPhonePattern, validateOrderCustomerContact } from '$lib/order-validation';
+	import {
+		customerPhonePattern,
+		normalizeInvoiceNumber,
+		validateInvoiceNumber,
+		validateOrderCustomerContact
+	} from '$lib/order-validation';
 	import OrderChangeReview from './OrderChangeReview.svelte';
 	import OrderItemsEditor from './OrderItemsEditor.svelte';
 	import {
@@ -21,7 +28,6 @@
 
 	let {
 		order: currentOrder,
-		businessOptions,
 		statusOptions,
 		onclose,
 		onpreview,
@@ -29,7 +35,6 @@
 		onreload
 	}: {
 		order: ManagedOrder;
-		businessOptions: Option[];
 		statusOptions: Option[];
 		onclose: () => void;
 		onpreview: (orderId: string, input: OrderUpdateInput) => Promise<ManagedOrderUpdatePreview>;
@@ -38,16 +43,41 @@
 	} = $props();
 
 	let order = $derived(currentOrder);
-	let businessId = $derived(order.businessId ?? '');
+	let businessId = $state('');
+	let selectedBusiness = $state<ManagedBusiness | null>(null);
 	let items = $derived<OrderItemDraft[]>(createOrderItemDrafts(order));
 	let preview = $state<ManagedOrderUpdatePreview | null>(null);
 	let pendingInput = $state<OrderUpdateInput | null>(null);
 	let error = $state('');
 	let busy = $state(false);
 
+	$effect(() => {
+		businessId = currentOrder.businessId ?? '';
+		selectedBusiness = currentOrder.business;
+	});
+
+	const reviewBusinesses = $derived.by(() => {
+		const values = [order.business, selectedBusiness].filter(
+			(value): value is ManagedBusiness => value !== null
+		);
+		return [...new Map(values.map((value) => [value.id, value])).values()];
+	});
+
+	function selectBusiness(value: ManagedBusiness | null) {
+		selectedBusiness = value;
+		businessId = value?.id ?? '';
+	}
+
 	function optional(value: FormDataEntryValue | null): string | null {
 		const normalized = String(value ?? '').trim();
 		return normalized || null;
+	}
+
+	function invoiceNumber(value: FormDataEntryValue | null): string | null {
+		const normalized = normalizeInvoiceNumber(optional(value));
+		const error = validateInvoiceNumber(normalized);
+		if (error) throw new Error(error);
+		return normalized;
 	}
 
 	function message(value: unknown, fallback: string): string {
@@ -87,6 +117,7 @@
 		const input: OrderUpdateInput = {
 			version: order.version,
 			status: String(values.get('status')) as ManagedOrder['status'],
+			invoiceNumber: invoiceNumber(values.get('invoiceNumber')),
 			businessId: businessId || null,
 			customerName,
 			customerEmail: optional(values.get('customerEmail')),
@@ -176,7 +207,7 @@
 			{#if preview}
 				<OrderChangeReview
 					{preview}
-					{businessOptions}
+					businesses={reviewBusinesses}
 				/>
 				<div class="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
 					<button
@@ -224,19 +255,23 @@
 						</label>
 						<label class="block text-sm font-medium">
 							客戶類型
-							<select
-								name="businessId"
-								bind:value={businessId}
-								class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3"
+							<BusinessCombobox
+								business={selectedBusiness}
+								onselect={selectBusiness}
 								disabled={busy}
-							>
-								<option value="">一般消費者</option>
-								{#each businessOptions.filter((option) => option.value) as option (option.value)}<option
-										value={option.value}
-									>
-										{option.label}
-									</option>{/each}
-							</select>
+								placeholder="搜尋企業名稱、聯絡人或電話"
+							/>
+						</label>
+						<label class="block text-sm font-medium">
+							發票號碼（選填）
+							<input
+								name="invoiceNumber"
+								value={order.invoiceNumber ?? ''}
+								maxlength="50"
+								pattern="[A-Za-z0-9]+"
+								class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3 uppercase"
+								disabled={busy}
+							/>
 						</label>
 						<label class="block text-sm font-medium">
 							客戶姓名

@@ -8,8 +8,14 @@
 		type OrderInput
 	} from '$lib/api/admin-api';
 	import Drawer from '$lib/components/shared/Drawer.svelte';
+	import BusinessCombobox from '$lib/components/orders/BusinessCombobox.svelte';
 	import SkuCombobox from '$lib/components/orders/SkuCombobox.svelte';
-	import { customerPhonePattern, validateOrderCustomerContact } from '$lib/order-validation';
+	import {
+		customerPhonePattern,
+		normalizeInvoiceNumber,
+		validateInvoiceNumber,
+		validateOrderCustomerContact
+	} from '$lib/order-validation';
 
 	type DraftItem = {
 		id: number;
@@ -24,20 +30,17 @@
 
 	let {
 		open,
-		businesses,
-		businessOptions,
 		onclose,
 		oncreate
 	}: {
 		open: boolean;
-		businesses: ManagedBusiness[];
-		businessOptions: Array<{ value: string; label: string }>;
 		onclose: () => void;
 		oncreate: (input: OrderInput, requestKey: string) => Promise<void>;
 	} = $props();
 
 	let formError = $state('');
 	let draftBusinessId = $state('');
+	let selectedBusiness = $state<ManagedBusiness | null>(null);
 	let draftDiscountRate = $state<number | undefined>(undefined);
 	let customItemOpen = $state(false);
 	let customName = $state('');
@@ -49,9 +52,6 @@
 	let requestKey = $state<string | null>(null);
 	let requestFingerprint = $state<string | null>(null);
 
-	const selectedBusiness = $derived(
-		businesses.find((business) => business.id === draftBusinessId) ?? null
-	);
 	const suggestedDiscountRate = $derived(selectedBusiness?.label?.discountRate ?? null);
 	const draftSubtotal = $derived(
 		items.reduce(
@@ -66,6 +66,7 @@
 	function resetDraft() {
 		formError = '';
 		draftBusinessId = '';
+		selectedBusiness = null;
 		draftDiscountRate = undefined;
 		customItemOpen = false;
 		customName = '';
@@ -81,6 +82,11 @@
 	function close() {
 		resetDraft();
 		onclose();
+	}
+
+	function selectBusiness(business: ManagedBusiness | null) {
+		selectedBusiness = business;
+		draftBusinessId = business?.id ?? '';
 	}
 
 	function addSku(sku: ManagedOrderSkuLookup) {
@@ -152,6 +158,13 @@
 		return normalized || null;
 	}
 
+	function invoiceNumber(value: FormDataEntryValue | null): string | null {
+		const normalized = normalizeInvoiceNumber(optional(value));
+		const error = validateInvoiceNumber(normalized);
+		if (error) throw new Error(error);
+		return normalized;
+	}
+
 	function buildOrderItems(): OrderInput['items'] {
 		return items.map((item) => ({
 			productSkuId: item.productSkuId,
@@ -201,6 +214,7 @@
 			}
 			const input: OrderInput = {
 				businessId,
+				invoiceNumber: invoiceNumber(values.get('invoiceNumber')),
 				customerName,
 				customerEmail: optional(values.get('customerEmail')),
 				customerPhone,
@@ -236,15 +250,11 @@
 	>
 		<label class="block text-sm font-medium">
 			客戶類型
-			<select
-				name="businessId"
-				bind:value={draftBusinessId}
-				class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3"
-			>
-				{#each businessOptions as option (option.value)}<option value={option.value}>
-						{option.label}
-					</option>{/each}
-			</select>
+			<BusinessCombobox
+				business={selectedBusiness}
+				onselect={selectBusiness}
+				placeholder="搜尋企業名稱、聯絡人或電話"
+			/>
 		</label>
 		{#if selectedBusiness?.label}
 			<p class="rounded-md border border-border bg-bg-sunken px-3 py-2 text-sm text-text-muted">
@@ -264,6 +274,15 @@
 				step="0.01"
 				placeholder={String(suggestedDiscountRate ?? '')}
 				class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3"
+			/>
+		</label>
+		<label class="block text-sm font-medium">
+			發票號碼（選填）
+			<input
+				name="invoiceNumber"
+				maxlength="50"
+				pattern="[A-Za-z0-9]+"
+				class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3 uppercase"
 			/>
 		</label>
 		<div class="grid gap-3 rounded-md border border-border bg-bg-sunken p-3 sm:grid-cols-3">

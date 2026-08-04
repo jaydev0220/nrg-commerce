@@ -41,6 +41,9 @@ import {
 	deleteStaff,
 	formatDate,
 	getOptionalCurrentStaff,
+	loadBusinessDetail,
+	loadBusinessLookups,
+	loadOrderPageData,
 	loadOrderSkuLookups,
 	loadOrderDetail,
 	loadLogDetail,
@@ -79,7 +82,8 @@ const ids = {
 	image: '00000000-0000-4000-8000-000000000007',
 	category: '00000000-0000-4000-8000-000000000008',
 	upload: '00000000-0000-4000-8000-000000000009',
-	order: '00000000-0000-4000-8000-000000000010'
+	order: '00000000-0000-4000-8000-000000000010',
+	business: '00000000-0000-4000-8000-000000000012'
 } as const;
 const timestamp = '2026-07-19T00:00:00.000Z';
 
@@ -186,9 +190,25 @@ const productRecord = {
 	images: [],
 	skus: [skuRecord]
 };
+const businessRecord = {
+	id: ids.business,
+	name: '北區供應商',
+	contactName: '王小明',
+	contactEmail: 'contact@example.com',
+	contactPhone: '0912345678',
+	taxId: null,
+	address: null,
+	notes: null,
+	labelId: null,
+	label: null,
+	deletedAt: null,
+	createdAt: timestamp,
+	updatedAt: timestamp
+};
 const orderRecord = {
 	id: ids.order,
 	businessId: null,
+	invoiceNumber: null,
 	status: 'pending',
 	customerName: 'Consumer',
 	customerEmail: null,
@@ -234,6 +254,7 @@ const orderPreviewRecord = {
 		version: 1,
 		status: 'pending',
 		businessId: null,
+		invoiceNumber: null,
 		customerName: 'Consumer',
 		customerEmail: null,
 		customerPhone: '1234567',
@@ -555,6 +576,32 @@ describe('admin API staff and order contracts', () => {
 			expect.objectContaining({ method: 'POST' }),
 			{}
 		);
+	});
+
+	it('searches businesses without loading the full collection and resolves order filters by id', async () => {
+		client.requestJson.mockImplementation(async (path: string) => {
+			if (path.startsWith('/api/management/businesses?')) return paginated([businessRecord]);
+			if (path === `/api/management/businesses/${ids.business}`) return businessRecord;
+			if (path.startsWith('/api/management/orders?')) return paginated([orderRecord]);
+			throw new Error(`Unexpected request: ${path}`);
+		});
+
+		await loadBusinessLookups('  北區  ');
+		await loadBusinessDetail(ids.business);
+		const result = await loadOrderPageData(new URLSearchParams({ businessId: ids.business }));
+
+		expect(client.requestJson).toHaveBeenCalledWith(
+			'/api/management/businesses?search=%E5%8C%97%E5%8D%80&includeDeleted=false&sort=name&order=asc&page=1&limit=20',
+			{},
+			{}
+		);
+		expect(client.requestJson).toHaveBeenCalledWith(
+			`/api/management/businesses/${ids.business}`,
+			{},
+			{}
+		);
+		expect(result.business?.id).toBe(ids.business);
+		expect(result.orders[0]?.id).toBe(ids.order);
 	});
 
 	it('trims SKU lookup search and sends order idempotency and status payloads', async () => {

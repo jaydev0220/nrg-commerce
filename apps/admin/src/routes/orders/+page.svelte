@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { Edit3, RotateCcw, Search, ShoppingCart } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import type { Pathname } from '$app/types';
 
 	import {
 		AdminApiError,
@@ -13,8 +14,10 @@
 		updateOrder,
 		type OrderInput,
 		type OrderUpdateInput,
+		type ManagedBusiness,
 		type ManagedOrder
 	} from '$lib/api/admin-api';
+	import BusinessCombobox from '$lib/components/orders/BusinessCombobox.svelte';
 	import OrderCreateDrawer from '$lib/components/orders/OrderCreateDrawer.svelte';
 	import OrderDetailDrawer from '$lib/components/orders/OrderDetailDrawer.svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
@@ -39,6 +42,21 @@
 
 	function openEdit(order: PageData['orders'][number]) {
 		selected = order;
+	}
+
+	function selectBusinessFilter(business: ManagedBusiness | null) {
+		const params = Array.from(page.url.searchParams.entries()).filter(
+			([key]) => key !== 'businessId'
+		);
+		if (business) params.push(['businessId', business.id]);
+		const query = params
+			.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+			.join('&');
+		void goto(resolve(`/orders${query ? `?${query}` : ''}` as Pathname), {
+			invalidateAll: true,
+			keepFocus: true,
+			replaceState: true
+		});
 	}
 
 	function tone(status: string): 'success' | 'warning' | 'danger' | 'neutral' {
@@ -107,7 +125,7 @@
 				<input
 					name="search"
 					value={page.url.searchParams.get('search') ?? ''}
-					placeholder="搜尋訂單或客戶"
+					placeholder="搜尋訂單、客戶或發票"
 					class="h-10 w-full rounded-md border border-border bg-bg-surface pr-3 pl-9 text-sm"
 				/>
 			</label>
@@ -133,23 +151,19 @@
 			</label>
 			<label class="min-w-40 flex-1">
 				<span class="sr-only">企業</span>
-				<select
-					name="businessId"
-					class="h-10 w-full rounded-md border border-border bg-bg-surface px-3 text-sm"
+				<div
+					oninput={(event) => event.stopPropagation()}
+					oncompositionstart={(event) => event.stopPropagation()}
+					oncompositionend={(event) => event.stopPropagation()}
 				>
-					<option
-						value=""
-						selected={!page.url.searchParams.has('businessId')}
-					>
-						全部客戶
-					</option>
-					{#each data.businessOptions.filter((option) => option.value) as option (option.value)}<option
-							value={option.value}
-							selected={page.url.searchParams.get('businessId') === option.value}
-						>
-							{option.label}
-						</option>{/each}
-				</select>
+					<BusinessCombobox
+						business={data.business}
+						name="businessId"
+						onselect={selectBusinessFilter}
+						placeholder="搜尋企業名稱、聯絡人或電話"
+						listboxId="order-filter-business-results"
+					/>
+				</div>
 			</label>
 			<a
 				href={resolve('/orders')}
@@ -177,6 +191,9 @@
 						<tr>
 							<td class="px-4 py-4">
 								<strong class="text-text-heading">#{order.id.slice(0, 8)}</strong>
+								{#if order.invoiceNumber}<p class="mt-1 text-xs font-medium text-text-heading">
+										{order.invoiceNumber}
+									</p>{/if}
 								<p class="mt-1 text-xs text-text-muted">{order.businessName}</p>
 							</td>
 							<td class="px-4 py-4">
@@ -211,15 +228,12 @@
 
 <OrderCreateDrawer
 	open={createOpen}
-	businesses={data.businesses}
-	businessOptions={data.businessOptions}
 	onclose={() => (createOpen = false)}
 	oncreate={submitCreate}
 />
 {#if selected}
 	<OrderDetailDrawer
 		order={selected}
-		businessOptions={data.businessOptions}
 		statusOptions={data.statusOptions}
 		onclose={() => (selected = null)}
 		onpreview={previewOrderUpdate}

@@ -63,6 +63,12 @@ test('maps expected Prisma race errors without exposing database details', async
 			throw Object.assign(new Error('sensitive database detail'), { code });
 		});
 	}
+	app.get('/invoice-conflict', () => {
+		throw Object.assign(new Error('sensitive database detail'), {
+			code: 'P2002',
+			meta: { target: ['invoiceNumber'] }
+		});
+	});
 	app.use(createErrorHandler((...args) => reports.push(args)));
 
 	const expectations = [
@@ -77,5 +83,11 @@ test('maps expected Prisma race errors without exposing database details', async
 		assert.equal(response.json<{ error: { code: string } }>().error.code, code);
 		assert.doesNotMatch(response.text(), /sensitive database detail/);
 	}
+	const invoiceConflict = await requestApp(app, { path: '/invoice-conflict' });
+	assert.equal(invoiceConflict.status, 409);
+	assert.equal(
+		invoiceConflict.json<{ error: { code: string } }>().error.code,
+		'ORDER_INVOICE_NUMBER_CONFLICT'
+	);
 	assert.equal(reports.length, 0);
 });

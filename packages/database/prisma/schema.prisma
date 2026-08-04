@@ -329,6 +329,7 @@ model Business {
 
 model Order {
   id                     String         @id @default(uuid()) @db.Uuid
+  invoiceNumber          String?        @unique @db.VarChar(50)
   businessId             String?        @db.Uuid
   status                 OrderStatus    @default(pending)
   version                Int            @default(0)

@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateOrderCustomerContact } from './order-validation';
+import {
+	normalizeInvoiceNumber,
+	validateInvoiceNumber,
+	validateOrderCustomerContact
+} from './order-validation';
+
+describe('invoice validation', () => {
+	it('normalizes optional values and validates the invoice format', () => {
+		expect(normalizeInvoiceNumber(' inv001 ')).toBe('INV001');
+		expect(normalizeInvoiceNumber('   ')).toBeNull();
+		expect(validateInvoiceNumber('INV001')).toBeNull();
+		expect(validateInvoiceNumber('INV-001')).toBe(
+			'發票號碼只能包含英文字母與數字，且長度不可超過 50 碼。'
+		);
+		expect(validateInvoiceNumber('A'.repeat(51))).toBe(
+			'發票號碼只能包含英文字母與數字，且長度不可超過 50 碼。'
+		);
+	});
+});
 
 describe('order customer validation', () => {
 	it('requires name and phone for consumer orders', () => {

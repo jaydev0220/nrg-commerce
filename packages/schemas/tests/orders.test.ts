@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
 	businessBulkLabelUpdateSchema,
+	invoiceNumberSchema,
 	orderCreateSchema,
 	orderListQuerySchema,
 	orderSkuLookupQuerySchema,
@@ -16,6 +17,14 @@ const orderItem = {
 	quantity: 1,
 	attributes: {}
 };
+
+test('invoiceNumberSchema normalizes valid invoice numbers and rejects unsafe values', () => {
+	assert.equal(invoiceNumberSchema.parse(' inv001 '), 'INV001');
+	assert.equal(invoiceNumberSchema.parse('A'.repeat(50)), 'A'.repeat(50));
+	assert.throws(() => invoiceNumberSchema.parse(''));
+	assert.throws(() => invoiceNumberSchema.parse('INV-001'));
+	assert.throws(() => invoiceNumberSchema.parse('A'.repeat(51)));
+});
 
 test('orderCreateSchema accepts null business and optional customer fields for business orders', () => {
 	const order = orderCreateSchema.parse({

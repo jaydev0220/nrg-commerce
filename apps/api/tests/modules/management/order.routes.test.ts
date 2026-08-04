@@ -37,6 +37,7 @@ const authContext: AuthenticatedStaffContext = {
 function createOrderRecord(status: 'pending' | 'confirmed' = 'pending') {
 	return {
 		id: '0189076c-4f2a-7fe1-b9fd-2d68df455401',
+		invoiceNumber: null,
 		businessId: null,
 		status,
 		customerName: 'Walk-in Buyer',
@@ -95,6 +96,7 @@ function createUpdatePreview(
 		proposed: {
 			version: current.version + 1,
 			status,
+			invoiceNumber: proposedOrder.invoiceNumber,
 			businessId: proposedOrder.businessId,
 			customerName: proposedOrder.customerName,
 			customerEmail: proposedOrder.customerEmail,
@@ -192,11 +194,15 @@ function createAppWithOrders(
 
 test('management order route creates an order and records an audit log', async () => {
 	let auditInput: Parameters<Pick<LogService, 'recordAuditLog'>['recordAuditLog']>[0] | undefined;
+	let createInput: unknown;
 	const app = createAppWithOrders(
 		{
 			listOrders: async () => ({ data: [], total: 0 }),
 			listOrderSkuLookups: async () => ({ data: [], total: 0 }),
-			createOrder: async () => createOrderRecord(),
+			createOrder: async (input) => {
+				createInput = input;
+				return createOrderRecord();
+			},
 			getOrder: async () => createOrderRecord(),
 			updateOrderStatus: async () => createUpdateResult('confirmed')
 		},
@@ -218,6 +224,7 @@ test('management order route creates an order and records an audit log', async (
 		},
 		body: JSON.stringify({
 			businessId: null,
+			invoiceNumber: 'inv001',
 			customerName: 'Walk-in Buyer',
 			customerPhone: '0912345678',
 			items: [
@@ -233,6 +240,7 @@ test('management order route creates an order and records an audit log', async (
 	});
 
 	assert.equal(response.status, 201, response.text());
+	assert.equal((createInput as { invoiceNumber?: string } | undefined)?.invoiceNumber, 'INV001');
 	assert.equal(auditInput?.entityType, 'order');
 	assert.equal(auditInput?.entityId, createOrderRecord().id);
 });
@@ -388,6 +396,38 @@ test('management order route records the server-derived item diff after an updat
 	assert.equal(metadata?.['versionBefore'], 0);
 	assert.equal(metadata?.['versionAfter'], 1);
 	assert.deepEqual(metadata?.['items'], result.preview.changes.items);
+});
+
+test('management order route passes invoice search to the order service', async () => {
+	let receivedQuery: { page: number; limit: number; search?: string } | undefined;
+	const app = createAppWithOrders(
+		{
+			listOrders: async (query) => {
+				receivedQuery = query;
+				return { data: [createOrderRecord()], total: 1 };
+			}
+		},
+		{ recordAuditLog: async () => createAuditRecord() }
+	);
+
+	const response = await requestApp(app, {
+		path: '/api/management/orders?search=INV001&page=2&limit=10'
+	});
+	const payload = response.json<{
+		data: Array<{ id: string }>;
+		pagination: { page: number; limit: number; total: number; totalPages: number };
+	}>();
+
+	assert.equal(response.status, 200, response.text());
+	assert.deepEqual(receivedQuery, {
+		page: 2,
+		limit: 10,
+		search: 'INV001',
+		sort: 'createdAt',
+		order: 'desc'
+	});
+	assert.equal(payload.data[0]?.id, createOrderRecord().id);
+	assert.deepEqual(payload.pagination, { page: 2, limit: 10, total: 1, totalPages: 1 });
 });
 
 test('management order route requires read permission for list', async () => {

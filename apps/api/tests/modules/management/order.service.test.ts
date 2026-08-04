@@ -28,6 +28,7 @@ test('createOrder computes item count and total amount from line-item snapshots'
 				return {
 					id: 'order-1',
 					businessId: null,
+					invoiceNumber: null,
 					status: 'pending',
 					customerName: input.customerName ?? null,
 					customerEmail: input.customerEmail ?? null,
@@ -357,6 +358,7 @@ test('updateOrder changes customer fields without replacing item snapshots', asy
 	const existing = {
 		id: 'order-1',
 		businessId: null,
+		invoiceNumber: null,
 		status: 'pending' as const,
 		customerName: 'Old',
 		customerEmail: null,

@@ -35,6 +35,7 @@ export type OrderLineItemUpdateInput =
 export type OrderUpdateInput = {
 	version: number;
 	status?: OrderStatus;
+	invoiceNumber?: string | null;
 	businessId?: string | null;
 	customerName?: string | null;
 	customerEmail?: string | null;
@@ -47,6 +48,7 @@ export type ResolvedOrderUpdateItem = Omit<ManagedOrderPreviewItemRecord, 'lineT
 
 type ProposedValues = {
 	status: OrderStatus;
+	invoiceNumber: string | null;
 	businessId: string | null;
 	customerName: string | null;
 	customerEmail: string | null;
@@ -161,6 +163,7 @@ function buildFieldChanges(
 ): ManagedOrderUpdatePreviewRecord['changes']['fields'] {
 	const fields: ManagedOrderUpdateField[] = [
 		'status',
+		'invoiceNumber',
 		'businessId',
 		'customerName',
 		'customerEmail',
@@ -243,6 +246,7 @@ export function buildOrderUpdatePreview(
 		proposed: {
 			version: current.version + 1,
 			status: proposedValues.status,
+			invoiceNumber: proposedValues.invoiceNumber,
 			businessId: proposedValues.businessId,
 			customerName: proposedValues.customerName,
 			customerEmail: proposedValues.customerEmail,

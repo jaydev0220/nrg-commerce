@@ -1,21 +1,20 @@
 <script lang="ts">
 	import { ArrowDown, ArrowUp, CircleMinus, CirclePlus, Pencil } from '@lucide/svelte';
 
-	import type { ManagedOrderUpdatePreview } from '$lib/api/admin-api';
+	import type { ManagedBusiness, ManagedOrderUpdatePreview } from '$lib/api/admin-api';
 	import { localizeAdminLabel } from '$lib/labels';
-
-	type Option = { value: string; label: string };
 
 	let {
 		preview,
-		businessOptions
-	}: { preview: ManagedOrderUpdatePreview; businessOptions: Option[] } = $props();
+		businesses
+	}: { preview: ManagedOrderUpdatePreview; businesses: ManagedBusiness[] } = $props();
 
 	const fieldLabels: Record<
 		ManagedOrderUpdatePreview['changes']['fields'][number]['field'],
 		string
 	> = {
 		status: '訂單狀態',
+		invoiceNumber: '發票號碼',
 		businessId: '客戶類型',
 		customerName: '客戶姓名',
 		customerEmail: '電子郵件',
@@ -25,7 +24,7 @@
 
 	function businessLabel(value: string | null): string {
 		if (!value) return '一般消費者';
-		return businessOptions.find((option) => option.value === value)?.label ?? value;
+		return businesses.find((business) => business.id === value)?.name ?? value;
 	}
 
 	function fieldValue(field: keyof typeof fieldLabels, value: string | null): string {

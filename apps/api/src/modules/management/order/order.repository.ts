@@ -34,6 +34,7 @@ type ListOrdersInput = {
 type CreateOrderInput = {
 	idempotencyKey: string;
 	idempotencyFingerprint: string;
+	invoiceNumber?: string | null;
 	businessId?: string | null;
 	customerName?: string | null;
 	customerEmail?: string | null;
@@ -179,6 +180,7 @@ function mapOrderItem(item: {
 
 function mapOrder(order: {
 	id: string;
+	invoiceNumber: string | null;
 	businessId: string | null;
 	status: OrderStatus;
 	customerName: string | null;
@@ -237,6 +239,7 @@ function mapOrder(order: {
 }): ManagedOrderRecord {
 	return {
 		id: order.id,
+		invoiceNumber: order.invoiceNumber,
 		businessId: order.businessId,
 		status: order.status,
 		customerName: order.customerName,
@@ -529,6 +532,8 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 				'The requested order status transition is not allowed.'
 			);
 		}
+		const invoiceNumber =
+			input.invoiceNumber === undefined ? current.invoiceNumber : input.invoiceNumber;
 		const businessId = input.businessId === undefined ? current.businessId : input.businessId;
 		const customerName =
 			input.customerName === undefined ? current.customerName : input.customerName;
@@ -559,6 +564,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 		const items = await resolveUpdateItems(transaction, current, input.items);
 		const preview = buildOrderUpdatePreview(current, {
 			status,
+			invoiceNumber,
 			businessId,
 			customerName,
 			customerEmail,
@@ -652,6 +658,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 				where: { id: orderId, version: current.version },
 				data: {
 					status: proposed.status,
+					invoiceNumber: proposed.invoiceNumber,
 					businessId: proposed.businessId,
 					customerName: proposed.customerName,
 					customerEmail: proposed.customerEmail,
@@ -686,6 +693,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 			const orderRecord = mapOrder(updated);
 			const persistedPreview = buildOrderUpdatePreview(current, {
 				status: orderRecord.status,
+				invoiceNumber: orderRecord.invoiceNumber,
 				businessId: orderRecord.businessId,
 				customerName: orderRecord.customerName,
 				customerEmail: orderRecord.customerEmail,
@@ -714,6 +722,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 			const searchFilters: Prisma.OrderWhereInput[] = input.search
 				? [
 						...(orderIds.length > 0 ? [{ id: { in: orderIds } }] : []),
+						{ invoiceNumber: { contains: input.search, mode: 'insensitive' } },
 						{ customerName: { contains: input.search, mode: 'insensitive' } },
 						{ customerEmail: { contains: input.search, mode: 'insensitive' } },
 						{
@@ -883,6 +892,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 					data: {
 						idempotencyKey: input.idempotencyKey,
 						idempotencyFingerprint: input.idempotencyFingerprint,
+						invoiceNumber: input.invoiceNumber ?? null,
 						businessId: input.businessId ?? null,
 						customerName: input.customerName ?? null,
 						customerEmail: input.customerEmail ?? null,
