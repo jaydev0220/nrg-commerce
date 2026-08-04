@@ -20,7 +20,7 @@
 	import BusinessLabelEditorDrawer from '$lib/components/businesses/BusinessLabelEditorDrawer.svelte';
 	import BusinessLabels from '$lib/components/businesses/BusinessLabels.svelte';
 	import Pagination from '$lib/components/shared/Pagination.svelte';
-	import { applyFilters, scheduleFilters } from '$lib/filter-navigation';
+	import { createFilterHandlers } from '$lib/filter-navigation';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -34,6 +34,7 @@
 	let selectedIds = $state<string[]>([]);
 	let bulkLabelId = $state('');
 	let bulkBusy = $state(false);
+	const filterHandlers = createFilterHandlers('/businesses');
 
 	const labelColors = ['#2F6FED', '#0F766E', '#B45309', '#BE123C', '#7C3AED', '#475569'];
 	const permissions = $derived(
@@ -235,8 +236,10 @@
 			<form
 				class="flex flex-wrap items-center gap-2 border-b border-border p-4"
 				onsubmit={(event) => event.preventDefault()}
-				oninput={(event) => scheduleFilters('/businesses', event.currentTarget as HTMLFormElement)}
-				onchange={(event) => applyFilters('/businesses', event.currentTarget as HTMLFormElement)}
+				oninput={filterHandlers.oninput}
+				onchange={filterHandlers.onchange}
+				oncompositionstart={filterHandlers.oncompositionstart}
+				oncompositionend={filterHandlers.oncompositionend}
 			>
 				<label class="relative min-w-0 flex-[1_1_16rem]">
 					<Search class="pointer-events-none absolute top-3 left-3 size-4 text-text-muted" />

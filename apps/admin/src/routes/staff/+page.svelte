@@ -26,7 +26,7 @@
 	import Drawer from '$lib/components/shared/Drawer.svelte';
 	import Pagination from '$lib/components/shared/Pagination.svelte';
 	import Tooltip from '$lib/components/shared/Tooltip.svelte';
-	import { applyFilters, scheduleFilters } from '$lib/filter-navigation';
+	import { createFilterHandlers } from '$lib/filter-navigation';
 	import { localizeAdminLabel } from '$lib/labels';
 	import type { PageData } from './$types';
 
@@ -36,6 +36,7 @@
 	let initialPassword = $state<string | null>(null);
 	let drawerMode = $state<'create' | 'edit' | null>(null);
 	let selected = $state<PageData['staff'][number] | null>(null);
+	const filterHandlers = createFilterHandlers('/staff');
 	const permissions = $derived(
 		new Set(data.currentStaff?.roles.flatMap((role) => role.permissions) ?? [])
 	);
@@ -164,8 +165,10 @@
 		<form
 			class="flex flex-wrap items-center gap-2 border-b border-border p-4"
 			onsubmit={(event) => event.preventDefault()}
-			oninput={(event) => scheduleFilters('/staff', event.currentTarget as HTMLFormElement)}
-			onchange={(event) => applyFilters('/staff', event.currentTarget as HTMLFormElement)}
+			oninput={filterHandlers.oninput}
+			onchange={filterHandlers.onchange}
+			oncompositionstart={filterHandlers.oncompositionstart}
+			oncompositionend={filterHandlers.oncompositionend}
 		>
 			<label class="relative min-w-0 flex-[1_1_16rem]">
 				<Search class="pointer-events-none absolute top-3 left-3 size-4 text-text-muted" />

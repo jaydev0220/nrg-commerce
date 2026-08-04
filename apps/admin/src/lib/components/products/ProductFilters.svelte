@@ -3,14 +3,18 @@
 	import { resolve } from '$app/paths';
 	import { RotateCcw, Search } from '@lucide/svelte';
 
-	import { applyFilters, scheduleFilters } from '$lib/filter-navigation';
+	import { createFilterHandlers } from '$lib/filter-navigation';
+
+	const filterHandlers = createFilterHandlers('/products');
 </script>
 
 <form
 	class="flex flex-wrap items-center gap-2 border-b border-border p-4"
 	onsubmit={(event) => event.preventDefault()}
-	oninput={(event) => scheduleFilters('/products', event.currentTarget as HTMLFormElement)}
-	onchange={(event) => applyFilters('/products', event.currentTarget as HTMLFormElement)}
+	oninput={filterHandlers.oninput}
+	onchange={filterHandlers.onchange}
+	oncompositionstart={filterHandlers.oncompositionstart}
+	oncompositionend={filterHandlers.oncompositionend}
 >
 	<label class="relative min-w-0 flex-[1_1_16rem]">
 		<Search class="pointer-events-none absolute top-3 left-3 size-4 text-text-muted" />

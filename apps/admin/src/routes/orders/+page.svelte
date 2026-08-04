@@ -19,13 +19,14 @@
 	import OrderDetailDrawer from '$lib/components/orders/OrderDetailDrawer.svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import Pagination from '$lib/components/shared/Pagination.svelte';
-	import { applyFilters, scheduleFilters } from '$lib/filter-navigation';
+	import { createFilterHandlers } from '$lib/filter-navigation';
 	import { localizeAdminLabel } from '$lib/labels';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let createOpen = $state(false);
 	let selected = $state<ManagedOrder | null>(null);
+	const filterHandlers = createFilterHandlers('/orders');
 
 	const permissions = $derived(
 		new Set(data.currentStaff?.roles.flatMap((role) => role.permissions) ?? [])
@@ -95,8 +96,10 @@
 		<form
 			class="flex flex-wrap items-center gap-2 border-b border-border p-4"
 			onsubmit={(event) => event.preventDefault()}
-			oninput={(event) => scheduleFilters('/orders', event.currentTarget as HTMLFormElement)}
-			onchange={(event) => applyFilters('/orders', event.currentTarget as HTMLFormElement)}
+			oninput={filterHandlers.oninput}
+			onchange={filterHandlers.onchange}
+			oncompositionstart={filterHandlers.oncompositionstart}
+			oncompositionend={filterHandlers.oncompositionend}
 		>
 			<label class="relative min-w-0 flex-[1_1_16rem]">
 				<span class="sr-only">搜尋訂單</span>

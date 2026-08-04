@@ -7,13 +7,14 @@
 	import LogDetailDrawer from '$lib/components/logs/LogDetailDrawer.svelte';
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import Pagination from '$lib/components/shared/Pagination.svelte';
-	import { applyFilters, scheduleFilters } from '$lib/filter-navigation';
+	import { createFilterHandlers } from '$lib/filter-navigation';
 	import { localizeAdminLabel } from '$lib/labels';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let detail = $state<Awaited<ReturnType<typeof loadLogDetail>> | null>(null);
 	let formError = $state('');
+	const filterHandlers = createFilterHandlers('/logs');
 
 	function levelTone(level: string): 'accent' | 'neutral' | 'warning' | 'danger' {
 		return level === 'error' || level === 'fatal'
@@ -51,8 +52,10 @@
 		<form
 			class="flex flex-wrap items-center gap-2 border-b border-border p-4"
 			onsubmit={(event) => event.preventDefault()}
-			oninput={(event) => scheduleFilters('/logs', event.currentTarget as HTMLFormElement)}
-			onchange={(event) => applyFilters('/logs', event.currentTarget as HTMLFormElement)}
+			oninput={filterHandlers.oninput}
+			onchange={filterHandlers.onchange}
+			oncompositionstart={filterHandlers.oncompositionstart}
+			oncompositionend={filterHandlers.oncompositionend}
 		>
 			<label class="relative min-w-0 flex-[1_1_16rem]">
 				<span class="sr-only">請求識別碼</span>
