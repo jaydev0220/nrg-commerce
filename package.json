@@ -13,6 +13,7 @@
 	},
 	"scripts": {
 		"dev": "pnpm --parallel --filter './apps/*' run dev",
+		"dev:mock": "node scripts/dev/mock.mjs",
 		"build": "pnpm -r run build",
 		"check": "pnpm -r run check",
 		"ci:generate": "pnpm --filter @packages/database db:generate && pnpm --filter @apps/admin types && pnpm --filter @apps/catalog types && pnpm --filter @apps/contact-worker types",

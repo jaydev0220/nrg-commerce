@@ -1284,6 +1284,64 @@ importers:
 
   packages/tsconfig: {}
 
+  tools/mock-api:
+    dependencies:
+      '@packages/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      cors:
+        specifier: catalog:express
+        version: 2.8.6
+      express:
+        specifier: catalog:express
+        version: 5.2.1(supports-color@10.2.2)
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@eslint/js':
+        specifier: catalog:lint
+        version: 10.0.1(eslint@10.7.0(jiti@2.7.0)(supports-color@10.2.2))
+      '@packages/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
+      '@packages/prettier-config':
+        specifier: workspace:*
+        version: link:../../packages/prettier-config
+      '@packages/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@types/cors':
+        specifier: catalog:express
+        version: 2.8.19
+      '@types/express':
+        specifier: catalog:express
+        version: 5.0.6
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      eslint:
+        specifier: catalog:lint
+        version: 10.7.0(jiti@2.7.0)(supports-color@10.2.2)
+      eslint-config-prettier:
+        specifier: catalog:lint
+        version: 10.1.8(eslint@10.7.0(jiti@2.7.0)(supports-color@10.2.2))
+      globals:
+        specifier: catalog:lint
+        version: 17.7.0
+      prettier:
+        specifier: catalog:lint
+        version: 3.9.5
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.1
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      typescript-eslint:
+        specifier: catalog:lint
+        version: 8.64.0(eslint@10.7.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3)
+
 packages:
 
   '@aws-sdk/checksums@3.1000.18':
