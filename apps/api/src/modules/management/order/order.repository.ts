@@ -71,6 +71,27 @@ type OrderSkuLookupInput = {
 	page: number;
 	limit: number;
 };
+const minimumOrderIdSearchHexCharacters = 3;
+const orderIdSearchPattern = /^[0-9a-f-]+$/i;
+
+function getOrderIdSearchFragment(search: string): string | null {
+	const normalized = search.trim().toLowerCase();
+	const hexCharacters = normalized.replaceAll('-', '');
+	if (hexCharacters.length < minimumOrderIdSearchHexCharacters) return null;
+	return orderIdSearchPattern.test(normalized) ? normalized : null;
+}
+
+async function findOrderIdsBySearch(database: DatabaseClient, search: string): Promise<string[]> {
+	const fragment = getOrderIdSearchFragment(search);
+	if (!fragment) return [];
+
+	const rows = await database.$queryRaw<Array<{ id: string }>>`
+		SELECT "id"
+		FROM "Order"
+		WHERE strpos(lower("id"::text), ${fragment}) > 0
+	`;
+	return rows.map((row) => row.id);
+}
 
 function mapBusiness(
 	business: {
@@ -689,23 +710,23 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 
 	return {
 		async listOrders(input: ListOrdersInput): Promise<PaginatedResult<ManagedOrderRecord>> {
-			const where = {
+			const orderIds = input.search ? await findOrderIdsBySearch(database, input.search) : [];
+			const searchFilters: Prisma.OrderWhereInput[] = input.search
+				? [
+						...(orderIds.length > 0 ? [{ id: { in: orderIds } }] : []),
+						{ customerName: { contains: input.search, mode: 'insensitive' } },
+						{ customerEmail: { contains: input.search, mode: 'insensitive' } },
+						{
+							business: {
+								is: { name: { contains: input.search, mode: 'insensitive' } }
+							}
+						}
+					]
+				: [];
+			const where: Prisma.OrderWhereInput = {
 				...(input.status ? { status: input.status } : {}),
 				...(input.businessId ? { businessId: input.businessId } : {}),
-				...(input.search
-					? {
-							OR: [
-								{ id: { contains: input.search, mode: 'insensitive' as const } },
-								{ customerName: { contains: input.search, mode: 'insensitive' as const } },
-								{ customerEmail: { contains: input.search, mode: 'insensitive' as const } },
-								{
-									business: {
-										is: { name: { contains: input.search, mode: 'insensitive' as const } }
-									}
-								}
-							]
-						}
-					: {})
+				...(searchFilters.length > 0 ? { OR: searchFilters } : {})
 			};
 			const [orders, total] = await Promise.all([
 				database.order.findMany({

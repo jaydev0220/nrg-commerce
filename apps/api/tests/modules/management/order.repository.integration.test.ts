@@ -162,3 +162,78 @@ test(
 		}
 	}
 );
+
+test(
+	'order repository searches order identifiers and text fields safely',
+	{ skip: databaseUrl ? false : 'TEST_DATABASE_URL is not configured.' },
+	async () => {
+		const pool = new Pool({ connectionString: databaseUrl, max: 5 });
+		const database = createDatabaseClient({ pool });
+		const repository = createPrismaOrderRepository(database);
+		const business = await database.business.create({ data: { name: 'Partial search business' } });
+		const order = await database.order.create({
+			data: {
+				businessId: business.id,
+				status: 'pending',
+				customerName: 'Partial search customer',
+				customerEmail: 'partial.search@example.com',
+				customerPhone: '0912345678',
+				itemCount: 0,
+				subtotalAmount: 0,
+				discountRate: 0,
+				discountAmount: 0,
+				totalAmount: 0
+			}
+		});
+
+		const listInput = (search: string) => ({
+			search,
+			sort: 'createdAt' as const,
+			order: 'desc' as const,
+			page: 1,
+			limit: 20
+		});
+
+		try {
+			for (const search of [order.id.slice(0, 3), order.id.slice(4, 7)]) {
+				const result = await repository.listOrders(listInput(search));
+				assert.ok(result.data.some((item) => item.id === order.id));
+			}
+
+			for (const search of [
+				'Partial search customer',
+				'partial.search@example.com',
+				'Partial search business'
+			]) {
+				const result = await repository.listOrders(listInput(search));
+				assert.ok(result.data.some((item) => item.id === order.id));
+			}
+
+			const compactId = order.id.replaceAll('-', '');
+			const searchableText =
+				'partial search customer partial.search@example.com partial search business';
+			const shortFragment = Array.from({ length: compactId.length - 1 }, (_, index) =>
+				compactId.slice(index, index + 2)
+			).find((fragment) => !searchableText.includes(fragment));
+			assert.ok(shortFragment);
+			const shortResult = await repository.listOrders(listInput(shortFragment));
+			assert.equal(
+				shortResult.data.some((item) => item.id === order.id),
+				false
+			);
+
+			const unsafeResult = await repository.listOrders(
+				listInput(`${order.id.slice(0, 3)}' OR 1=1 --`)
+			);
+			assert.equal(
+				unsafeResult.data.some((item) => item.id === order.id),
+				false
+			);
+		} finally {
+			await database.order.delete({ where: { id: order.id } });
+			await database.business.delete({ where: { id: business.id } });
+			await database.$disconnect();
+			await pool.end();
+		}
+	}
+);
