@@ -72,10 +72,7 @@
 
 	<section class="rounded-lg border border-border bg-bg-surface p-3 shadow-xs sm:p-4">
 		<div class="mb-2 flex flex-wrap items-center justify-between gap-3">
-			<div>
-				<h2 class="text-lg font-semibold tracking-normal text-text-heading">完成銷售趨勢</h2>
-				<p class="mt-1 text-xs text-text-muted">所有工作人員共用的完成訂單銷售資料</p>
-			</div>
+			<h2 class="text-lg font-semibold tracking-normal text-text-heading">銷售趨勢</h2>
 			<div
 				class="flex shrink-0 rounded-md border border-border bg-bg-sunken p-1"
 				role="group"

@@ -103,8 +103,8 @@ test('two tabs share one refresh and both finish their protected loads', async (
 	const secondPage = await context.newPage();
 	await Promise.all([firstPage.goto('/'), secondPage.goto('/')]);
 
-	await expect(firstPage.getByRole('heading', { name: '完成銷售趨勢' })).toBeVisible();
-	await expect(secondPage.getByRole('heading', { name: '完成銷售趨勢' })).toBeVisible();
+	await expect(firstPage.getByRole('heading', { name: '銷售趨勢' })).toBeVisible();
+	await expect(secondPage.getByRole('heading', { name: '銷售趨勢' })).toBeVisible();
 	expect(expiredRequestCount).toBe(2);
 	expect(refreshCount).toBe(1);
 });
