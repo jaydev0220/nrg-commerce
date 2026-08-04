@@ -4,7 +4,7 @@ export default defineConfig({
 	use: { baseURL: 'http://127.0.0.1:4175' },
 	webServer: [
 		{
-			command: 'node e2e/fixtures/mock-storefront-api.mjs',
+			command: 'pnpm --dir ../../tools/mock-api exec tsx src/index.ts --scenario e2e --port 4174',
 			port: 4174
 		},
 		{
