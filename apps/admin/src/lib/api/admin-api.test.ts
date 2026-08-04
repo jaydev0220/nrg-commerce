@@ -43,6 +43,8 @@ import {
 	getOptionalCurrentStaff,
 	loadOrderSkuLookups,
 	loadOrderDetail,
+	loadLogDetail,
+	loadLogsPageData,
 	loadProductEditorData,
 	loadSecuritySettingsData,
 	loadStaffPageData,
@@ -208,6 +210,22 @@ const orderRecord = {
 	updatedAt: timestamp,
 	business: null,
 	items: []
+};
+const logRecord = {
+	id: '00000000-0000-4000-8000-000000000011',
+	level: 'error',
+	kind: 'request',
+	message: 'Request failed',
+	actorStaffId: null,
+	requestId: 'request-1',
+	method: 'GET',
+	path: '/api/management/orders',
+	statusCode: 500,
+	entityType: null,
+	entityId: null,
+	metadata: { error: { stack: 'x'.repeat(10_000) } },
+	expiresAt: '2026-10-04T00:00:00.000Z',
+	createdAt: timestamp
 };
 
 const orderPreviewRecord = {
@@ -621,4 +639,19 @@ describe('admin API staff and order contracts', () => {
 
 it('formats absent dates without invoking Intl', () => {
 	expect(formatDate(null)).toBe('尚無資料');
+});
+
+describe('admin API log contracts', () => {
+	it('parses realistic redacted error metadata for list and detail responses', async () => {
+		client.requestJson
+			.mockResolvedValueOnce(paginated([logRecord]))
+			.mockResolvedValueOnce(logRecord);
+
+		const result = await loadLogsPageData();
+		const detail = await loadLogDetail(logRecord.id);
+
+		expect(result.data[0]?.createdAt).toBeInstanceOf(Date);
+		expect(detail.expiresAt).toBeInstanceOf(Date);
+		expect((detail.metadata as { error: { stack: string } }).error.stack).toHaveLength(10_000);
+	});
 });

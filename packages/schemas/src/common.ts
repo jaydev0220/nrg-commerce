@@ -1,12 +1,24 @@
 import { z } from 'zod';
 
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue =
+	string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
-const maximumAttributeDepth = 8;
-const maximumAttributeNodes = 500;
-const maximumAttributeEntries = 100;
-const maximumAttributeKeyLength = 100;
-const maximumAttributeStringLength = 2_000;
+export type JsonValueLimits = {
+	maximumDepth: number;
+	maximumNodes?: number;
+	maximumEntries: number;
+	maximumKeyLength: number;
+	maximumStringLength: number;
+};
+
+export const attributeJsonLimits = {
+	maximumDepth: 8,
+	maximumNodes: 500,
+	maximumEntries: 100,
+	maximumKeyLength: 100,
+	maximumStringLength: 2_000
+} as const satisfies JsonValueLimits;
+
 const unsafeAttributeKeys = new Set(['__proto__', 'constructor', 'prototype']);
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -16,9 +28,13 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 	return prototype === Object.prototype || prototype === null;
 }
 
-function isBoundedJsonValue(value: unknown): value is JsonValue {
+export function isBoundedJsonValue(
+	value: unknown,
+	limits: JsonValueLimits = attributeJsonLimits
+): value is JsonValue {
 	try {
 		const stack: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
+		const seen = new WeakSet<object>();
 		let nodeCount = 0;
 
 		while (stack.length > 0) {
@@ -26,7 +42,10 @@ function isBoundedJsonValue(value: unknown): value is JsonValue {
 			if (!current) break;
 
 			nodeCount += 1;
-			if (nodeCount > maximumAttributeNodes || current.depth > maximumAttributeDepth) {
+			if (
+				(limits.maximumNodes !== undefined && nodeCount > limits.maximumNodes) ||
+				current.depth > limits.maximumDepth
+			) {
 				return false;
 			}
 
@@ -36,12 +55,17 @@ function isBoundedJsonValue(value: unknown): value is JsonValue {
 				continue;
 			}
 			if (typeof current.value === 'string') {
-				if (current.value.length > maximumAttributeStringLength) return false;
+				if (current.value.length > limits.maximumStringLength) return false;
 				continue;
 			}
 
+			if (typeof current.value === 'object') {
+				if (seen.has(current.value)) return false;
+				seen.add(current.value);
+			}
+
 			if (Array.isArray(current.value)) {
-				if (current.value.length > maximumAttributeEntries) return false;
+				if (current.value.length > limits.maximumEntries) return false;
 				for (const item of current.value) {
 					stack.push({ value: item, depth: current.depth + 1 });
 				}
@@ -50,11 +74,11 @@ function isBoundedJsonValue(value: unknown): value is JsonValue {
 
 			if (!isPlainRecord(current.value)) return false;
 			const entries = Object.entries(current.value);
-			if (entries.length > maximumAttributeEntries) return false;
+			if (entries.length > limits.maximumEntries) return false;
 			for (const [key, entryValue] of entries) {
 				if (
 					key.length === 0 ||
-					key.length > maximumAttributeKeyLength ||
+					key.length > limits.maximumKeyLength ||
 					unsafeAttributeKeys.has(key)
 				) {
 					return false;

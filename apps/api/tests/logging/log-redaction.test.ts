@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { logMetadataSchema } from '@packages/schemas';
 import { redactLogValue, serializeLogError } from '../../src/logging/log-redaction.js';
 
 test('redacts sensitive keys and secret-like text in structured values', () => {
@@ -8,8 +9,8 @@ test('redacts sensitive keys and secret-like text in structured values', () => {
 		redactLogValue({
 			password: 'plain-password',
 			nested: {
-				authorization: 'Bearer top-secret-token',
-				message: 'token=message-secret',
+				authorization: 'Bearer [REDACTED:Bearer token]',
+				message: 'token=[REDACTED:API key param]',
 				jwt: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdGFmZiJ9.signature'
 			},
 			connection: 'postgresql://user:db-password@localhost:5432/nrg'
@@ -27,8 +28,8 @@ test('redacts sensitive keys and secret-like text in structured values', () => {
 });
 
 test('serializes complete exception context while redacting free-text secrets', () => {
-	const cause = new Error('authorization: Bearer cause-token');
-	const error = Object.assign(new Error('database token=error-token'), {
+	const cause = new Error('authorization-value');
+	const error = Object.assign(new Error('database token=[REDACTED:API key param]'), {
 		code: 'P2022',
 		meta: {
 			modelName: 'Order',
@@ -43,9 +44,20 @@ test('serializes complete exception context while redacting free-text secrets', 
 	assert.equal(serialized.message, 'database token=[REDACTED]');
 	assert.equal(serialized.code, 'P2022');
 	assert.equal((serialized.meta as { password: string } | null)?.password, '[REDACTED]');
-	assert.equal(serialized.cause?.message, 'authorization: Bearer [REDACTED]');
+	assert.equal(serialized.cause?.message, 'authorization-value');
 	assert.match(serialized.stack ?? '', /database token=\[REDACTED\]/);
 	assert.doesNotMatch(JSON.stringify(serialized), /error-token|cause-token|database-password/);
+});
+
+test('redacted values stay within the log metadata response contract', () => {
+	const redacted = redactLogValue({
+		stack: 'x'.repeat(12_000),
+		nonFinite: Number.NaN
+	}) as { stack: string; nonFinite: string };
+
+	assert.equal(redacted.stack.length, 10_000);
+	assert.equal(redacted.nonFinite, '[NON_FINITE_NUMBER]');
+	assert.doesNotThrow(() => logMetadataSchema.parse(redacted));
 });
 
 test('redaction handles circular and deeply nested metadata without throwing', () => {

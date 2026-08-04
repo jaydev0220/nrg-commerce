@@ -1,3 +1,4 @@
+import { logMetadataLimits } from '@packages/schemas';
 import type { Prisma } from '@packages/database';
 
 const sensitiveLogKeyPattern =
@@ -6,13 +7,15 @@ const sensitiveLogKeyPattern =
 const textRedactionPatterns: Array<[RegExp, string]> = [
 	[/(^|[\s"'=])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '$1[REDACTED]'],
 	[/(authorization\s*[:=]\s*)(?!bearer\s+|basic\s+)[^\s,;]+/gi, '$1[REDACTED]'],
+	[/((?:bearer|basic)\s+)\[[^\]]*\]/gi, '$1[REDACTED]'],
 	[/((?:bearer|basic)\s+)[^\s,;]+/gi, '$1[REDACTED]'],
+	[
+		/((?:password|passphrase|secret|token|api[_-]?key|cookie)\s*[:=]\s*)\[[^\]]*\]/gi,
+		'$1[REDACTED]'
+	],
 	[/((?:password|passphrase|secret|token|api[_-]?key|cookie)\s*[:=]\s*)[^\s,;]+/gi, '$1[REDACTED]'],
 	[/(\b(?:postgres(?:ql)?|mysql):\/\/)[^\s:/]+:[^\s@]+@/gi, '$1[REDACTED]:[REDACTED]@']
 ];
-const maximumLogDepth = 12;
-const maximumLogCollectionEntries = 100;
-const maximumLogStringLength = 10_000;
 
 export function redactSensitiveText(value: string): string {
 	return textRedactionPatterns.reduce(
@@ -28,26 +31,29 @@ function redactLogValueInternal(
 ): Prisma.InputJsonValue | null {
 	if (value === null || value === undefined) return null;
 	if (typeof value === 'string') {
-		return redactSensitiveText(value).slice(0, maximumLogStringLength);
+		return redactSensitiveText(value).slice(0, logMetadataLimits.maximumStringLength);
 	}
-	if (typeof value === 'number' || typeof value === 'boolean') return value;
-	if (depth >= maximumLogDepth) return '[TRUNCATED]';
+	if (typeof value === 'number') {
+		return Number.isFinite(value) ? value : '[NON_FINITE_NUMBER]';
+	}
+	if (typeof value === 'boolean') return value;
+	if (depth >= logMetadataLimits.maximumDepth) return '[TRUNCATED]';
 	if (typeof value === 'object') {
 		if (seen.has(value)) return '[CIRCULAR]';
 		seen.add(value);
 	}
 	if (Array.isArray(value)) {
 		return value
-			.slice(0, maximumLogCollectionEntries)
+			.slice(0, logMetadataLimits.maximumEntries)
 			.map((item) => redactLogValueInternal(item, seen, depth + 1));
 	}
 	if (typeof value === 'object') {
 		try {
 			return Object.fromEntries(
 				Object.entries(value)
-					.slice(0, maximumLogCollectionEntries)
+					.slice(0, logMetadataLimits.maximumEntries)
 					.map(([key, nestedValue]) => [
-						key.slice(0, 200),
+						key.slice(0, logMetadataLimits.maximumKeyLength),
 						sensitiveLogKeyPattern.test(key)
 							? '[REDACTED]'
 							: redactLogValueInternal(nestedValue, seen, depth + 1)
@@ -59,7 +65,7 @@ function redactLogValueInternal(
 	}
 
 	try {
-		return redactSensitiveText(String(value)).slice(0, maximumLogStringLength);
+		return redactSensitiveText(String(value)).slice(0, logMetadataLimits.maximumStringLength);
 	} catch {
 		return '[UNSERIALIZABLE]';
 	}
@@ -87,7 +93,7 @@ export function serializeLogError(
 	seen = new Set<unknown>(),
 	depth = 0
 ): SerializedLogError {
-	if (depth >= maximumLogDepth) {
+	if (depth >= logMetadataLimits.maximumDepth) {
 		return {
 			name: 'TruncatedError',
 			message: '[TRUNCATED]',

@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { logSchema, managementLogListQuerySchema } from '../src/index.js';
+import {
+	logMetadataLimits,
+	logMetadataSchema,
+	logSchema,
+	managementLogListQuerySchema
+} from '../src/index.js';
 
 test('logSchema accepts audit and request log records', () => {
 	const parsedLog = logSchema.parse({
@@ -25,6 +30,40 @@ test('logSchema accepts audit and request log records', () => {
 
 	assert.equal(parsedLog.level, 'warn');
 	assert.equal(parsedLog.kind, 'audit');
+});
+
+test('logMetadataSchema accepts redacted error metadata within logger limits', () => {
+	let nested: unknown = 'leaf';
+	for (let depth = 0; depth < logMetadataLimits.maximumDepth - 1; depth += 1) {
+		nested = { child: nested };
+	}
+
+	assert.doesNotThrow(() =>
+		logMetadataSchema.parse({
+			stack: 'x'.repeat(logMetadataLimits.maximumStringLength),
+			nested
+		})
+	);
+});
+
+test('logMetadataSchema rejects cyclic metadata', () => {
+	const cyclic: Record<string, unknown> = {};
+	cyclic['self'] = cyclic;
+
+	assert.throws(() => logMetadataSchema.parse(cyclic));
+});
+
+test('logMetadataSchema rejects metadata beyond logger limits', () => {
+	assert.throws(() =>
+		logMetadataSchema.parse({
+			stack: 'x'.repeat(logMetadataLimits.maximumStringLength + 1)
+		})
+	);
+	assert.throws(() =>
+		logMetadataSchema.parse({
+			['x'.repeat(logMetadataLimits.maximumKeyLength + 1)]: 'value'
+		})
+	);
 });
 
 test('managementLogListQuerySchema parses filters and pagination defaults', () => {
