@@ -121,7 +121,7 @@
 			</a>
 		</form>
 		<div class="overflow-x-auto">
-			<table class="w-full min-w-[900px] text-left text-sm">
+			<table class="w-full min-w-225 text-left text-sm">
 				<thead class="border-b border-border bg-bg-sunken text-xs text-text-muted">
 					<tr>
 						<th class="px-4 py-3">時間</th>

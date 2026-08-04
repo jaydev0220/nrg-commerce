@@ -62,9 +62,9 @@
 						<div
 							class="mt-2 grid gap-1 text-text-muted sm:grid-cols-[1fr_auto_1fr] sm:items-center"
 						>
-							<span class="break-words">{fieldValue(change.field, change.before)}</span>
+							<span class="wrap-break-word">{fieldValue(change.field, change.before)}</span>
 							<span aria-hidden="true">→</span>
-							<strong class="break-words text-text-heading">
+							<strong class="wrap-break-word text-text-heading">
 								{fieldValue(change.field, change.after)}
 							</strong>
 						</div>

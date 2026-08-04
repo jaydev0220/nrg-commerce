@@ -103,7 +103,7 @@
 </script>
 
 {#if request}
-	<div class="fixed inset-0 z-[80] grid place-items-center bg-black/45 p-4">
+	<div class="fixed inset-0 z-80 grid place-items-center bg-black/45 p-4">
 		<div
 			class="w-full max-w-md rounded-lg border border-border bg-bg-surface p-5 shadow-xl"
 			role="dialog"

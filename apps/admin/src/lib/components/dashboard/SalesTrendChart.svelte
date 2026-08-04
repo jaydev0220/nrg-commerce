@@ -101,7 +101,7 @@
 </div>
 
 <div class="overflow-x-auto">
-	<div class="relative min-w-[60rem]">
+	<div class="relative min-w-240">
 		{#if activeTrend}
 			<div
 				id="sales-trend-tooltip"

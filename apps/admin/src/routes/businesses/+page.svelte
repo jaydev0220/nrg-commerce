@@ -332,7 +332,7 @@
 			{/if}
 
 			<div class="overflow-x-auto">
-				<table class="w-full min-w-[760px] text-left text-sm">
+				<table class="w-full min-w-190 text-left text-sm">
 					<thead class="border-b border-border bg-bg-sunken text-xs text-text-muted">
 						<tr>
 							<th class="w-12 px-4 py-3">
