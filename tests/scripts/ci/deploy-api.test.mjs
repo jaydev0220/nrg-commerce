@@ -292,6 +292,44 @@ test('reconcileIngressRules fails on unmanaged rules and removes stale managed r
 	);
 });
 
+test('reconcileIngressRules retries mutations after Azure finishes active provisioning', async () => {
+	const config = parseApiDeploymentEnvironment(deploymentEnvironment, image, 'production');
+	let setAttempts = 0;
+	let showAttempts = 0;
+	const run = async (command, args) => {
+		if (command === 'az' && args.includes('access-restriction') && args.includes('list')) {
+			return json({ value: [] });
+		}
+		if (command === 'az' && args.includes('access-restriction') && args.includes('set')) {
+			setAttempts += 1;
+			if (setAttempts === 1) {
+				throw Object.assign(new Error('Container App operation in progress'), {
+					stderr:
+						'ERROR: (ContainerAppOperationInProgress) Cannot modify a container app because there is an active provisioning operation in progress.'
+				});
+			}
+			return { stdout: '' };
+		}
+		if (command === 'az' && args[0] === 'containerapp' && args[1] === 'show') {
+			showAttempts += 1;
+			return json({
+				properties: { provisioningState: showAttempts === 1 ? 'InProgress' : 'Succeeded' }
+			});
+		}
+		throw new Error(`Unexpected command: ${command} ${args.join(' ')}`);
+	};
+
+	await reconcileIngressRules({
+		run,
+		config,
+		cidrs: ['192.0.2.0/24'],
+		waitOptions: { intervalMs: 0, timeoutMs: 1000 }
+	});
+
+	assert.equal(setAttempts, 2);
+	assert.equal(showAttempts, 2);
+});
+
 test('deployApi promotes a healthy new revision after migrations and DNS reconciliation', async () => {
 	const originalArgv = process.argv;
 	process.argv = ['node', 'deploy-api.mjs', '--environment', 'production', '--image', image];

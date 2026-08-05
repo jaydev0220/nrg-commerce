@@ -240,6 +240,11 @@ function isMissingAzureResource(error) {
 	return /not found|could not be found|ResourceNotFound|ResourceGroupNotFound/iu.test(message);
 }
 
+function isContainerAppOperationInProgress(error) {
+	const message = `${error?.stderr ?? ''} ${error?.message ?? ''}`;
+	return /ContainerAppOperationInProgress|active provisioning operation/iu.test(message);
+}
+
 async function showResourceGroup(run, config) {
 	try {
 		return await runJson(run, 'az', ['group', 'show', '--name', config.resourceGroup]);
@@ -405,7 +410,53 @@ export async function fetchCloudflareIpv4Cidrs(fetcher = fetch) {
 	return [...new Set(cidrs)].sort();
 }
 
-export async function reconcileIngressRules({ run, config, cidrs }) {
+async function waitForContainerAppProvisioning(run, config, options = {}) {
+	const intervalMs = options.intervalMs ?? 10_000;
+	const timeoutMs = options.timeoutMs ?? 10 * 60_000;
+	const sleep =
+		options.sleep ??
+		((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+	const startedAt = Date.now();
+
+	while (Date.now() - startedAt <= timeoutMs) {
+		const app = await showContainerApp(run, config);
+		if (!app) throw new Error('Azure Container App disappeared while waiting for provisioning.');
+		const provisioningState = app.properties?.provisioningState;
+		if (!provisioningState || provisioningState === 'Succeeded') return app;
+		if (['Failed', 'Canceled', 'Deleting'].includes(provisioningState)) {
+			throw new Error(`Azure Container App provisioning entered ${provisioningState}.`);
+		}
+		await sleep(intervalMs);
+	}
+
+	throw new Error('Timed out waiting for Azure Container App provisioning to complete.');
+}
+
+async function runContainerAppMutation(run, config, args, options = {}) {
+	const timeoutMs = options.timeoutMs ?? 10 * 60_000;
+	const startedAt = Date.now();
+	let lastOperationError;
+
+	while (Date.now() - startedAt <= timeoutMs) {
+		try {
+			return await run('az', args);
+		} catch (error) {
+			if (!isContainerAppOperationInProgress(error)) throw error;
+			lastOperationError = error;
+			const remainingMs = Math.max(timeoutMs - (Date.now() - startedAt), 0);
+			await waitForContainerAppProvisioning(run, config, {
+				...options,
+				timeoutMs: remainingMs
+			});
+		}
+	}
+
+	throw new Error('Timed out waiting to modify Azure Container App ingress.', {
+		cause: lastOperationError
+	});
+}
+
+export async function reconcileIngressRules({ run, config, cidrs, waitOptions }) {
 	const listed = await runJson(run, 'az', [
 		'containerapp',
 		'ingress',
@@ -430,43 +481,53 @@ export async function reconcileIngressRules({ run, config, cidrs }) {
 		const name = ruleNameForCidr(cidr);
 		const current = existing.find((rule) => rule.name === name && rule.cidr === cidr);
 		if (current) continue;
-		await run('az', [
-			'containerapp',
-			'ingress',
-			'access-restriction',
-			'set',
-			'--name',
-			config.containerAppName,
-			'--resource-group',
-			config.resourceGroup,
-			'--rule-name',
-			name,
-			'--ip-address',
-			cidr,
-			'--action',
-			'Allow',
-			'--description',
-			'Cloudflare IPv4 origin range managed by CI.',
-			'--output',
-			'none'
-		]);
-	}
-	for (const rule of existing) {
-		if (!desiredNames.has(rule.name)) {
-			await run('az', [
+		await runContainerAppMutation(
+			run,
+			config,
+			[
 				'containerapp',
 				'ingress',
 				'access-restriction',
-				'remove',
+				'set',
 				'--name',
 				config.containerAppName,
 				'--resource-group',
 				config.resourceGroup,
 				'--rule-name',
-				rule.name,
+				name,
+				'--ip-address',
+				cidr,
+				'--action',
+				'Allow',
+				'--description',
+				'Cloudflare IPv4 origin range managed by CI.',
 				'--output',
 				'none'
-			]);
+			],
+			waitOptions
+		);
+	}
+	for (const rule of existing) {
+		if (!desiredNames.has(rule.name)) {
+			await runContainerAppMutation(
+				run,
+				config,
+				[
+					'containerapp',
+					'ingress',
+					'access-restriction',
+					'remove',
+					'--name',
+					config.containerAppName,
+					'--resource-group',
+					config.resourceGroup,
+					'--rule-name',
+					rule.name,
+					'--output',
+					'none'
+				],
+				waitOptions
+			);
 		}
 	}
 	return [...desiredNames];
@@ -622,7 +683,7 @@ export async function deployApi({
 	}
 
 	const cidrs = await fetchCloudflareIpv4Cidrs(fetcher);
-	await reconcileIngressRules({ run, config, cidrs });
+	await reconcileIngressRules({ run, config, cidrs, waitOptions });
 	await applyApiDns(run, config, environment, true, fetcher);
 	try {
 		await bindCustomDomain(run, config);
