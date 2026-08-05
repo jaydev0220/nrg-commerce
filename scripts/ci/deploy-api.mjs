@@ -141,8 +141,6 @@ export function buildCreateArguments(config, environment) {
 		config.containerAppEnvironment,
 		'--image',
 		config.image,
-		'--registry-server',
-		'ghcr.io',
 		'--target-port',
 		'8080',
 		'--ingress',

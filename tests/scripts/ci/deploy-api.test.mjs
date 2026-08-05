@@ -78,6 +78,9 @@ test('buildCreateArguments configures the public port, resource bounds, secret r
 	assert.ok(args.includes('multiple'));
 	assert.ok(args.includes('--target-port'));
 	assert.ok(args.includes('8080'));
+	assert.ok(!args.includes('--registry-server'));
+	assert.ok(!args.includes('--registry-username'));
+	assert.ok(!args.includes('--registry-password'));
 	assert.ok(args.includes('DATABASE_URL=secretref:DATABASE_URL'));
 	assert.ok(
 		args.includes('DATABASE_URL=postgresql://app:secret@db.example.com/app?sslmode=verify-full')
