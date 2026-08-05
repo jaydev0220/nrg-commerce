@@ -679,7 +679,6 @@ jobs:
       WEBAUTHN_RP_ID: ${{ vars.API_WEBAUTHN_RP_ID }}
       WEBAUTHN_RP_NAME: ${{ vars.API_WEBAUTHN_RP_NAME }}
       WEBAUTHN_ORIGIN: ${{ vars.API_WEBAUTHN_ORIGIN }}
-      R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       R2_BUCKET_NAME: nrg-commerce-staging-product-assets
       R2_UPLOAD_BUCKET_NAME: nrg-commerce-staging-product-uploads
       R2_PUBLIC_BASE_URL: ${{ vars.CDN_BASE_URL }}
@@ -756,6 +755,7 @@ jobs:
           REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
           PENDING_TOKEN_SECRET: ${{ secrets.PENDING_TOKEN_SECRET }}
           DATA_ENCRYPTION_SECRET: ${{ secrets.DATA_ENCRYPTION_SECRET }}
+          R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.API_OTEL_EXPORTER_OTLP_HEADERS }}
@@ -800,7 +800,6 @@ jobs:
       WEBAUTHN_RP_ID: ${{ vars.API_WEBAUTHN_RP_ID }}
       WEBAUTHN_RP_NAME: ${{ vars.API_WEBAUTHN_RP_NAME }}
       WEBAUTHN_ORIGIN: ${{ vars.API_WEBAUTHN_ORIGIN }}
-      R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       R2_BUCKET_NAME: nrg-commerce-product-assets
       R2_UPLOAD_BUCKET_NAME: nrg-commerce-product-uploads
       R2_PUBLIC_BASE_URL: ${{ vars.CDN_BASE_URL }}
@@ -877,6 +876,7 @@ jobs:
           REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
           PENDING_TOKEN_SECRET: ${{ secrets.PENDING_TOKEN_SECRET }}
           DATA_ENCRYPTION_SECRET: ${{ secrets.DATA_ENCRYPTION_SECRET }}
+          R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.API_OTEL_EXPORTER_OTLP_HEADERS }}
