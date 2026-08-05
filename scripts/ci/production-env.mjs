@@ -145,7 +145,8 @@ function api(environment, errors) {
 		'PENDING_TOKEN_SECRET',
 		'DATA_ENCRYPTION_SECRET',
 		'R2_ACCESS_KEY_ID',
-		'R2_SECRET_ACCESS_KEY'
+		'R2_SECRET_ACCESS_KEY',
+		'OTEL_RESOURCE_ATTRIBUTES'
 	]) {
 		required(environment, name, errors);
 	}

@@ -45,7 +45,8 @@ const validEnvironment = {
 	R2_SECRET_ACCESS_KEY: 'r2-secret-key',
 	WEBAUTHN_ORIGIN: 'https://admin.example.com',
 	R2_PUBLIC_BASE_URL: 'https://cdn.example.com/assets',
-	OTEL_EXPORTER_OTLP_ENDPOINT: 'https://otel.example.com/v1'
+	OTEL_EXPORTER_OTLP_ENDPOINT: 'https://otel.example.com/v1',
+	OTEL_RESOURCE_ATTRIBUTES: 'service.namespace=nrg-commerce,deployment.environment.name=production'
 };
 
 test('validates landing content and Cloudflare deployment values', () => {

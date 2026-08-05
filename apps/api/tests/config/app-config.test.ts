@@ -24,7 +24,8 @@ const validProductionEnvironment = {
 	R2_ACCESS_KEY_ID: 'access-key-id',
 	R2_SECRET_ACCESS_KEY: 'r2-secret-access-key',
 	R2_PUBLIC_BASE_URL: 'https://cdn.example.com',
-	OTEL_EXPORTER_OTLP_ENDPOINT: 'https://telemetry.example.com'
+	OTEL_EXPORTER_OTLP_ENDPOINT: 'https://telemetry.example.com',
+	OTEL_RESOURCE_ATTRIBUTES: 'service.namespace=nrg-commerce,deployment.environment.name=production'
 } satisfies NodeJS.ProcessEnv;
 
 test('development config supports the admin preview and Vite origins', () => {

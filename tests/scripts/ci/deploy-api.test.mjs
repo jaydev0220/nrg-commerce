@@ -29,7 +29,8 @@ const deploymentEnvironment = {
 	PENDING_TOKEN_SECRET: 'pending',
 	DATA_ENCRYPTION_SECRET: 'encryption',
 	R2_ACCESS_KEY_ID: 'r2-access',
-	R2_SECRET_ACCESS_KEY: 'r2-secret'
+	R2_SECRET_ACCESS_KEY: 'r2-secret',
+	OTEL_RESOURCE_ATTRIBUTES: 'service.namespace=nrg-commerce,deployment.environment.name=production'
 };
 
 function json(value) {
@@ -80,6 +81,11 @@ test('buildCreateArguments configures the public port, resource bounds, secret r
 	assert.ok(args.includes('DATABASE_URL=secretref:DATABASE_URL'));
 	assert.ok(
 		args.includes('DATABASE_URL=postgresql://app:secret@db.example.com/app?sslmode=verify-full')
+	);
+	assert.ok(
+		args.includes(
+			'OTEL_RESOURCE_ATTRIBUTES=service.namespace=nrg-commerce,deployment.environment.name=production'
+		)
 	);
 
 	const defaults = buildCreateArguments(
