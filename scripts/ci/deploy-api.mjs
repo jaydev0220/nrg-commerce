@@ -105,9 +105,9 @@ export function parseApiDeploymentEnvironment(environment, image, environmentNam
 		image,
 		revisionSuffix: `api-${revisionDigest.slice(0, 12)}`,
 		resourceGroup: required(environment, 'AZURE_RESOURCE_GROUP'),
+		location: required(environment, 'AZURE_LOCATION').toLowerCase(),
 		containerAppEnvironment: required(environment, 'AZURE_CONTAINER_APP_ENVIRONMENT'),
 		containerAppName: required(environment, 'AZURE_CONTAINER_APP_NAME'),
-		certificateName: required(environment, 'AZURE_CONTAINER_APP_CERTIFICATE_NAME'),
 		apiDomain: required(environment, 'API_DOMAIN').toLowerCase(),
 		zoneId: required(environment, 'CLOUDFLARE_ZONE_ID'),
 		dnsWorkspace: required(environment, 'API_DNS_TF_WORKSPACE'),
@@ -231,6 +231,82 @@ async function runJson(run, command, args, options) {
 	}
 }
 
+function isMissingAzureResource(error) {
+	const message = `${error?.stderr ?? ''} ${error?.message ?? ''}`;
+	return /not found|could not be found|ResourceNotFound|ResourceGroupNotFound/iu.test(message);
+}
+
+async function showResourceGroup(run, config) {
+	try {
+		return await runJson(run, 'az', ['group', 'show', '--name', config.resourceGroup]);
+	} catch (error) {
+		if (isMissingAzureResource(error)) return null;
+		throw error;
+	}
+}
+
+async function showContainerAppEnvironment(run, config) {
+	try {
+		return await runJson(run, 'az', [
+			'containerapp',
+			'env',
+			'show',
+			'--name',
+			config.containerAppEnvironment,
+			'--resource-group',
+			config.resourceGroup
+		]);
+	} catch (error) {
+		if (isMissingAzureResource(error)) return null;
+		throw error;
+	}
+}
+
+export async function ensureAzureInfrastructure(run, config) {
+	let resourceGroup = await showResourceGroup(run, config);
+	if (!resourceGroup) {
+		await run('az', [
+			'group',
+			'create',
+			'--name',
+			config.resourceGroup,
+			'--location',
+			config.location,
+			'--output',
+			'none'
+		]);
+		resourceGroup = await showResourceGroup(run, config);
+		if (!resourceGroup) throw new Error('Azure resource group was not available after creation.');
+	}
+
+	let containerAppEnvironment = await showContainerAppEnvironment(run, config);
+	if (!containerAppEnvironment) {
+		await run('az', [
+			'containerapp',
+			'env',
+			'create',
+			'--name',
+			config.containerAppEnvironment,
+			'--resource-group',
+			config.resourceGroup,
+			'--location',
+			config.location,
+			'--environment-mode',
+			'ConsumptionOnly',
+			'--logs-destination',
+			'none',
+			'--output',
+			'none'
+		]);
+		containerAppEnvironment = await showContainerAppEnvironment(run, config);
+		if (!containerAppEnvironment) {
+			throw new Error('Azure Container Apps environment was not available after creation.');
+		}
+	}
+
+	return { resourceGroup, containerAppEnvironment };
+}
+
 async function showContainerApp(run, config) {
 	try {
 		return await runJson(run, 'az', [
@@ -242,8 +318,7 @@ async function showContainerApp(run, config) {
 			config.resourceGroup
 		]);
 	} catch (error) {
-		const message = `${error?.stderr ?? ''} ${error?.message ?? ''}`;
-		if (/not found|could not be found|ResourceNotFound/iu.test(message)) return null;
+		if (isMissingAzureResource(error)) return null;
 		throw error;
 	}
 }
@@ -429,8 +504,6 @@ async function bindCustomDomain(run, config) {
 		config.apiDomain,
 		'--environment',
 		config.containerAppEnvironment,
-		'--certificate',
-		config.certificateName,
 		'--validation-method',
 		'CNAME',
 		'--output',
@@ -538,6 +611,7 @@ export async function deployApi({
 } = {}) {
 	const { environmentName, image } = parseArguments(process.argv.slice(2));
 	const config = parseApiDeploymentEnvironment(environment, image, environmentName);
+	await ensureAzureInfrastructure(run, config);
 	const deployment = await ensureContainerApp(run, config, environment);
 	config.containerAppHostname = deployment.app.properties?.configuration?.ingress?.fqdn;
 	config.verificationId = deployment.app.properties?.customDomainVerificationId;

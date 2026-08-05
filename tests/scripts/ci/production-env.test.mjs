@@ -29,9 +29,9 @@ const validEnvironment = {
 	AZURE_TENANT_ID: 'tenant-id',
 	AZURE_SUBSCRIPTION_ID: 'subscription-id',
 	AZURE_RESOURCE_GROUP: 'nrg-commerce-production',
+	AZURE_LOCATION: 'eastasia',
 	AZURE_CONTAINER_APP_ENVIRONMENT: 'nrg-commerce-production',
 	AZURE_CONTAINER_APP_NAME: 'nrg-commerce-api',
-	AZURE_CONTAINER_APP_CERTIFICATE_NAME: 'api-production',
 	CLOUDFLARE_ZONE_ID: 'fedcba9876543210fedcba9876543210',
 	CORS_ORIGINS: 'https://admin.example.com,https://catalog.example.com',
 	TRUST_PROXY_HOPS: '1',
@@ -122,6 +122,7 @@ test('validates API deployment and database values without returning secrets', (
 		deploymentEnvironment: 'production',
 		apiDomain: 'api.example.com',
 		azureResourceGroup: 'nrg-commerce-production',
+		azureLocation: 'eastasia',
 		azureContainerAppEnvironment: 'nrg-commerce-production',
 		azureContainerAppName: 'nrg-commerce-api',
 		apiDnsTerraformWorkspace: 'nrg-commerce-api-dns-production'

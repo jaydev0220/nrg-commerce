@@ -132,9 +132,9 @@ function api(environment, errors) {
 		'AZURE_TENANT_ID',
 		'AZURE_SUBSCRIPTION_ID',
 		'AZURE_RESOURCE_GROUP',
+		'AZURE_LOCATION',
 		'AZURE_CONTAINER_APP_ENVIRONMENT',
 		'AZURE_CONTAINER_APP_NAME',
-		'AZURE_CONTAINER_APP_CERTIFICATE_NAME',
 		'API_DNS_TF_WORKSPACE',
 		'HCP_TERRAFORM_TOKEN',
 		'CLOUDFLARE_ZONE_ID',
@@ -173,6 +173,7 @@ function api(environment, errors) {
 		deploymentEnvironment,
 		apiDomain: environment['API_DOMAIN']?.trim().toLowerCase() ?? '',
 		azureResourceGroup: environment['AZURE_RESOURCE_GROUP']?.trim() ?? '',
+		azureLocation: environment['AZURE_LOCATION']?.trim().toLowerCase() ?? '',
 		azureContainerAppEnvironment: environment['AZURE_CONTAINER_APP_ENVIRONMENT']?.trim() ?? '',
 		azureContainerAppName: environment['AZURE_CONTAINER_APP_NAME']?.trim() ?? '',
 		apiDnsTerraformWorkspace: environment['API_DNS_TF_WORKSPACE']?.trim() ?? ''

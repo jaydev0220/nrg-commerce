@@ -6,6 +6,7 @@ import {
 	buildTemplatePatch,
 	defaultRun,
 	deployApi,
+	ensureAzureInfrastructure,
 	fetchCloudflareIpv4Cidrs,
 	parseApiDeploymentEnvironment,
 	reconcileIngressRules,
@@ -15,9 +16,9 @@ import {
 const image = 'ghcr.io/jaydev0220/nrg-commerce-api@sha256:' + 'a'.repeat(64);
 const deploymentEnvironment = {
 	AZURE_RESOURCE_GROUP: 'nrg-commerce',
+	AZURE_LOCATION: 'eastasia',
 	AZURE_CONTAINER_APP_ENVIRONMENT: 'nrg-commerce',
 	AZURE_CONTAINER_APP_NAME: 'nrg-commerce-api',
-	AZURE_CONTAINER_APP_CERTIFICATE_NAME: 'api-production',
 	API_DOMAIN: 'api.example.com',
 	CLOUDFLARE_ZONE_ID: '0123456789abcdef0123456789abcdef',
 	API_DNS_TF_WORKSPACE: 'nrg-commerce-api-dns-production',
@@ -41,6 +42,7 @@ test('parseApiDeploymentEnvironment requires an immutable digest and creates a b
 	const config = parseApiDeploymentEnvironment(deploymentEnvironment, image, 'production');
 	assert.equal(config.revisionSuffix, 'api-' + 'a'.repeat(12));
 	assert.equal(config.apiDomain, 'api.example.com');
+	assert.equal(config.location, 'eastasia');
 	assert.throws(
 		() =>
 			parseApiDeploymentEnvironment(
@@ -97,6 +99,54 @@ test('buildCreateArguments configures the public port, resource bounds, secret r
 	);
 	assert.ok(defaults.includes('NODE_ENV=production'));
 	assert.ok(defaults.includes('PORT=8080'));
+});
+
+test('ensureAzureInfrastructure creates missing Azure resources once without a log workspace', async () => {
+	const config = parseApiDeploymentEnvironment(deploymentEnvironment, image, 'production');
+	const calls = [];
+	let groupExists = false;
+	let environmentExists = false;
+	const notFound = () =>
+		Object.assign(new Error('ResourceNotFound'), { stderr: 'ResourceNotFound' });
+	const run = async (command, args) => {
+		calls.push([command, args]);
+		if (command === 'az' && args[0] === 'group' && args[1] === 'show') {
+			if (!groupExists) throw notFound();
+			return json({ name: config.resourceGroup, location: config.location });
+		}
+		if (command === 'az' && args[0] === 'group' && args[1] === 'create') {
+			groupExists = true;
+			return { stdout: '' };
+		}
+		if (command === 'az' && args[0] === 'containerapp' && args[1] === 'env' && args[2] === 'show') {
+			if (!environmentExists) throw notFound();
+			return json({ name: config.containerAppEnvironment, location: config.location });
+		}
+		if (
+			command === 'az' &&
+			args[0] === 'containerapp' &&
+			args[1] === 'env' &&
+			args[2] === 'create'
+		) {
+			environmentExists = true;
+			return { stdout: '' };
+		}
+		throw new Error(`Unexpected command: ${command} ${args.join(' ')}`);
+	};
+
+	await ensureAzureInfrastructure(run, config);
+	await ensureAzureInfrastructure(run, config);
+
+	const groupCreates = calls.filter(([, args]) => args[0] === 'group' && args[1] === 'create');
+	assert.equal(groupCreates.length, 1);
+	assert.ok(groupCreates[0][1].includes(config.location));
+	const environmentCreates = calls.filter(
+		([, args]) => args[0] === 'containerapp' && args[1] === 'env' && args[2] === 'create'
+	);
+	assert.equal(environmentCreates.length, 1);
+	assert.ok(environmentCreates[0][1].includes('ConsumptionOnly'));
+	assert.ok(environmentCreates[0][1].includes('--logs-destination'));
+	assert.ok(environmentCreates[0][1].includes('none'));
 });
 
 test('buildTemplatePatch preserves existing environment references and adds health probes', () => {
@@ -262,7 +312,16 @@ test('deployApi promotes a healthy new revision after migrations and DNS reconci
 		calls.push([command, args]);
 		if (command === 'az' && args.includes('revision') && args.includes('show'))
 			return json({ properties: { runningState: 'Running', healthState: 'Healthy' } });
-		if (command === 'az' && args.includes('containerapp') && args.includes('show')) {
+		if (command === 'az' && args[0] === 'group' && args[1] === 'show') {
+			return json({ name: deploymentEnvironment.AZURE_RESOURCE_GROUP, location: 'eastasia' });
+		}
+		if (command === 'az' && args[0] === 'containerapp' && args[1] === 'env' && args[2] === 'show') {
+			return json({
+				name: deploymentEnvironment.AZURE_CONTAINER_APP_ENVIRONMENT,
+				location: 'eastasia'
+			});
+		}
+		if (command === 'az' && args[0] === 'containerapp' && args[1] === 'show') {
 			showCount += 1;
 			return json({
 				...app,
@@ -299,6 +358,9 @@ test('deployApi promotes a healthy new revision after migrations and DNS reconci
 		assert.equal(result.revision, 'api-new');
 		assert.ok(calls.some(([, args]) => args.includes('traffic')));
 		assert.ok(calls.some(([, args]) => args.includes('rest')));
+		const bindCall = calls.find(([, args]) => args.includes('hostname') && args.includes('bind'));
+		assert.ok(bindCall);
+		assert.ok(!bindCall[1].includes('--certificate'));
 	} finally {
 		process.argv = originalArgv;
 	}
