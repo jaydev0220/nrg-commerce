@@ -1,0 +1,7 @@
+ignore:
+  # Node.js fixed CVE-2026-58043 in 24.18.1, but Grype's current NVD CPE
+  # record does not include the fixed 24.x version and flags patched releases.
+  - vulnerability: CVE-2026-58043
+    package:
+      name: node
+      version: 24.19.0
