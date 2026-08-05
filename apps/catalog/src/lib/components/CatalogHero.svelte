@@ -1,12 +1,16 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import type { Pathname } from '$app/types';
+
 	type Props = {
 		title: string;
 		description: string;
 		eyebrow: string;
 		homeLabel: string;
+		homeHref?: string;
 	};
 
-	let { title, description, eyebrow, homeLabel }: Props = $props();
+	let { title, description, eyebrow, homeLabel, homeHref }: Props = $props();
 </script>
 
 <section class="border-b border-border bg-bg-surface">
@@ -15,7 +19,16 @@
 			class="mb-6 flex items-center gap-2 text-sm text-text-muted"
 			aria-label="Breadcrumb"
 		>
-			<span>{homeLabel}</span>
+			{#if homeHref}
+				<a
+					href={resolve(homeHref as Pathname)}
+					class="duration-base transition-[color,transform] ease-ui hover:-translate-y-0.5 hover:text-text-accent"
+				>
+					{homeLabel}
+				</a>
+			{:else}
+				<span>{homeLabel}</span>
+			{/if}
 			<span aria-hidden="true">/</span>
 			<span class="text-text-body">{title}</span>
 		</nav>

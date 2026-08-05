@@ -61,7 +61,8 @@
 			locale,
 			siteName: organization.name,
 			siteOrigin,
-			resolveLocalizedUrl: resolveLandingSeoUrl
+			resolveLocalizedUrl: resolveLandingSeoUrl,
+			trailingSlash: 'always'
 		})
 	);
 	const structuredData = $derived(
@@ -71,6 +72,7 @@
 			locale,
 			siteOrigin,
 			resolveLocalizedUrl: resolveLandingSeoUrl,
+			trailingSlash: 'always',
 			logoUrl: assetUrl(SHARED_ASSETS.logoLight),
 			organization,
 			sameAs: socialLinks.map((social) => social.href).filter(Boolean),
@@ -89,7 +91,8 @@
 	const alternateLinks = $derived(
 		buildAlternateLinks({
 			pathname: page.url.pathname,
-			resolveLocalizedUrl: resolveLandingSeoUrl
+			resolveLocalizedUrl: resolveLandingSeoUrl,
+			trailingSlash: 'always'
 		})
 	);
 	const navigationLinks = $derived.by<NavLinkItem[]>(() =>

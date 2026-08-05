@@ -4,6 +4,8 @@
 	"catalog_description": "Browse product families, then select specifications on each product page to resolve the matching SKU.",
 	"catalog_meta_title": "Product Catalog | NRG GLASS",
 	"catalog_meta_description": "Explore NRG Glass laboratory glassware by product family, specification, and SKU for research, education, and industrial applications.",
+	"catalog_category_meta_title": "{categoryName} | Product Catalog | NRG GLASS",
+	"catalog_category_meta_description": "Browse {categoryName} laboratory glassware and available product specifications from NRG Glass.",
 	"product_meta_title": "{productName} | NRG GLASS",
 	"product_meta_description": "Review {productName} specifications, available configurations, product images, and SKU options from NRG Glass.",
 	"catalog_eyebrow": "{year} PRODUCT INDEX",

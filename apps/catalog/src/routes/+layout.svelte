@@ -40,9 +40,8 @@
 	let { children } = $props();
 	let locale = $derived((extractLocaleFromUrl(page.url) ?? 'zh-tw') as Locale);
 	let seoLocale = $derived(locale as SupportedLocale);
-	let skipTarget = $derived(
-		page.url.pathname.includes('/products/') ? 'product-content' : 'catalog-content'
-	);
+	let isProductPage = $derived(Boolean(page.data['product']));
+	let skipTarget = $derived(isProductPage ? 'product-content' : 'catalog-content');
 	let theme = $state<'light' | 'dark'>('light');
 
 	const currentYear = new Date().getFullYear();
@@ -59,6 +58,7 @@
 	});
 	const canonicalPathname = $derived(deLocalizeUrl(page.url).pathname);
 	const seoPage = $derived(page.data.seo ?? fallbackSeo);
+	const seoBreadcrumbItems = $derived(page.data['seoBreadcrumbItems']);
 	const organization: SeoOrganizationData = $derived({
 		name: m.company_name(),
 		description: m.company_description(),
@@ -94,14 +94,15 @@
 			organization,
 			sameAs: [facebookUrl, lineUrl].filter(Boolean),
 			breadcrumbItems:
-				canonicalPathname === '/'
+				seoBreadcrumbItems ??
+				(canonicalPathname === '/'
 					? []
 					: [
 							{
 								name: m.catalog_title(),
 								pathname: '/'
 							}
-						]
+						])
 		})
 	);
 	const productStructuredData = $derived(
@@ -249,9 +250,7 @@
 		href={`#${skipTarget}`}
 		class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-100 focus:rounded-md focus:bg-brand focus:px-4 focus:py-2 focus:text-text-on-accent"
 	>
-		{page.url.pathname.includes('/products/')
-			? m.catalog_skip_to_product()
-			: m.catalog_skip_to_catalog()}
+		{isProductPage ? m.catalog_skip_to_product() : m.catalog_skip_to_catalog()}
 	</a>
 
 	<Navbar

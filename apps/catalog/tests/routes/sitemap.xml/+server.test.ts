@@ -1,12 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/server/catalog-api.js', () => ({
+	fetchCatalogSitemapCategories: vi.fn(async () => [
+		{ slug: 'laboratory glassware', updatedAt: '2026-07-19T00:00:00.000Z', productCount: 2 }
+	]),
 	fetchCatalogSitemapProducts: vi.fn(async () => [
 		{ slug: 'glass beaker', updatedAt: '2026-07-20T00:00:00.000Z' }
 	])
 }));
 
-import { fetchCatalogSitemapProducts } from '$lib/server/catalog-api.js';
+import {
+	fetchCatalogSitemapCategories,
+	fetchCatalogSitemapProducts
+} from '$lib/server/catalog-api.js';
 import { GET } from '../../../src/routes/sitemap.xml/+server.js';
 
 describe('catalog sitemap', () => {
@@ -21,6 +27,7 @@ describe('catalog sitemap', () => {
 		expect(response.headers.get('cache-control')).toContain('max-age=300');
 		expect(xml).toContain('https://catalog.example.com/glass%20beaker');
 		expect(xml).toContain('https://catalog.example.com/en/glass%20beaker');
+		expect(xml).toContain('https://catalog.example.com/categories/laboratory%20glassware');
 		expect(xml).toContain('hreflang="x-default"');
 		expect(xml).toContain('<lastmod>2026-07-20T00:00:00.000Z</lastmod>');
 	});
@@ -34,5 +41,15 @@ describe('catalog sitemap', () => {
 
 		expect(response.status).toBe(503);
 		expect(response.headers.get('cache-control')).toBe('no-store');
+	});
+
+	it('returns an uncached 503 when category discovery fails', async () => {
+		vi.mocked(fetchCatalogSitemapCategories).mockRejectedValueOnce(new Error('unavailable'));
+		const response = await GET({
+			fetch,
+			url: new URL('https://catalog.example.com/sitemap.xml')
+		} as never);
+
+		expect(response.status).toBe(503);
 	});
 });

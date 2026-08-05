@@ -4,6 +4,8 @@
 	"catalog_description": "瀏覽產品系列，並在各產品頁依需求選擇對應規格。",
 	"catalog_meta_title": "產品目錄 | 巧新有限公司",
 	"catalog_meta_description": "依產品系列與規格瀏覽巧新實驗室玻璃儀器，適用於研究、教學與產業應用。",
+	"catalog_category_meta_title": "{categoryName} | 產品目錄 | 巧新有限公司",
+	"catalog_category_meta_description": "瀏覽{categoryName}實驗室玻璃器材及巧新有限公司提供的產品規格。",
 	"product_meta_title": "{productName} | 巧新有限公司",
 	"product_meta_description": "查看 {productName} 的產品規格、可選配置與產品圖片。",
 	"catalog_eyebrow": "{year} 產品索引",

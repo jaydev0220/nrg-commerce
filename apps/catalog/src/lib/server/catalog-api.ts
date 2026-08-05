@@ -175,13 +175,40 @@ export async function fetchCatalogSitemapProducts(fetcher: typeof fetch) {
 	return products;
 }
 
+function flattenCategoryTree(categories: CatalogCategoryNode[]): CatalogCategoryRecord[] {
+	return categories.flatMap((category) => [category, ...flattenCategoryTree(category.children)]);
+}
+
+export async function fetchCatalogSitemapCategories(fetcher: typeof fetch) {
+	const response = await fetchJson(
+		fetcher,
+		'/api/storefront/products/categories',
+		storefrontCategoryTreeListResponseSchema,
+		new URLSearchParams({ includeTree: 'true', includeProductCount: 'true' })
+	);
+
+	return flattenCategoryTree(response.data)
+		.filter((category) => (category.productCount ?? 0) > 0)
+		.map(({ slug, updatedAt, productCount }) => ({ slug, updatedAt, productCount }));
+}
+
 export async function fetchCatalogCategoryBySlug(
 	fetcher: typeof fetch,
-	categorySlug: string
+	categorySlug: string,
+	options: { includeChildren?: boolean; includeProductCount?: boolean } = {}
 ): Promise<CatalogCategoryRecord> {
+	const searchParams = new URLSearchParams();
+	if (options.includeChildren !== undefined) {
+		searchParams.set('includeChildren', String(options.includeChildren));
+	}
+	if (options.includeProductCount !== undefined) {
+		searchParams.set('includeProductCount', String(options.includeProductCount));
+	}
+
 	return fetchJson(
 		fetcher,
 		`/api/storefront/products/categories/${encodeURIComponent(categorySlug)}`,
-		storefrontCategoryResponseSchema
+		storefrontCategoryResponseSchema,
+		searchParams
 	);
 }

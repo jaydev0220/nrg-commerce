@@ -1,4 +1,7 @@
-import { fetchCatalogSitemapProducts } from '$lib/server/catalog-api.js';
+import {
+	fetchCatalogSitemapCategories,
+	fetchCatalogSitemapProducts
+} from '$lib/server/catalog-api.js';
 import type { RequestHandler } from './$types';
 
 const staticPaths = ['/', '/inquiry'];
@@ -25,9 +28,19 @@ function renderEntry(origin: string, pathname: string, lastModified?: string) {
 
 export const GET: RequestHandler = async ({ fetch, url }) => {
 	try {
-		const products = await fetchCatalogSitemapProducts(fetch);
+		const [products, categories] = await Promise.all([
+			fetchCatalogSitemapProducts(fetch),
+			fetchCatalogSitemapCategories(fetch)
+		]);
 		const entries = [
 			...staticPaths.map((pathname) => renderEntry(url.origin, pathname)),
+			...categories.map((category) =>
+				renderEntry(
+					url.origin,
+					`/categories/${encodeURIComponent(category.slug)}`,
+					category.updatedAt
+				)
+			),
 			...products.map((product) =>
 				renderEntry(url.origin, `/${encodeURIComponent(product.slug)}`, product.updatedAt)
 			)

@@ -43,6 +43,11 @@
 		return selectedIndex >= 0 ? selectedIndex : 0;
 	});
 	let catalogHref = $derived(localizeHref('/', { locale }) as Pathname);
+	let categoryHref = $derived(
+		data.category
+			? (localizeHref(`/categories/${data.category.slug}`, { locale }) as Pathname)
+			: null
+	);
 	let inquiryHref = $derived.by(() => {
 		const queryString = buildInquiryQueryString({ skuCode: model.activeSku.skuCode });
 		const href = localizeHref('/inquiry', { locale });
@@ -68,6 +73,7 @@
 		{catalogHref}
 		catalogLabel={m.catalog_title()}
 		categoryLabel={localizedCategoryName}
+		{categoryHref}
 		productLabel={localizedName}
 	/>
 

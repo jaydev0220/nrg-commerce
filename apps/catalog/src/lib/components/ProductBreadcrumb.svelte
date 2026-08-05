@@ -7,10 +7,11 @@
 		catalogHref: string;
 		catalogLabel: string;
 		categoryLabel: string | null;
+		categoryHref?: string | null;
 		productLabel: string;
 	};
 
-	let { catalogHref, catalogLabel, categoryLabel, productLabel }: Props = $props();
+	let { catalogHref, catalogLabel, categoryLabel, categoryHref, productLabel }: Props = $props();
 </script>
 
 <section class="border-b border-border bg-bg-surface">
@@ -27,7 +28,16 @@
 			</a>
 			{#if categoryLabel}
 				<ChevronRight class="size-3.5" />
-				<span>{categoryLabel}</span>
+				{#if categoryHref}
+					<a
+						href={resolve(categoryHref as Pathname)}
+						class="duration-base transition-[color,transform] ease-ui hover:-translate-y-0.5 hover:text-text-accent"
+					>
+						{categoryLabel}
+					</a>
+				{:else}
+					<span>{categoryLabel}</span>
+				{/if}
 			{/if}
 			<ChevronRight class="size-3.5" />
 			<span class="text-text-body">{productLabel}</span>

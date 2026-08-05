@@ -1,19 +1,25 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import type { Pathname } from '$app/types';
 	import * as m from '$lib/paraglide/messages';
+	import { localizeHref } from '$lib/paraglide/runtime';
 	import type { CatalogCategoryListEntry, CatalogLocale } from '$lib/catalog/types.js';
 
 	type Props = {
 		locale: CatalogLocale;
 		categoryList: CatalogCategoryListEntry[];
 		selectedCategorySlug: string | null;
-		onCategoryChange: (categorySlug: string | null) => void;
 		onReset: () => void;
 	};
 
-	let { locale, categoryList, selectedCategorySlug, onCategoryChange, onReset }: Props = $props();
+	let { locale, categoryList, selectedCategorySlug, onReset }: Props = $props();
 
 	function getCategoryName(entry: CatalogCategoryListEntry): string {
 		return locale === 'en' ? (entry.category.nameEn ?? entry.category.name) : entry.category.name;
+	}
+
+	function getCategoryHref(categorySlug: string): Pathname {
+		return localizeHref(`/categories/${categorySlug}`, { locale }) as Pathname;
 	}
 </script>
 
@@ -30,18 +36,16 @@
 			</button>
 		</div>
 		<div class="space-y-1">
-			<button
-				type="button"
+			<a
+				href={resolve(localizeHref('/', { locale }) as Pathname)}
 				class={`duration-base flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-[color,background-color,transform] ease-ui hover:-translate-y-0.5 ${selectedCategorySlug === null ? 'bg-brand-subtle text-text-accent' : 'text-text-muted hover:bg-bg-sunken hover:text-text-heading'}`}
-				onclick={() => onCategoryChange(null)}
 			>
 				<span class="min-w-0 flex-1 truncate">{m.catalog_all_categories()}</span>
-			</button>
+			</a>
 			{#each categoryList as entry (entry.category.id)}
-				<button
-					type="button"
+				<a
+					href={resolve(getCategoryHref(entry.category.slug))}
 					class={`duration-base flex w-full items-center gap-2 rounded-md py-2 text-left text-sm transition-[color,background-color,transform] ease-ui hover:-translate-y-0.5 ${entry.depth > 0 ? 'pr-2 pl-7' : 'px-2 font-semibold'} ${selectedCategorySlug === entry.category.slug ? 'bg-brand-subtle text-text-accent' : 'text-text-muted hover:bg-bg-sunken hover:text-text-heading'}`}
-					onclick={() => onCategoryChange(entry.category.slug)}
 				>
 					{#if entry.depth > 0}
 						<span class="h-px w-2.5 bg-border-strong"></span>
@@ -50,7 +54,7 @@
 					{#if entry.category.productCount !== undefined}
 						<span class="font-mono text-[10px]">{entry.category.productCount}</span>
 					{/if}
-				</button>
+				</a>
 			{/each}
 		</div>
 	</section>

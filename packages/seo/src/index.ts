@@ -40,6 +40,8 @@ export type SeoAlternateLink = {
 	href: string;
 };
 
+export type SeoTrailingSlash = 'always' | 'never' | 'ignore';
+
 const SUPPORTED_LOCALES: readonly SupportedLocale[] = ['zh-tw', 'en'];
 
 const SCHEMA_LANGUAGES: Record<SupportedLocale, string> = {
@@ -64,9 +66,17 @@ function normalizeSiteOrigin(siteOrigin: string): string {
 function resolveUrl(
 	resolveLocalizedUrl: ResolveLocalizedUrl,
 	pathname: string,
-	locale: SupportedLocale
+	locale: SupportedLocale,
+	trailingSlash: SeoTrailingSlash
 ): string {
-	return new URL(resolveLocalizedUrl(pathname, locale).toString()).href;
+	const url = new URL(resolveLocalizedUrl(pathname, locale).toString());
+	if (trailingSlash === 'always' && url.pathname !== '/' && !url.pathname.endsWith('/')) {
+		url.pathname = `${url.pathname}/`;
+	} else if (trailingSlash === 'never' && url.pathname !== '/') {
+		url.pathname = url.pathname.replace(/\/+$/u, '');
+	}
+
+	return url.href;
 }
 
 export function createSeoPageData(seo: SeoPageData): { seo: SeoPageData } {
@@ -79,7 +89,8 @@ export function buildSeoConfig({
 	locale,
 	siteName,
 	siteOrigin,
-	resolveLocalizedUrl
+	resolveLocalizedUrl,
+	trailingSlash = 'ignore'
 }: {
 	seo: SeoPageData;
 	pathname: string;
@@ -87,11 +98,12 @@ export function buildSeoConfig({
 	siteName: string;
 	siteOrigin: string;
 	resolveLocalizedUrl: ResolveLocalizedUrl;
+	trailingSlash?: SeoTrailingSlash;
 }): SeoConfig {
 	return {
 		title: seo.title,
 		description: seo.description,
-		url: resolveUrl(resolveLocalizedUrl, pathname, locale),
+		url: resolveUrl(resolveLocalizedUrl, pathname, locale, trailingSlash),
 		website: normalizeSiteOrigin(siteOrigin),
 		language: OG_LOCALES[locale],
 		open_graph_image: seo.openGraphImage,
@@ -105,21 +117,23 @@ export function buildAlternateLinks({
 	pathname,
 	resolveLocalizedUrl,
 	locales = SUPPORTED_LOCALES,
-	defaultLocale = 'zh-tw'
+	defaultLocale = 'zh-tw',
+	trailingSlash = 'ignore'
 }: {
 	pathname: string;
 	resolveLocalizedUrl: ResolveLocalizedUrl;
 	locales?: readonly SupportedLocale[];
 	defaultLocale?: SupportedLocale;
+	trailingSlash?: SeoTrailingSlash;
 }): SeoAlternateLink[] {
 	const alternateLinks = locales.map((locale) => ({
 		hreflang: HREFLANGS[locale],
-		href: resolveUrl(resolveLocalizedUrl, pathname, locale)
+		href: resolveUrl(resolveLocalizedUrl, pathname, locale, trailingSlash)
 	}));
 
 	alternateLinks.push({
 		hreflang: 'x-default',
-		href: resolveUrl(resolveLocalizedUrl, pathname, defaultLocale)
+		href: resolveUrl(resolveLocalizedUrl, pathname, defaultLocale, trailingSlash)
 	});
 
 	return alternateLinks;
@@ -135,7 +149,8 @@ export function buildStructuredData({
 	organization,
 	sameAs = [],
 	breadcrumbItems = [],
-	mainEntityOrganization = false
+	mainEntityOrganization = false,
+	trailingSlash = 'ignore'
 }: {
 	seo: SeoPageData;
 	pathname: string;
@@ -147,9 +162,10 @@ export function buildStructuredData({
 	sameAs?: string[];
 	breadcrumbItems?: SeoBreadcrumbItem[];
 	mainEntityOrganization?: boolean;
+	trailingSlash?: SeoTrailingSlash;
 }): SchemaOrgProps['schema'] {
 	const siteUrl = normalizeSiteOrigin(siteOrigin);
-	const canonicalUrl = resolveUrl(resolveLocalizedUrl, pathname, locale);
+	const canonicalUrl = resolveUrl(resolveLocalizedUrl, pathname, locale, trailingSlash);
 	const organizationId = `${siteUrl}#organization`;
 	const websiteId = `${siteUrl}#website`;
 	const inLanguage = SCHEMA_LANGUAGES[locale];
@@ -236,7 +252,7 @@ export function buildStructuredData({
 					'@type': 'ListItem',
 					position: index + 1,
 					name: item.name,
-					item: resolveUrl(resolveLocalizedUrl, item.pathname, locale)
+					item: resolveUrl(resolveLocalizedUrl, item.pathname, locale, trailingSlash)
 				})),
 				{
 					'@type': 'ListItem',

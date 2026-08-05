@@ -223,7 +223,6 @@
 						{locale}
 						{categoryList}
 						selectedCategorySlug={queryState.categorySlug}
-						onCategoryChange={(categorySlug) => updateQuery({ categorySlug })}
 						onReset={resetFilters}
 					/>
 					<CatalogHelpCard />
@@ -301,7 +300,6 @@
 				{locale}
 				{categoryList}
 				selectedCategorySlug={queryState.categorySlug}
-				onCategoryChange={(categorySlug) => updateQuery({ categorySlug })}
 				onReset={resetFilters}
 			/>
 		</div>

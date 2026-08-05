@@ -140,3 +140,44 @@ test('buildStructuredData omits sameAs and breadcrumbs when they are not supplie
 	assert.ok(schema[0]);
 	assert.equal('sameAs' in schema[0], false);
 });
+
+test('SEO URLs can enforce a trailing-slash policy without changing the default behavior', () => {
+	const config = buildSeoConfig({
+		seo: seoPage,
+		pathname: '/about',
+		locale: 'en',
+		siteName: 'NRG Instruments',
+		siteOrigin: 'https://landing.example.com',
+		resolveLocalizedUrl,
+		trailingSlash: 'always'
+	});
+	const alternateLinks = buildAlternateLinks({
+		pathname: '/about',
+		resolveLocalizedUrl,
+		trailingSlash: 'always'
+	});
+
+	assert.equal(config.url, 'https://catalog.example.com/en/about/');
+	assert.equal(alternateLinks[0]?.href, 'https://catalog.example.com/about/');
+	assert.equal(alternateLinks[1]?.href, 'https://catalog.example.com/en/about/');
+});
+
+test('SEO URLs can remove trailing slashes while preserving the site root', () => {
+	const config = buildSeoConfig({
+		seo: seoPage,
+		pathname: '/about/',
+		locale: 'zh-tw',
+		siteName: 'NRG Instruments',
+		siteOrigin: 'https://catalog.example.com',
+		resolveLocalizedUrl,
+		trailingSlash: 'never'
+	});
+	const rootLinks = buildAlternateLinks({
+		pathname: '/',
+		resolveLocalizedUrl,
+		trailingSlash: 'never'
+	});
+
+	assert.equal(config.url, 'https://catalog.example.com/about');
+	assert.equal(rootLinks[0]?.href, 'https://catalog.example.com/');
+});

@@ -10,6 +10,7 @@ import {
 	fetchCatalogCategoryBySlug,
 	fetchCatalogIndexData,
 	fetchCatalogProductBySlug,
+	fetchCatalogSitemapCategories,
 	fetchCatalogSitemapProducts
 } from '$lib/server/catalog-api.js';
 
@@ -153,5 +154,49 @@ describe('catalog API client', () => {
 		]);
 		expect(fetcher).toHaveBeenCalledTimes(2);
 		expect(new URL(String(fetcher.mock.calls[0]?.[0])).searchParams.get('limit')).toBe('100');
+	});
+
+	it('flattens the category tree and excludes empty categories from sitemap data', async () => {
+		const fetcher = vi.fn<typeof fetch>(async () =>
+			jsonResponse({
+				data: [
+					{
+						id: '00000000-0000-4000-8000-000000000010',
+						slug: 'glassware',
+						name: 'Glassware',
+						nameEn: null,
+						description: null,
+						descriptionEn: null,
+						position: 0,
+						deletedAt: null,
+						parentId: null,
+						productCount: 2,
+						createdAt: timestamp,
+						updatedAt: timestamp,
+						children: [
+							{
+								id: '00000000-0000-4000-8000-000000000011',
+								slug: 'empty',
+								name: 'Empty',
+								nameEn: null,
+								description: null,
+								descriptionEn: null,
+								position: 0,
+								deletedAt: null,
+								parentId: '00000000-0000-4000-8000-000000000010',
+								productCount: 0,
+								createdAt: timestamp,
+								updatedAt: timestamp,
+								children: []
+							}
+						]
+					}
+				]
+			})
+		);
+
+		await expect(fetchCatalogSitemapCategories(fetcher)).resolves.toEqual([
+			{ slug: 'glassware', updatedAt: timestamp, productCount: 2 }
+		]);
 	});
 });

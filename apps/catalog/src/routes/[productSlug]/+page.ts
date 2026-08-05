@@ -14,9 +14,26 @@ export const load: PageLoad = ({ data, url }) => {
 		m.product_meta_description({ productName: localizedName });
 	const openGraphImage =
 		data.product.thumbnail?.imageUrl ?? assetUrl(CATALOG_ASSETS.galleryOpenGraph);
+	const productUrl = `${url.origin}${url.pathname}`;
+	const productGroupId = `${productUrl}#product-${data.product.id}`;
+	const productImages = [
+		...(data.product.thumbnail ? [data.product.thumbnail.imageUrl] : []),
+		...data.product.images.map((image) => image.imageUrl)
+	].filter((imageUrl, index, images) => images.indexOf(imageUrl) === index);
 
 	return {
 		...data,
+		seoBreadcrumbItems: [
+			{ name: m.catalog_title(), pathname: '/' },
+			...(data.category
+				? [
+						{
+							name: localizeValue(locale, data.category.name, data.category.nameEn),
+							pathname: `/categories/${data.category.slug}`
+						}
+					]
+				: [])
+		],
 		...createSeoPageData({
 			title: localizedTitle,
 			description: localizedDescription,
@@ -26,15 +43,28 @@ export const load: PageLoad = ({ data, url }) => {
 		}),
 		productStructuredData: {
 			'@type': 'ProductGroup',
-			'@id': `${url.origin}${url.pathname}#product`,
+			'@id': productGroupId,
+			productGroupID: data.product.id,
 			name: localizedName,
 			description: localizedDescription,
-			url: `${url.origin}${url.pathname}`,
-			...(data.product.thumbnail ? { image: data.product.thumbnail.imageUrl } : {}),
+			url: productUrl,
+			brand: {
+				'@type': 'Brand',
+				name: m.company_name()
+			},
+			...(data.category
+				? {
+						category: localizeValue(locale, data.category.name, data.category.nameEn)
+					}
+				: {}),
+			...(productImages.length > 0 ? { image: productImages } : {}),
 			hasVariant: data.product.skus.map((sku) => ({
 				'@type': 'Product',
+				'@id': `${productUrl}#sku-${sku.id}`,
 				sku: sku.skuCode,
+				identifier: sku.skuCode,
 				name: `${localizedName} - ${sku.skuCode}`,
+				isVariantOf: { '@id': productGroupId },
 				offers: {
 					'@type': 'Offer',
 					priceCurrency: 'TWD',
@@ -43,7 +73,7 @@ export const load: PageLoad = ({ data, url }) => {
 						sku.availability === 'in_stock'
 							? 'https://schema.org/InStock'
 							: 'https://schema.org/OutOfStock',
-					url: `${url.origin}${url.pathname}`
+					url: `${productUrl}#sku-${sku.id}`
 				}
 			}))
 		}
