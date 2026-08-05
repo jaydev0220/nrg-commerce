@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
 
-const targets = new Set(['landing', 'catalog', 'contact', 'admin', 'infrastructure']);
+const targets = new Set(['landing', 'catalog', 'contact', 'admin', 'api', 'infrastructure']);
 
 function isLoopbackHostname(hostname) {
 	return (
@@ -75,6 +75,109 @@ function cloudflare(environment, errors) {
 	return { cloudflareAccountId };
 }
 
+function secureDatabaseUrl(environment, name, errors) {
+	const value = required(environment, name, errors);
+	if (!value) return '';
+
+	try {
+		const url = new URL(value);
+		if (url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') {
+			throw new Error('invalid protocol');
+		}
+		if (isLoopbackHostname(url.hostname) || url.hash) {
+			throw new Error('invalid database host');
+		}
+		if (url.searchParams.get('sslmode') !== 'verify-full') {
+			throw new Error('missing sslmode');
+		}
+	} catch {
+		errors.push(`${name} must use a PostgreSQL URL with sslmode=verify-full.`);
+	}
+
+	return value;
+}
+
+function secureOriginList(environment, name, errors) {
+	const value = required(environment, name, errors);
+	if (!value) return [];
+
+	const origins = value
+		.split(',')
+		.map((origin) => origin.trim())
+		.filter(Boolean)
+		.map((origin) => {
+			try {
+				const url = new URL(origin);
+				if (url.protocol !== 'https:' || url.pathname !== '/' || url.search || url.hash) {
+					throw new Error('invalid origin');
+				}
+				return url.origin;
+			} catch {
+				errors.push(`${name} must contain only secure HTTPS origins.`);
+				return '';
+			}
+		});
+
+	return origins.filter(Boolean);
+}
+
+function api(environment, errors) {
+	const deploymentEnvironment = required(environment, 'DEPLOYMENT_ENVIRONMENT', errors);
+	if (deploymentEnvironment && !['staging', 'production'].includes(deploymentEnvironment)) {
+		errors.push('DEPLOYMENT_ENVIRONMENT must be staging or production.');
+	}
+
+	for (const name of [
+		'AZURE_CLIENT_ID',
+		'AZURE_TENANT_ID',
+		'AZURE_SUBSCRIPTION_ID',
+		'AZURE_RESOURCE_GROUP',
+		'AZURE_CONTAINER_APP_ENVIRONMENT',
+		'AZURE_CONTAINER_APP_NAME',
+		'AZURE_CONTAINER_APP_CERTIFICATE_NAME',
+		'API_DNS_TF_WORKSPACE',
+		'HCP_TERRAFORM_TOKEN',
+		'CLOUDFLARE_ZONE_ID',
+		'DIRECT_URL',
+		'DATABASE_URL',
+		'ACCESS_TOKEN_SECRET',
+		'REFRESH_TOKEN_SECRET',
+		'PENDING_TOKEN_SECRET',
+		'DATA_ENCRYPTION_SECRET',
+		'R2_ACCESS_KEY_ID',
+		'R2_SECRET_ACCESS_KEY'
+	]) {
+		required(environment, name, errors);
+	}
+
+	const cloudflareZoneId = environment['CLOUDFLARE_ZONE_ID']?.trim() ?? '';
+	if (cloudflareZoneId && !/^[0-9a-f]{32}$/u.test(cloudflareZoneId)) {
+		errors.push('CLOUDFLARE_ZONE_ID must be a 32-character lowercase hexadecimal ID.');
+	}
+
+	secureDatabaseUrl(environment, 'DATABASE_URL', errors);
+	secureDatabaseUrl(environment, 'DIRECT_URL', errors);
+	secureOriginList(environment, 'CORS_ORIGINS', errors);
+	secureUrl(environment, 'WEBAUTHN_ORIGIN', errors);
+	secureUrl(environment, 'R2_PUBLIC_BASE_URL', errors);
+	secureUrl(environment, 'OTEL_EXPORTER_OTLP_ENDPOINT', errors);
+	domain(environment, 'API_DOMAIN', errors);
+
+	const trustProxyHops = required(environment, 'TRUST_PROXY_HOPS', errors);
+	if (trustProxyHops && !/^\d+$/u.test(trustProxyHops)) {
+		errors.push('TRUST_PROXY_HOPS must be a non-negative integer.');
+	}
+
+	return {
+		deploymentEnvironment,
+		apiDomain: environment['API_DOMAIN']?.trim().toLowerCase() ?? '',
+		azureResourceGroup: environment['AZURE_RESOURCE_GROUP']?.trim() ?? '',
+		azureContainerAppEnvironment: environment['AZURE_CONTAINER_APP_ENVIRONMENT']?.trim() ?? '',
+		azureContainerAppName: environment['AZURE_CONTAINER_APP_NAME']?.trim() ?? '',
+		apiDnsTerraformWorkspace: environment['API_DNS_TF_WORKSPACE']?.trim() ?? ''
+	};
+}
+
 function infrastructure(environment, errors) {
 	const deploymentEnvironment = required(environment, 'DEPLOYMENT_ENVIRONMENT', errors);
 	if (deploymentEnvironment && !['staging', 'production'].includes(deploymentEnvironment)) {
@@ -116,6 +219,8 @@ export function validateProductionEnvironment(target, environment) {
 
 	if (target === 'infrastructure') {
 		result = infrastructure(environment, errors);
+	} else if (target === 'api') {
+		result = api(environment, errors);
 	} else if (target === 'landing') {
 		const values = publicSiteValues(environment, errors);
 		const landingDomain = domain(environment, 'LANDING_DOMAIN', errors);

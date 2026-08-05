@@ -26,8 +26,12 @@ test('every deployment publication job is restricted to the main branch', async 
 		'deploy-workers-staging',
 		'deploy-workers-production',
 		'publish-api-image',
+		'deploy-api-staging',
+		'deploy-api-production',
 		'deploy-landing-staging',
-		'deploy-landing-production'
+		'deploy-landing-production',
+		'deploy-api-staging',
+		'deploy-api-production'
 	]) {
 		assert.match(readJob(workflow, jobName), /github\.ref == 'refs\/heads\/main'/u);
 	}
@@ -137,6 +141,31 @@ test('the API publication scans the immutable SHA image and never publishes late
 
 	assert.ok(publishIndex >= 0);
 	assert.ok(scanIndex > publishIndex);
-	assert.match(publication, /nrg-commerce-api:\$\{\{ github\.sha \}\}/u);
+	assert.match(publication, /tags: type=raw,value=\$\{\{ github\.sha \}\}/u);
+	assert.match(
+		publication,
+		/image: ghcr\.io\/jaydev0220\/nrg-commerce-api@\$\{\{ steps\.publish\.outputs\.digest \}\}/u
+	);
 	assert.doesNotMatch(publication, /value=latest/u);
+});
+
+test('API staging and production promote the same digest with migrations before deployment', async () => {
+	const workflow = await readFile(workflowPath, 'utf8');
+	const staging = readJob(workflow, 'deploy-api-staging');
+	const production = readJob(workflow, 'deploy-api-production');
+
+	assert.match(staging, /needs\.publish-api-image\.result == 'success'/u);
+	assert.match(staging, /working-directory: packages\/database/u);
+	assert.match(staging, /run: pnpm db:deploy/u);
+	assert.match(
+		staging,
+		/--image ghcr\.io\/jaydev0220\/nrg-commerce-api@\$\{\{ needs\.publish-api-image\.outputs\.image-digest \}\}/u
+	);
+	assert.match(production, /needs\.deploy-api-staging\.result == 'success'/u);
+	assert.match(production, /environment:\n      name: production/u);
+	assert.doesNotMatch(staging.slice(0, staging.indexOf('\n    steps:')), /\$\{\{\s*secrets\./u);
+	assert.doesNotMatch(
+		production.slice(0, production.indexOf('\n    steps:')),
+		/\$\{\{\s*secrets\./u
+	);
 });

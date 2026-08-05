@@ -52,6 +52,35 @@ async function assertSecurityHeaders(root) {
 	}
 }
 
+async function assertSiteDiscoveryFiles(root, expectedSiteOrigin) {
+	const robots = await readFile(resolve(root, 'robots.txt'), 'utf8');
+	const sitemap = await readFile(resolve(root, 'sitemap.xml'), 'utf8');
+	const llms = await readFile(resolve(root, 'llms.txt'), 'utf8');
+	const sitemapUrl = new URL('/sitemap.xml', expectedSiteOrigin).toString();
+
+	if (!robots.includes('User-agent: *') || !robots.includes(`Sitemap: ${sitemapUrl}`)) {
+		throw new Error('Landing robots.txt must allow crawling and reference the canonical sitemap.');
+	}
+	if ((sitemap.match(/<loc>/g) ?? []).length !== 6 || !sitemap.includes('hreflang="x-default"')) {
+		throw new Error('Landing sitemap must contain all six localized page URLs and alternates.');
+	}
+	if (!llms.includes('# NRG Glass') || !llms.includes(sitemapUrl)) {
+		throw new Error('Landing llms.txt must identify the site and reference the canonical sitemap.');
+	}
+}
+
+function assertCanonicalMetadata(html, page, expectedSiteOrigin) {
+	const canonical = html.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/iu)?.[0];
+	const canonicalHref = canonical?.match(/\bhref=["']([^"']+)["']/iu)?.[1];
+	if (!canonicalHref) throw new Error(`${page} must contain a canonical link.`);
+
+	const expectedPath = page === 'index.html' ? '/' : `/${page.replace(/\/index\.html$/u, '')}/`;
+	const expectedUrl = new URL(expectedPath, expectedSiteOrigin).toString();
+	if (canonicalHref !== expectedUrl) {
+		throw new Error(`${page} canonical URL must be ${expectedUrl}.`);
+	}
+}
+
 async function listJavascriptFiles(directory) {
 	const entries = await readdir(directory, { withFileTypes: true, recursive: true });
 	return entries
@@ -109,10 +138,15 @@ function assertResourcePolicy(csp, page, expectedContactWorkerUrl) {
 	}
 }
 
-export async function verifyLandingBuild(buildDirectory, expectedContactWorkerUrl) {
+export async function verifyLandingBuild(
+	buildDirectory,
+	expectedContactWorkerUrl,
+	expectedSiteOrigin = undefined
+) {
 	const root = resolve(buildDirectory);
 	await assertServerAssetsExcluded(root);
 	await assertSecurityHeaders(root);
+	if (expectedSiteOrigin) await assertSiteDiscoveryFiles(root, expectedSiteOrigin);
 	const javascriptFiles = await listJavascriptFiles(resolve(root, '_app', 'immutable'));
 	const totalJavascriptBytes = (
 		await Promise.all(javascriptFiles.map(async (file) => (await stat(file)).size))
@@ -127,6 +161,7 @@ export async function verifyLandingBuild(buildDirectory, expectedContactWorkerUr
 		if (!/<main\b[^>]*\bid=["']main-content["'][^>]*>/i.test(html) || !hasRenderedHeading(html)) {
 			throw new Error(`${page} must contain prerendered main content and a rendered heading.`);
 		}
+		if (expectedSiteOrigin) assertCanonicalMetadata(html, page, expectedSiteOrigin);
 		assertResourcePolicy(readCspMeta(html, page), page, expectedContactWorkerUrl);
 
 		const references = [...new Set(pageAssetReferences(html))];
@@ -164,12 +199,17 @@ export async function verifyLandingBuild(buildDirectory, expectedContactWorkerUr
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
 	const buildDirectory = process.argv[2] ?? 'apps/landing/.svelte-kit/cloudflare';
 	const expectedContactWorkerUrl = process.argv[3];
-	if (!expectedContactWorkerUrl) {
+	const expectedSiteOrigin = process.argv[4];
+	if (!expectedContactWorkerUrl || !expectedSiteOrigin) {
 		throw new Error(
-			'Usage: verify-landing-build.mjs <build-directory> <expected-contact-worker-url>'
+			'Usage: verify-landing-build.mjs <build-directory> <expected-contact-worker-url> <expected-site-origin>'
 		);
 	}
-	const result = await verifyLandingBuild(buildDirectory, expectedContactWorkerUrl);
+	const result = await verifyLandingBuild(
+		buildDirectory,
+		expectedContactWorkerUrl,
+		expectedSiteOrigin
+	);
 	process.stdout.write(
 		`Verified ${result.pageCount} pages and ${result.javascriptFileCount} JavaScript files (${result.totalJavascriptBytes} bytes).\n`
 	);

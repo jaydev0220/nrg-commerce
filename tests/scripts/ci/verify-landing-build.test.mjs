@@ -46,11 +46,22 @@ async function createBuild(options = {}) {
 			.map((name) => `<link rel="modulepreload" href="${assetPrefix}_app/immutable/${name}">`)
 			.join('');
 		const html = `${modulePreloads}<main id="main-content"><h1>Rendered page</h1></main><script>start()</script>`;
+		const canonicalPath = page === 'index.html' ? '/' : `/${page.replace(/\/index\.html$/u, '')}/`;
+		const seoHead = `<link rel="canonical" href="https://example.test${canonicalPath}">`;
 		await writeFile(
 			join(root, page),
-			`${options.includeCsp === false ? '' : cspMeta}${options.html ?? html}`
+			`${options.includeCsp === false ? '' : cspMeta}${options.html ?? `${seoHead}${html}`}`
 		);
 	}
+	await writeFile(
+		join(root, 'robots.txt'),
+		'User-agent: *\nAllow: /\nSitemap: https://example.test/sitemap.xml\n'
+	);
+	await writeFile(
+		join(root, 'sitemap.xml'),
+		'<urlset><loc>1</loc><loc>2</loc><loc>3</loc><loc>4</loc><loc>5</loc><loc>6</loc><xhtml:link hreflang="x-default" /></urlset>'
+	);
+	await writeFile(join(root, 'llms.txt'), '# NRG Glass\nhttps://example.test/sitemap.xml\n');
 	return root;
 }
 
@@ -60,6 +71,13 @@ test('accepts rendered static pages within the JavaScript budgets', async () => 
 
 	assert.equal(result.pageCount, 6);
 	assert.equal(result.javascriptFileCount, 1);
+});
+
+test('accepts canonical metadata and discovery files for the deployed origin', async () => {
+	const root = await createBuild();
+	await assert.doesNotReject(() =>
+		verifyLandingBuild(root, expectedContactWorkerUrl, 'https://example.test')
+	);
 });
 
 test('rejects a build without transport security headers', async () => {
