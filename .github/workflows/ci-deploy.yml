@@ -679,10 +679,10 @@ jobs:
       WEBAUTHN_RP_ID: ${{ vars.API_WEBAUTHN_RP_ID }}
       WEBAUTHN_RP_NAME: ${{ vars.API_WEBAUTHN_RP_NAME }}
       WEBAUTHN_ORIGIN: ${{ vars.API_WEBAUTHN_ORIGIN }}
-      R2_ACCOUNT_ID: ${{ vars.API_R2_ACCOUNT_ID }}
-      R2_BUCKET_NAME: ${{ vars.API_R2_BUCKET_NAME }}
-      R2_UPLOAD_BUCKET_NAME: ${{ vars.API_R2_UPLOAD_BUCKET_NAME }}
-      R2_PUBLIC_BASE_URL: ${{ vars.API_R2_PUBLIC_BASE_URL }}
+      R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_BUCKET_NAME: nrg-commerce-staging-product-assets
+      R2_UPLOAD_BUCKET_NAME: nrg-commerce-staging-product-uploads
+      R2_PUBLIC_BASE_URL: ${{ vars.CDN_BASE_URL }}
       R2_ASSET_KEY_PREFIX: ${{ vars.API_R2_ASSET_KEY_PREFIX }}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.API_OTEL_EXPORTER_OTLP_ENDPOINT }}
       OTEL_SERVICE_NAME: ${{ vars.API_OTEL_SERVICE_NAME }}
@@ -800,10 +800,10 @@ jobs:
       WEBAUTHN_RP_ID: ${{ vars.API_WEBAUTHN_RP_ID }}
       WEBAUTHN_RP_NAME: ${{ vars.API_WEBAUTHN_RP_NAME }}
       WEBAUTHN_ORIGIN: ${{ vars.API_WEBAUTHN_ORIGIN }}
-      R2_ACCOUNT_ID: ${{ vars.API_R2_ACCOUNT_ID }}
-      R2_BUCKET_NAME: ${{ vars.API_R2_BUCKET_NAME }}
-      R2_UPLOAD_BUCKET_NAME: ${{ vars.API_R2_UPLOAD_BUCKET_NAME }}
-      R2_PUBLIC_BASE_URL: ${{ vars.API_R2_PUBLIC_BASE_URL }}
+      R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_BUCKET_NAME: nrg-commerce-product-assets
+      R2_UPLOAD_BUCKET_NAME: nrg-commerce-product-uploads
+      R2_PUBLIC_BASE_URL: ${{ vars.CDN_BASE_URL }}
       R2_ASSET_KEY_PREFIX: ${{ vars.API_R2_ASSET_KEY_PREFIX }}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.API_OTEL_EXPORTER_OTLP_ENDPOINT }}
       OTEL_SERVICE_NAME: ${{ vars.API_OTEL_SERVICE_NAME }}
