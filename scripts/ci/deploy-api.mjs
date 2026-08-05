@@ -66,6 +66,10 @@ const defaultRuntimeValues = {
 	PORT: '8080'
 };
 
+function azureSecretName(name) {
+	return name.toLowerCase().replaceAll('_', '-');
+}
+
 export async function defaultRun(command, args, options = {}) {
 	return execFile(command, args, { ...options, maxBuffer: 8 * 1024 * 1024 });
 }
@@ -124,7 +128,7 @@ function buildRuntimeEnvArguments(environment) {
 	}
 	for (const name of runtimeSecretVariables) {
 		if (!environment[name]?.trim()) continue;
-		values.push(`${name}=secretref:${name}`);
+		values.push(`${name}=secretref:${azureSecretName(name)}`);
 	}
 	return values;
 }
@@ -162,7 +166,7 @@ export function buildCreateArguments(config, environment) {
 	];
 	const secrets = runtimeSecretVariables
 		.filter((name) => environment[name]?.trim())
-		.map((name) => `${name}=${environment[name].trim()}`);
+		.map((name) => `${azureSecretName(name)}=${environment[name].trim()}`);
 	const runtimeEnv = buildRuntimeEnvArguments(environment);
 	if (secrets.length > 0) args.push('--secrets', ...secrets);
 	if (runtimeEnv.length > 0) args.push('--env-vars', ...runtimeEnv);

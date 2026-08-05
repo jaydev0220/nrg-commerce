@@ -83,10 +83,12 @@ test('buildCreateArguments configures the public port, resource bounds, secret r
 	assert.ok(!args.includes('--registry-server'));
 	assert.ok(!args.includes('--registry-username'));
 	assert.ok(!args.includes('--registry-password'));
-	assert.ok(args.includes('DATABASE_URL=secretref:DATABASE_URL'));
+	assert.ok(args.includes('DATABASE_URL=secretref:database-url'));
+	assert.ok(args.includes('ACCESS_TOKEN_SECRET=secretref:access-token-secret'));
 	assert.ok(
-		args.includes('DATABASE_URL=postgresql://app:secret@db.example.com/app?sslmode=verify-full')
+		args.includes('database-url=postgresql://app:secret@db.example.com/app?sslmode=verify-full')
 	);
+	assert.ok(args.includes('access-token-secret=access'));
 	assert.ok(
 		args.includes(
 			'OTEL_RESOURCE_ATTRIBUTES=service.namespace=nrg-commerce,deployment.environment.name=production'
