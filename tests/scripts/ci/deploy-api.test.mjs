@@ -101,7 +101,7 @@ test('buildCreateArguments configures the public port, resource bounds, secret r
 	assert.ok(defaults.includes('PORT=8080'));
 });
 
-test('ensureAzureInfrastructure creates missing Azure resources once without a log workspace', async () => {
+test('ensureAzureInfrastructure creates missing Azure resources once with compatible environment arguments', async () => {
 	const config = parseApiDeploymentEnvironment(deploymentEnvironment, image, 'production');
 	const calls = [];
 	let groupExists = false;
@@ -144,7 +144,8 @@ test('ensureAzureInfrastructure creates missing Azure resources once without a l
 		([, args]) => args[0] === 'containerapp' && args[1] === 'env' && args[2] === 'create'
 	);
 	assert.equal(environmentCreates.length, 1);
-	assert.ok(environmentCreates[0][1].includes('ConsumptionOnly'));
+	assert.ok(!environmentCreates[0][1].includes('--environment-mode'));
+	assert.ok(!environmentCreates[0][1].includes('ConsumptionOnly'));
 	assert.ok(environmentCreates[0][1].includes('--logs-destination'));
 	assert.ok(environmentCreates[0][1].includes('none'));
 });

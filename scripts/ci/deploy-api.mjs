@@ -291,8 +291,6 @@ export async function ensureAzureInfrastructure(run, config) {
 			config.resourceGroup,
 			'--location',
 			config.location,
-			'--environment-mode',
-			'ConsumptionOnly',
 			'--logs-destination',
 			'none',
 			'--output',
