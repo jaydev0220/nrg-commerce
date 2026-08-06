@@ -788,6 +788,8 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.API_OTEL_EXPORTER_OTLP_HEADERS }}
+          API_ORIGIN_CERTIFICATE_PFX_BASE64: ${{ secrets.API_ORIGIN_CERTIFICATE_PFX_BASE64 }}
+          API_ORIGIN_CERTIFICATE_PASSWORD: ${{ secrets.API_ORIGIN_CERTIFICATE_PASSWORD }}
         run: node scripts/ci/production-env.mjs api
 
       - name: Apply staging database migrations
@@ -820,6 +822,8 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.API_OTEL_EXPORTER_OTLP_HEADERS }}
+          API_ORIGIN_CERTIFICATE_PFX_BASE64: ${{ secrets.API_ORIGIN_CERTIFICATE_PFX_BASE64 }}
+          API_ORIGIN_CERTIFICATE_PASSWORD: ${{ secrets.API_ORIGIN_CERTIFICATE_PASSWORD }}
         run: node scripts/ci/deploy-api.mjs --environment staging --image ghcr.io/jaydev0220/nrg-commerce-api@${{ needs.publish-api-image.outputs.image-digest }}
 
   deploy-api-production:
@@ -916,6 +920,8 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.API_OTEL_EXPORTER_OTLP_HEADERS }}
+          API_ORIGIN_CERTIFICATE_PFX_BASE64: ${{ secrets.API_ORIGIN_CERTIFICATE_PFX_BASE64 }}
+          API_ORIGIN_CERTIFICATE_PASSWORD: ${{ secrets.API_ORIGIN_CERTIFICATE_PASSWORD }}
         run: node scripts/ci/production-env.mjs api
 
       - name: Apply production database migrations
@@ -948,6 +954,8 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.API_OTEL_EXPORTER_OTLP_HEADERS }}
+          API_ORIGIN_CERTIFICATE_PFX_BASE64: ${{ secrets.API_ORIGIN_CERTIFICATE_PFX_BASE64 }}
+          API_ORIGIN_CERTIFICATE_PASSWORD: ${{ secrets.API_ORIGIN_CERTIFICATE_PASSWORD }}
         run: node scripts/ci/deploy-api.mjs --environment production --image ghcr.io/jaydev0220/nrg-commerce-api@${{ needs.publish-api-image.outputs.image-digest }}
 
   deploy-landing-staging:
