@@ -90,6 +90,22 @@ test('findExistingRecord rejects ambiguous or malformed Cloudflare responses', a
 	await assert.rejects(
 		() =>
 			findExistingRecord({
+				fetcher: async () =>
+					response(
+						{ errors: [{ code: 9109, message: 'Invalid access token' }], success: false },
+						403
+					),
+				zoneId: 'zone-id',
+				token: 'token',
+				type: 'TXT',
+				name: 'asuid.api.example.com',
+				expectedContent: 'verification'
+			}),
+		/HTTP 403: \[Cloudflare 9109\] Invalid access token/u
+	);
+	await assert.rejects(
+		() =>
+			findExistingRecord({
 				fetcher: async () => response({}, 502),
 				zoneId: 'zone-id',
 				token: 'token',

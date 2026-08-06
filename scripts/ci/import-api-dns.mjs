@@ -28,7 +28,26 @@ export async function findExistingRecord({ fetcher, zoneId, token, type, name, e
 	const response = await fetcher(endpoint, {
 		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
 	});
-	if (!response.ok) throw new Error(`Cloudflare DNS lookup failed with HTTP ${response.status}.`);
+	if (!response.ok) {
+		let details = '';
+		try {
+			const payload = await response.json();
+			const errors = Array.isArray(payload?.errors) ? payload.errors : [];
+			details = errors
+				.map((error) => {
+					const code = error?.code === undefined ? '' : ` ${error.code}`;
+					const message = typeof error?.message === 'string' ? error.message.trim() : '';
+					return message ? `[Cloudflare${code}] ${message}` : '';
+				})
+				.filter(Boolean)
+				.join('; ');
+		} catch {
+			// Cloudflare can return a non-JSON error response; the HTTP status still identifies the failure.
+		}
+		throw new Error(
+			`Cloudflare DNS lookup failed with HTTP ${response.status}${details ? `: ${details}` : ''}.`
+		);
+	}
 
 	const payload = await response.json();
 	if (!payload?.success || !Array.isArray(payload.result)) {
