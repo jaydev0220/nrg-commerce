@@ -7,6 +7,7 @@ generated
 test-results
 src/lib/paraglide
 project.inlang/cache/
+.codegraph
 
 .env
 .env.*
