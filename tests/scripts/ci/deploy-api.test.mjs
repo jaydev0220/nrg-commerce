@@ -176,7 +176,7 @@ test('buildTemplatePatch replaces runtime environment values and adds health pro
 						name: 'api',
 						image: 'old',
 						imageType: 'CloudBuild',
-						env: [{ name: 'DATABASE_URL', secretRef: 'DATABASE_URL' }]
+						env: [{ name: 'DATABASE_URL', secretRef: 'DATABASE_URL', imageType: 'Nested' }]
 					},
 					{ name: 'sidecar', image: 'sidecar', imageType: 'ContainerImage' }
 				],
@@ -192,6 +192,8 @@ test('buildTemplatePatch replaces runtime environment values and adds health pro
 	assert.equal(container.imageType, undefined);
 	assert.equal(patch.properties.template.containers[1].imageType, undefined);
 	assert.equal(patch.properties.template.initContainers[0].imageType, undefined);
+	assert.equal(container.env[0].imageType, undefined);
+	assert.ok(!JSON.stringify(patch).includes('imageType'));
 	assert.ok(
 		container.env.some((entry) => entry.name === 'NODE_ENV' && entry.value === 'production')
 	);

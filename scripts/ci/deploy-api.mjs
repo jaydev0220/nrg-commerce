@@ -229,8 +229,18 @@ const probes = [
 	}
 ];
 
+function stripUnsupportedImageType(value) {
+	if (Array.isArray(value)) return value.map(stripUnsupportedImageType);
+	if (!value || typeof value !== 'object') return value;
+	return Object.fromEntries(
+		Object.entries(value)
+			.filter(([key]) => key !== 'imageType')
+			.map(([key, nestedValue]) => [key, stripUnsupportedImageType(nestedValue)])
+	);
+}
+
 export function buildTemplatePatch(current, image, revisionSuffix, environment = {}) {
-	const template = current?.properties?.template;
+	const template = stripUnsupportedImageType(current?.properties?.template);
 	if (!template || !Array.isArray(template.containers) || template.containers.length === 0) {
 		throw new Error('Azure Container App has no deployable container template.');
 	}
@@ -239,28 +249,21 @@ export function buildTemplatePatch(current, image, revisionSuffix, environment =
 		0
 	);
 	const containers = template.containers.map((container, index) => {
-		const { imageType: _imageType, ...writableContainer } = container;
-		if (index !== containerIndex) return writableContainer;
+		if (index !== containerIndex) return container;
 		return {
-			...writableContainer,
+			...container,
 			image,
 			env: buildRuntimeEnvTemplate(environment),
 			resources: { ...container.resources, cpu: 0.25, memory: '0.5Gi' },
 			probes
 		};
 	});
-	const initContainers = template.initContainers?.map((container) => {
-		const { imageType: _imageType, ...writableContainer } = container;
-		return writableContainer;
-	});
-
 	return {
 		properties: {
 			template: {
 				...template,
 				revisionSuffix,
 				containers,
-				...(initContainers ? { initContainers } : {}),
 				scale: { ...template.scale, minReplicas: 0, maxReplicas: 1 }
 			}
 		}
