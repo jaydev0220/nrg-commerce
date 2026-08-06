@@ -62,8 +62,13 @@ export async function importExistingApiDnsRecords({
 	const apiDomain = required(environment, 'API_DOMAIN');
 	const containerAppHostname = required(environment, 'TF_VAR_container_app_hostname');
 	const verificationId = required(environment, 'TF_VAR_custom_domain_verification_id');
-	const state = await run('terraform', ['-chdir=' + terraformDirectory, 'state', 'list']);
-	const stateResources = new Set((state.stdout ?? '').split(/\r?\n/u).filter(Boolean));
+	let stateResources = new Set();
+	try {
+		const state = await run('terraform', ['-chdir=' + terraformDirectory, 'state', 'list']);
+		stateResources = new Set((state.stdout ?? '').split(/\r?\n/u).filter(Boolean));
+	} catch (error) {
+		if (!String(error?.stderr ?? '').includes('No state file was found!')) throw error;
+	}
 	const records = [
 		{
 			address: 'cloudflare_dns_record.api_cname',

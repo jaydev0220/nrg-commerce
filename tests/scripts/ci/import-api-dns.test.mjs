@@ -150,6 +150,66 @@ test('importExistingApiDnsRecords imports unmanaged matching records only once',
 	);
 });
 
+test('importExistingApiDnsRecords treats a missing Terraform state as empty on first deploy', async () => {
+	const calls = [];
+	const environment = {
+		CLOUDFLARE_ZONE_ID: 'zone-id',
+		CLOUDFLARE_API_TOKEN: 'token',
+		API_DOMAIN: 'api.example.com',
+		TF_VAR_container_app_hostname: 'origin.azurecontainerapps.io',
+		TF_VAR_custom_domain_verification_id: 'verification'
+	};
+	const run = async (command, args) => {
+		calls.push([command, args]);
+		if (args.includes('state')) {
+			const error = new Error('terraform state list failed');
+			error.stderr = 'No state file was found!';
+			throw error;
+		}
+		return { stdout: '' };
+	};
+	const fetcher = async (input) =>
+		response({
+			success: true,
+			result: [
+				{
+					id: input.toString().includes('CNAME') ? 'cname-id' : 'txt-id',
+					content: input.toString().includes('CNAME')
+						? 'origin.azurecontainerapps.io'
+						: 'verification'
+				}
+			]
+		});
+
+	await importExistingApiDnsRecords({ environment, run, fetcher });
+
+	assert.equal(calls.filter(([, args]) => args.includes('import')).length, 2);
+});
+
+test('importExistingApiDnsRecords propagates unexpected Terraform state failures', async () => {
+	const environment = {
+		CLOUDFLARE_ZONE_ID: 'zone-id',
+		CLOUDFLARE_API_TOKEN: 'token',
+		API_DOMAIN: 'api.example.com',
+		TF_VAR_container_app_hostname: 'origin.azurecontainerapps.io',
+		TF_VAR_custom_domain_verification_id: 'verification'
+	};
+	const expected = new Error('terraform state list failed');
+	expected.stderr = 'Failed to load remote state';
+
+	await assert.rejects(
+		() =>
+			importExistingApiDnsRecords({
+				environment,
+				run: async () => {
+					throw expected;
+				},
+				fetcher: async () => response({ success: true, result: [] })
+			}),
+		(error) => error === expected
+	);
+});
+
 test('importExistingApiDnsRecords skips state-managed and missing records', async () => {
 	const calls = [];
 	const environment = {
