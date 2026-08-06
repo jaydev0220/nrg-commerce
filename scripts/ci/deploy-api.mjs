@@ -66,8 +66,21 @@ const defaultRuntimeValues = {
 	PORT: '8080'
 };
 
+const azureSecretNames = {
+	DATABASE_URL: 'database-url',
+	ACCESS_TOKEN_SECRET: 'access-token-secret',
+	REFRESH_TOKEN_SECRET: 'refresh-token-secret',
+	PENDING_TOKEN_SECRET: 'pending-token-secret',
+	DATA_ENCRYPTION_SECRET: 'data-encryption',
+	R2_ACCESS_KEY_ID: 'r2-access-key-id',
+	R2_SECRET_ACCESS_KEY: 'r2-secret-key',
+	OTEL_EXPORTER_OTLP_HEADERS: 'otel-headers'
+};
+
 function azureSecretName(name) {
-	return name.toLowerCase().replaceAll('_', '-');
+	const secretName = azureSecretNames[name];
+	if (!secretName) throw new Error(`No Azure secret alias is configured for ${name}.`);
+	return secretName;
 }
 
 export async function defaultRun(command, args, options = {}) {
@@ -103,11 +116,22 @@ export function parseApiDeploymentEnvironment(environment, image, environmentNam
 		throw new Error('API deployment environment must be staging or production.');
 	}
 
-	const revisionDigest = image.slice(image.indexOf('@sha256:') + 8, image.length);
+	const revisionIdentity = createHash('sha256')
+		.update(
+			JSON.stringify({
+				image,
+				runtime: runtimeVariables.map((name) => [
+					name,
+					environment[name]?.trim() || defaultRuntimeValues[name] || null
+				]),
+				secrets: runtimeSecretVariables.map((name) => [name, environment[name]?.trim() || null])
+			})
+		)
+		.digest('hex');
 	return {
 		environmentName,
 		image,
-		revisionSuffix: `api-${revisionDigest.slice(0, 12)}`,
+		revisionSuffix: `api-${revisionIdentity.slice(0, 12)}`,
 		resourceGroup: required(environment, 'AZURE_RESOURCE_GROUP'),
 		location: required(environment, 'AZURE_LOCATION').toLowerCase(),
 		containerAppEnvironment: required(environment, 'AZURE_CONTAINER_APP_ENVIRONMENT'),
@@ -120,17 +144,29 @@ export function parseApiDeploymentEnvironment(environment, image, environmentNam
 	};
 }
 
-function buildRuntimeEnvArguments(environment) {
+function buildRuntimeEnvTemplate(environment) {
 	const values = [];
 	for (const name of runtimeVariables) {
 		const value = environment[name]?.trim() || defaultRuntimeValues[name];
-		if (value) values.push(`${name}=${value}`);
+		if (value) values.push({ name, value });
 	}
 	for (const name of runtimeSecretVariables) {
 		if (!environment[name]?.trim()) continue;
-		values.push(`${name}=secretref:${azureSecretName(name)}`);
+		values.push({ name, secretRef: azureSecretName(name) });
 	}
 	return values;
+}
+
+function buildRuntimeEnvArguments(environment) {
+	return buildRuntimeEnvTemplate(environment).map((entry) =>
+		entry.secretRef ? `${entry.name}=secretref:${entry.secretRef}` : `${entry.name}=${entry.value}`
+	);
+}
+
+function buildSecretArguments(environment) {
+	return runtimeSecretVariables
+		.filter((name) => environment[name]?.trim())
+		.map((name) => `${azureSecretName(name)}=${environment[name].trim()}`);
 }
 
 export function buildCreateArguments(config, environment) {
@@ -164,9 +200,7 @@ export function buildCreateArguments(config, environment) {
 		'--revision-suffix',
 		config.revisionSuffix
 	];
-	const secrets = runtimeSecretVariables
-		.filter((name) => environment[name]?.trim())
-		.map((name) => `${azureSecretName(name)}=${environment[name].trim()}`);
+	const secrets = buildSecretArguments(environment);
 	const runtimeEnv = buildRuntimeEnvArguments(environment);
 	if (secrets.length > 0) args.push('--secrets', ...secrets);
 	if (runtimeEnv.length > 0) args.push('--env-vars', ...runtimeEnv);
@@ -195,7 +229,7 @@ const probes = [
 	}
 ];
 
-export function buildTemplatePatch(current, image, revisionSuffix) {
+export function buildTemplatePatch(current, image, revisionSuffix, environment = {}) {
 	const template = current?.properties?.template;
 	if (!template || !Array.isArray(template.containers) || template.containers.length === 0) {
 		throw new Error('Azure Container App has no deployable container template.');
@@ -209,6 +243,7 @@ export function buildTemplatePatch(current, image, revisionSuffix) {
 		return {
 			...container,
 			image,
+			env: buildRuntimeEnvTemplate(environment),
 			resources: { ...container.resources, cpu: 0.25, memory: '0.5Gi' },
 			probes
 		};
@@ -330,13 +365,31 @@ async function showContainerApp(run, config) {
 	}
 }
 
-async function patchContainerTemplate(run, app, config) {
-	const payload = buildTemplatePatch(app, config.image, config.revisionSuffix);
+async function reconcileRuntimeSecrets(run, config, environment) {
+	const secrets = buildSecretArguments(environment);
+	if (secrets.length === 0) return;
+	await runContainerAppMutation(run, config, [
+		'containerapp',
+		'secret',
+		'set',
+		'--name',
+		config.containerAppName,
+		'--resource-group',
+		config.resourceGroup,
+		'--secrets',
+		...secrets,
+		'--output',
+		'none'
+	]);
+}
+
+async function patchContainerTemplate(run, app, config, environment) {
+	const payload = buildTemplatePatch(app, config.image, config.revisionSuffix, environment);
 	const directory = await mkdtemp(join(tmpdir(), 'nrg-api-patch-'));
 	const payloadPath = join(directory, 'payload.json');
 	await writeFile(payloadPath, JSON.stringify(payload), { mode: 0o600 });
 	try {
-		await run('az', [
+		await runContainerAppMutation(run, config, [
 			'rest',
 			'--method',
 			'patch',
@@ -360,7 +413,9 @@ async function ensureContainerApp(run, config, environment) {
 	}
 	const current = (await showContainerApp(run, config)) ?? existing;
 	if (!current) throw new Error('Azure Container App was not available after creation.');
-	await patchContainerTemplate(run, current, config);
+	await reconcileRuntimeSecrets(run, config, environment);
+	await patchContainerTemplate(run, current, config, environment);
+	await waitForContainerAppProvisioning(run, config);
 	const deployed = await showContainerApp(run, config);
 	if (!deployed) throw new Error('Azure Container App disappeared after deployment.');
 	const revision = deployed.properties?.latestRevisionName;
@@ -591,7 +646,12 @@ function terraformEnvironment(config, environment, proxied) {
 async function applyApiDns(run, config, environment, proxied, fetcher) {
 	const tfEnvironment = terraformEnvironment(config, environment, proxied);
 	const tfRun = (command, args) => run(command, args, { env: tfEnvironment });
-	await tfRun('terraform', ['-chdir=' + terraformDirectory, 'init', '-input=false']);
+	await tfRun('terraform', [
+		'-chdir=' + terraformDirectory,
+		'init',
+		'-input=false',
+		'-lockfile=readonly'
+	]);
 	await importExistingApiDnsRecords({ environment: tfEnvironment, fetcher, run: tfRun });
 	await tfRun('terraform', [
 		'-chdir=' + terraformDirectory,
@@ -604,7 +664,6 @@ async function applyApiDns(run, config, environment, proxied, fetcher) {
 		'-chdir=' + terraformDirectory,
 		'apply',
 		'-input=false',
-		'-auto-approve',
 		'-lock-timeout=5m',
 		'deployment.tfplan'
 	]);

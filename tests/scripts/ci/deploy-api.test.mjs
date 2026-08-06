@@ -38,10 +38,18 @@ function json(value) {
 	return { stdout: JSON.stringify(value) };
 }
 
-test('parseApiDeploymentEnvironment requires an immutable digest and creates a bounded revision suffix', () => {
+test('parseApiDeploymentEnvironment requires an immutable digest and creates a configuration-bound revision suffix', () => {
 	const config = parseApiDeploymentEnvironment(deploymentEnvironment, image, 'production');
-	assert.equal(config.revisionSuffix, 'api-' + 'a'.repeat(12));
+	assert.match(config.revisionSuffix, /^api-[a-f0-9]{12}$/u);
 	assert.equal(config.apiDomain, 'api.example.com');
+	assert.notEqual(
+		parseApiDeploymentEnvironment(
+			{ ...deploymentEnvironment, ACCESS_TOKEN_SECRET: 'rotated-access' },
+			image,
+			'production'
+		).revisionSuffix,
+		config.revisionSuffix
+	);
 	assert.equal(config.location, 'eastasia');
 	assert.throws(
 		() =>
@@ -89,6 +97,13 @@ test('buildCreateArguments configures the public port, resource bounds, secret r
 		args.includes('database-url=postgresql://app:secret@db.example.com/app?sslmode=verify-full')
 	);
 	assert.ok(args.includes('access-token-secret=access'));
+	const secretsStart = args.indexOf('--secrets') + 1;
+	const secretsEnd = args.indexOf('--env-vars');
+	for (const secret of args.slice(secretsStart, secretsEnd)) {
+		const [secretName] = secret.split('=', 1);
+		assert.match(secretName, /^[a-z0-9](?:[a-z0-9-]{0,18}[a-z0-9])?$/u);
+		assert.ok(secretName.length <= 20);
+	}
 	assert.ok(
 		args.includes(
 			'OTEL_RESOURCE_ATTRIBUTES=service.namespace=nrg-commerce,deployment.environment.name=production'
@@ -152,7 +167,7 @@ test('ensureAzureInfrastructure creates missing Azure resources once with compat
 	assert.ok(environmentCreates[0][1].includes('none'));
 });
 
-test('buildTemplatePatch preserves existing environment references and adds health probes', () => {
+test('buildTemplatePatch replaces runtime environment values and adds health probes', () => {
 	const current = {
 		properties: {
 			template: {
@@ -167,11 +182,20 @@ test('buildTemplatePatch preserves existing environment references and adds heal
 			}
 		}
 	};
-	const patch = buildTemplatePatch(current, image, 'api-aaaaaaaaaaaa');
+	const patch = buildTemplatePatch(current, image, 'api-aaaaaaaaaaaa', deploymentEnvironment);
 	const container = patch.properties.template.containers[0];
 
 	assert.equal(container.image, image);
-	assert.deepEqual(container.env, [{ name: 'DATABASE_URL', secretRef: 'DATABASE_URL' }]);
+	assert.ok(
+		container.env.some((entry) => entry.name === 'NODE_ENV' && entry.value === 'production')
+	);
+	assert.ok(container.env.some((entry) => entry.name === 'PORT' && entry.value === '8080'));
+	assert.ok(
+		container.env.some(
+			(entry) => entry.name === 'DATABASE_URL' && entry.secretRef === 'database-url'
+		)
+	);
+	assert.ok(!container.env.some((entry) => entry.secretRef === 'DATABASE_URL'));
 	assert.equal(container.resources.cpu, 0.25);
 	assert.equal(container.resources.memory, '0.5Gi');
 	assert.deepEqual(
@@ -193,7 +217,8 @@ test('buildTemplatePatch preserves existing environment references and adds heal
 			}
 		},
 		image,
-		'api-bbbbbbbbbbbb'
+		'api-bbbbbbbbbbbb',
+		deploymentEnvironment
 	);
 	assert.equal(fallbackPatch.properties.template.containers[0].image, image);
 });
@@ -399,6 +424,21 @@ test('deployApi promotes a healthy new revision after migrations and DNS reconci
 		assert.equal(result.revision, 'api-new');
 		assert.ok(calls.some(([, args]) => args.includes('traffic')));
 		assert.ok(calls.some(([, args]) => args.includes('rest')));
+		const secretSet = calls.find(
+			([command, args]) => command === 'az' && args.includes('secret') && args.includes('set')
+		);
+		assert.ok(secretSet);
+		assert.ok(secretSet[1].includes('access-token-secret=access'));
+		const terraformInit = calls.find(
+			([command, args]) => command === 'terraform' && args.includes('init')
+		);
+		assert.ok(terraformInit);
+		assert.ok(terraformInit[1].includes('-lockfile=readonly'));
+		const terraformApply = calls.find(
+			([command, args]) => command === 'terraform' && args.includes('apply')
+		);
+		assert.ok(terraformApply);
+		assert.ok(!terraformApply[1].includes('-auto-approve'));
 		const bindCall = calls.find(([, args]) => args.includes('hostname') && args.includes('bind'));
 		assert.ok(bindCall);
 		assert.ok(!bindCall[1].includes('--certificate'));

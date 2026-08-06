@@ -129,6 +129,17 @@ test('validates API deployment and database values without returning secrets', (
 	});
 });
 
+test('API validation rejects a zero trust proxy hop count to match runtime configuration', () => {
+	assert.throws(
+		() =>
+			validateProductionEnvironment('api', {
+				...validEnvironment,
+				TRUST_PROXY_HOPS: '0'
+			}),
+		/TRUST_PROXY_HOPS must be a positive integer/u
+	);
+});
+
 test('API validation reports missing names without exposing database or token values', () => {
 	assert.throws(
 		() => validateProductionEnvironment('api', { ...validEnvironment, DATABASE_URL: '' }),

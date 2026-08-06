@@ -165,8 +165,8 @@ function api(environment, errors) {
 	domain(environment, 'API_DOMAIN', errors);
 
 	const trustProxyHops = required(environment, 'TRUST_PROXY_HOPS', errors);
-	if (trustProxyHops && !/^\d+$/u.test(trustProxyHops)) {
-		errors.push('TRUST_PROXY_HOPS must be a non-negative integer.');
+	if (trustProxyHops && !/^[1-9]\d*$/u.test(trustProxyHops)) {
+		errors.push('TRUST_PROXY_HOPS must be a positive integer.');
 	}
 
 	return {
