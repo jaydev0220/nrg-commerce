@@ -41,6 +41,14 @@
 	"env": {
 		"staging": {
 			"name": "contact-worker-staging",
+			"secrets": {
+				"required": [
+					"ALLOWED_ORIGINS",
+					"CONTACT_SENDER_EMAIL",
+					"CONTACT_RECIPIENT_EMAIL",
+					"TURNSTILE_SECRET_KEY"
+				]
+			},
 			"send_email": [{ "name": "EMAIL" }],
 			"ratelimits": [
 				{
@@ -64,6 +72,14 @@
 		},
 		"production": {
 			"name": "contact-worker",
+			"secrets": {
+				"required": [
+					"ALLOWED_ORIGINS",
+					"CONTACT_SENDER_EMAIL",
+					"CONTACT_RECIPIENT_EMAIL",
+					"TURNSTILE_SECRET_KEY"
+				]
+			},
 			"send_email": [{ "name": "EMAIL" }],
 			"ratelimits": [
 				{

@@ -23,7 +23,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 COPY . .
 RUN pnpm --filter @packages/database db:generate
 RUN pnpm --filter @apps/api build
-RUN pnpm --filter @apps/api --prod deploy --legacy /prod/api
+RUN pnpm --filter @apps/api --prod deploy /prod/api
 
 FROM scratch AS runtime
 

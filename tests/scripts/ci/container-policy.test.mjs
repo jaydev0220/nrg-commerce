@@ -28,3 +28,12 @@ test('the API runtime image is digest-pinned, minimal, and non-root', async () =
 	assert.match(dockerfile, /^USER 65532:65532$/mu);
 	assert.match(dockerfile, /^HEALTHCHECK /mu);
 });
+
+test('the API image uses the current pnpm deploy implementation', async () => {
+	const dockerfile = await readFile(new URL('apps/api/Dockerfile', repositoryRoot), 'utf8');
+	const workspace = await readFile(new URL('pnpm-workspace.yaml', repositoryRoot), 'utf8');
+
+	assert.match(workspace, /^injectWorkspacePackages: true$/mu);
+	assert.match(dockerfile, /pnpm --filter @apps\/api --prod deploy \/prod\/api/u);
+	assert.doesNotMatch(dockerfile, /deploy --legacy/u);
+});

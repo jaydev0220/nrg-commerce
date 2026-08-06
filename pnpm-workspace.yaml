@@ -6,6 +6,7 @@ packages:
 engineStrict: true
 
 catalogMode: strict
+injectWorkspacePackages: true
 
 catalog:
   '@types/node': ^24.13.3
@@ -73,7 +74,7 @@ catalogs:
     svelte-dnd-action: 0.9.74
     tailwindcss: ^4.3.3
     vite: ^8.1.5
-    wrangler: ^4.113.0
+    wrangler: ^4.119.0
   test:
     '@cloudflare/vitest-pool-workers': ^0.18.7
     '@playwright/test': ^1.61.1
@@ -111,6 +112,6 @@ minimumReleaseAgeExclude:
   - '@cloudflare/workerd-linux-64@1.20260721.1'
   - '@cloudflare/workerd-linux-arm64@1.20260721.1'
   - '@cloudflare/workerd-windows-64@1.20260721.1'
-  - miniflare@4.20260721.0
+  - miniflare@4.20260721.0 || 5.20260801.0-alpha
   - workerd@1.20260721.1
-  - wrangler@4.113.0
+  - wrangler@4.119.0
