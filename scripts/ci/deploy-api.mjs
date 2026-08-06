@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { importExistingApiDnsRecords } from './import-api-dns.mjs';
 
 const execFile = promisify(execFileCallback);
-const terraformDirectory = 'infra/api-dns';
+const terraformDirectory = 'infra/api';
 const azureApiVersion = '2025-07-01';
 const managedRulePrefix = 'nrg-cloudflare-';
 const runtimeSecretVariables = [
@@ -160,55 +160,10 @@ function buildRuntimeEnvTemplate(environment) {
 	return values;
 }
 
-function buildRuntimeEnvArguments(environment) {
-	return buildRuntimeEnvTemplate(environment).map((entry) =>
-		entry.secretRef ? `${entry.name}=secretref:${entry.secretRef}` : `${entry.name}=${entry.value}`
-	);
-}
-
 function buildSecretArguments(environment) {
 	return runtimeSecretVariables
 		.filter((name) => environment[name]?.trim())
 		.map((name) => `${azureSecretName(name)}=${environment[name].trim()}`);
-}
-
-export function buildCreateArguments(config, environment) {
-	const args = [
-		'containerapp',
-		'create',
-		'--name',
-		config.containerAppName,
-		'--resource-group',
-		config.resourceGroup,
-		'--environment',
-		config.containerAppEnvironment,
-		'--image',
-		config.image,
-		'--target-port',
-		'8080',
-		'--ingress',
-		'external',
-		'--transport',
-		'auto',
-		'--min-replicas',
-		'0',
-		'--max-replicas',
-		'1',
-		'--cpu',
-		'0.25',
-		'--memory',
-		'0.5Gi',
-		'--revisions-mode',
-		'multiple',
-		'--revision-suffix',
-		config.revisionSuffix
-	];
-	const secrets = buildSecretArguments(environment);
-	const runtimeEnv = buildRuntimeEnvArguments(environment);
-	if (secrets.length > 0) args.push('--secrets', ...secrets);
-	if (runtimeEnv.length > 0) args.push('--env-vars', ...runtimeEnv);
-	args.push('--output', 'none');
-	return args;
 }
 
 const probes = [
@@ -353,49 +308,6 @@ async function showContainerAppEnvironment(run, config) {
 	}
 }
 
-export async function ensureAzureInfrastructure(run, config) {
-	let resourceGroup = await showResourceGroup(run, config);
-	if (!resourceGroup) {
-		await run('az', [
-			'group',
-			'create',
-			'--name',
-			config.resourceGroup,
-			'--location',
-			config.location,
-			'--output',
-			'none'
-		]);
-		resourceGroup = await showResourceGroup(run, config);
-		if (!resourceGroup) throw new Error('Azure resource group was not available after creation.');
-	}
-
-	let containerAppEnvironment = await showContainerAppEnvironment(run, config);
-	if (!containerAppEnvironment) {
-		await run('az', [
-			'containerapp',
-			'env',
-			'create',
-			'--name',
-			config.containerAppEnvironment,
-			'--resource-group',
-			config.resourceGroup,
-			'--location',
-			config.location,
-			'--logs-destination',
-			'none',
-			'--output',
-			'none'
-		]);
-		containerAppEnvironment = await showContainerAppEnvironment(run, config);
-		if (!containerAppEnvironment) {
-			throw new Error('Azure Container Apps environment was not available after creation.');
-		}
-	}
-
-	return { resourceGroup, containerAppEnvironment };
-}
-
 async function showContainerApp(run, config) {
 	try {
 		return await runJson(run, 'az', [
@@ -454,12 +366,9 @@ async function patchContainerTemplate(run, app, config, environment) {
 
 async function ensureContainerApp(run, config, environment) {
 	const existing = await showContainerApp(run, config);
-	const previousRevision = existing?.properties?.latestRevisionName ?? null;
-	if (!existing) {
-		await run('az', buildCreateArguments(config, environment));
-	}
-	const current = (await showContainerApp(run, config)) ?? existing;
-	if (!current) throw new Error('Azure Container App was not available after creation.');
+	if (!existing) throw new Error('Terraform-managed Azure Container App is missing after apply.');
+	const previousRevision = existing.properties?.latestRevisionName ?? null;
+	const current = existing;
 	await reconcileRuntimeSecrets(run, config, environment);
 	await patchContainerTemplate(run, current, config, environment);
 	await waitForContainerAppProvisioning(run, config);
@@ -648,38 +557,6 @@ async function listBoundHostnames(run, config) {
 	return Array.isArray(result) ? result : (result?.value ?? []);
 }
 
-async function uploadOriginCertificate(run, config) {
-	const directory = await mkdtemp(join(tmpdir(), 'nrg-api-origin-cert-'));
-	const certificatePath = join(directory, 'origin.pfx');
-	try {
-		const certificate = Buffer.from(config.originCertificatePfxBase64, 'base64');
-		if (certificate.length === 0) {
-			throw new Error('API_ORIGIN_CERTIFICATE_PFX_BASE64 must decode to a non-empty certificate.');
-		}
-		await writeFile(certificatePath, certificate, { mode: 0o600 });
-		await run('az', [
-			'containerapp',
-			'env',
-			'certificate',
-			'upload',
-			'--name',
-			config.containerAppEnvironment,
-			'--resource-group',
-			config.resourceGroup,
-			'--certificate-file',
-			certificatePath,
-			'--password',
-			config.originCertificatePassword,
-			'--certificate-name',
-			config.originCertificateName,
-			'--output',
-			'none'
-		]);
-	} finally {
-		await rm(directory, { recursive: true, force: true });
-	}
-}
-
 async function bindCustomDomain(run, config) {
 	const hostnames = await listBoundHostnames(run, config);
 	const existing = hostnames.find(
@@ -730,23 +607,97 @@ function terraformEnvironment(config, environment, proxied) {
 		TF_WORKSPACE: config.dnsWorkspace,
 		TF_VAR_cloudflare_zone_id: config.zoneId,
 		TF_VAR_api_domain: config.apiDomain,
-		TF_VAR_container_app_hostname: config.containerAppHostname,
-		TF_VAR_custom_domain_verification_id: config.verificationId,
 		TF_VAR_environment: config.environmentName,
-		TF_VAR_proxied: String(proxied)
+		TF_VAR_proxied: String(proxied),
+		TF_VAR_azure_resource_group: config.resourceGroup,
+		TF_VAR_azure_location: config.location,
+		TF_VAR_azure_container_app_environment: config.containerAppEnvironment,
+		TF_VAR_azure_container_app_name: config.containerAppName,
+		TF_VAR_bootstrap_image: config.image,
+		TF_VAR_origin_certificate_pfx_base64: config.originCertificatePfxBase64,
+		TF_VAR_origin_certificate_password: config.originCertificatePassword
 	};
 }
 
-async function applyApiDns(run, config, environment, proxied, fetcher) {
+async function terraformStateResources(run) {
+	try {
+		const state = await run('terraform', ['-chdir=' + terraformDirectory, 'state', 'list']);
+		return new Set((state.stdout ?? '').split(/\r?\n/u).filter(Boolean));
+	} catch (error) {
+		if (String(error?.stderr ?? '').includes('No state file was found!')) return new Set();
+		throw error;
+	}
+}
+
+async function listEnvironmentCertificates(run, config) {
+	try {
+		const result = await runJson(run, 'az', [
+			'containerapp',
+			'env',
+			'certificate',
+			'list',
+			'--name',
+			config.containerAppEnvironment,
+			'--resource-group',
+			config.resourceGroup
+		]);
+		return Array.isArray(result) ? result : (result?.value ?? []);
+	} catch (error) {
+		if (isMissingAzureResource(error)) return [];
+		throw error;
+	}
+}
+
+async function importExistingAzureInfrastructure(run, config, tfRun) {
+	const stateResources = await terraformStateResources(tfRun);
+	const resourceGroup = await showResourceGroup(run, config);
+	const containerAppEnvironment = resourceGroup
+		? await showContainerAppEnvironment(run, config)
+		: null;
+	const containerApp = containerAppEnvironment ? await showContainerApp(run, config) : null;
+	const certificates = containerAppEnvironment
+		? await listEnvironmentCertificates(run, config)
+		: [];
+	const certificate = certificates.find(
+		(entry) => (entry.name ?? '').toLowerCase() === config.originCertificateName.toLowerCase()
+	);
+	const resources = [
+		['azurerm_resource_group.api', resourceGroup?.id],
+		['azurerm_container_app_environment.api', containerAppEnvironment?.id],
+		['azurerm_container_app.api', containerApp?.id],
+		['azurerm_container_app_environment_certificate.api_origin', certificate?.id]
+	];
+	for (const [address, id] of resources) {
+		if (!id || stateResources.has(address)) continue;
+		await tfRun('terraform', [
+			'-chdir=' + terraformDirectory,
+			'import',
+			'-input=false',
+			address,
+			id
+		]);
+	}
+	return containerApp;
+}
+
+async function applyApiInfrastructure(run, config, environment, proxied, fetcher) {
 	const tfEnvironment = terraformEnvironment(config, environment, proxied);
 	const tfRun = (command, args) => run(command, args, { env: tfEnvironment });
-	await tfRun('terraform', [
-		'-chdir=' + terraformDirectory,
-		'init',
-		'-input=false',
-		'-lockfile=readonly'
-	]);
-	await importExistingApiDnsRecords({ environment: tfEnvironment, fetcher, run: tfRun });
+	await tfRun('terraform', ['-chdir=' + terraformDirectory, 'init', '-input=false', '-upgrade']);
+	const existingApp = await importExistingAzureInfrastructure(run, config, tfRun);
+	const hostname = existingApp?.properties?.configuration?.ingress?.fqdn;
+	const verificationId = existingApp?.properties?.customDomainVerificationId;
+	if (hostname && verificationId) {
+		await importExistingApiDnsRecords({
+			environment: {
+				...tfEnvironment,
+				TF_VAR_container_app_hostname: hostname,
+				TF_VAR_custom_domain_verification_id: verificationId
+			},
+			fetcher,
+			run: tfRun
+		});
+	}
 	await tfRun('terraform', [
 		'-chdir=' + terraformDirectory,
 		'plan',
@@ -827,7 +778,7 @@ export async function deployApi({
 } = {}) {
 	const { environmentName, image } = parseArguments(process.argv.slice(2));
 	const config = parseApiDeploymentEnvironment(environment, image, environmentName);
-	await ensureAzureInfrastructure(run, config);
+	await applyApiInfrastructure(run, config, environment, true, fetcher);
 	const deployment = await ensureContainerApp(run, config, environment);
 	config.containerAppHostname = deployment.app.properties?.configuration?.ingress?.fqdn;
 	config.verificationId = deployment.app.properties?.customDomainVerificationId;
@@ -837,19 +788,17 @@ export async function deployApi({
 
 	const cidrs = await fetchCloudflareIpv4Cidrs(fetcher);
 	await reconcileIngressRules({ run, config, cidrs, waitOptions });
-	await applyApiDns(run, config, environment, true, fetcher);
-	await uploadOriginCertificate(run, config);
 	try {
 		await bindCustomDomain(run, config);
 	} catch (error) {
 		if (!/DNS|CNAME|validation/iu.test(`${error?.message ?? ''} ${error?.stderr ?? ''}`)) {
 			throw error;
 		}
-		await applyApiDns(run, config, environment, false, fetcher);
+		await applyApiInfrastructure(run, config, environment, false, fetcher);
 		try {
 			await bindCustomDomain(run, config);
 		} finally {
-			await applyApiDns(run, config, environment, true, fetcher);
+			await applyApiInfrastructure(run, config, environment, true, fetcher);
 		}
 	}
 

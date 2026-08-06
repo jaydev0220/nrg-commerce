@@ -2,11 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-	buildCreateArguments,
 	buildTemplatePatch,
 	defaultRun,
 	deployApi,
-	ensureAzureInfrastructure,
 	fetchCloudflareIpv4Cidrs,
 	parseApiDeploymentEnvironment,
 	reconcileIngressRules,
@@ -80,93 +78,6 @@ test('parseApiDeploymentEnvironment requires an immutable digest and creates a c
 test('defaultRun executes a command with a bounded output buffer', async () => {
 	const result = await defaultRun(process.execPath, ['-e', "process.stdout.write('ok')"]);
 	assert.equal(result.stdout, 'ok');
-});
-
-test('buildCreateArguments configures the public port, resource bounds, secret references, and multiple revisions', () => {
-	const config = parseApiDeploymentEnvironment(deploymentEnvironment, image, 'production');
-	const args = buildCreateArguments(config, deploymentEnvironment);
-
-	assert.ok(args.includes('--revisions-mode'));
-	assert.ok(args.includes('multiple'));
-	assert.ok(args.includes('--target-port'));
-	assert.ok(args.includes('8080'));
-	assert.ok(!args.includes('--registry-server'));
-	assert.ok(!args.includes('--registry-username'));
-	assert.ok(!args.includes('--registry-password'));
-	assert.ok(args.includes('DATABASE_URL=secretref:database-url'));
-	assert.ok(args.includes('ACCESS_TOKEN_SECRET=secretref:access-token-secret'));
-	assert.ok(
-		args.includes('database-url=postgresql://app:secret@db.example.com/app?sslmode=verify-full')
-	);
-	assert.ok(args.includes('access-token-secret=access'));
-	const secretsStart = args.indexOf('--secrets') + 1;
-	const secretsEnd = args.indexOf('--env-vars');
-	for (const secret of args.slice(secretsStart, secretsEnd)) {
-		const [secretName] = secret.split('=', 1);
-		assert.match(secretName, /^[a-z0-9](?:[a-z0-9-]{0,18}[a-z0-9])?$/u);
-		assert.ok(secretName.length <= 20);
-	}
-	assert.ok(
-		args.includes(
-			'OTEL_RESOURCE_ATTRIBUTES=service.namespace=nrg-commerce,deployment.environment.name=production'
-		)
-	);
-
-	const defaults = buildCreateArguments(
-		parseApiDeploymentEnvironment(deploymentEnvironment, image, 'staging'),
-		{}
-	);
-	assert.ok(defaults.includes('NODE_ENV=production'));
-	assert.ok(defaults.includes('PORT=8080'));
-});
-
-test('ensureAzureInfrastructure creates missing Azure resources once with compatible environment arguments', async () => {
-	const config = parseApiDeploymentEnvironment(deploymentEnvironment, image, 'production');
-	const calls = [];
-	let groupExists = false;
-	let environmentExists = false;
-	const notFound = () =>
-		Object.assign(new Error('ResourceNotFound'), { stderr: 'ResourceNotFound' });
-	const run = async (command, args) => {
-		calls.push([command, args]);
-		if (command === 'az' && args[0] === 'group' && args[1] === 'show') {
-			if (!groupExists) throw notFound();
-			return json({ name: config.resourceGroup, location: config.location });
-		}
-		if (command === 'az' && args[0] === 'group' && args[1] === 'create') {
-			groupExists = true;
-			return { stdout: '' };
-		}
-		if (command === 'az' && args[0] === 'containerapp' && args[1] === 'env' && args[2] === 'show') {
-			if (!environmentExists) throw notFound();
-			return json({ name: config.containerAppEnvironment, location: config.location });
-		}
-		if (
-			command === 'az' &&
-			args[0] === 'containerapp' &&
-			args[1] === 'env' &&
-			args[2] === 'create'
-		) {
-			environmentExists = true;
-			return { stdout: '' };
-		}
-		throw new Error(`Unexpected command: ${command} ${args.join(' ')}`);
-	};
-
-	await ensureAzureInfrastructure(run, config);
-	await ensureAzureInfrastructure(run, config);
-
-	const groupCreates = calls.filter(([, args]) => args[0] === 'group' && args[1] === 'create');
-	assert.equal(groupCreates.length, 1);
-	assert.ok(groupCreates[0][1].includes(config.location));
-	const environmentCreates = calls.filter(
-		([, args]) => args[0] === 'containerapp' && args[1] === 'env' && args[2] === 'create'
-	);
-	assert.equal(environmentCreates.length, 1);
-	assert.ok(!environmentCreates[0][1].includes('--environment-mode'));
-	assert.ok(!environmentCreates[0][1].includes('ConsumptionOnly'));
-	assert.ok(environmentCreates[0][1].includes('--logs-destination'));
-	assert.ok(environmentCreates[0][1].includes('none'));
 });
 
 test('buildTemplatePatch replaces runtime environment values and adds health probes', () => {
@@ -393,13 +304,32 @@ test('deployApi promotes a healthy new revision after migrations and DNS reconci
 		if (command === 'az' && args.includes('revision') && args.includes('show'))
 			return json({ properties: { runningState: 'Running', healthState: 'Healthy' } });
 		if (command === 'az' && args[0] === 'group' && args[1] === 'show') {
-			return json({ name: deploymentEnvironment.AZURE_RESOURCE_GROUP, location: 'eastasia' });
+			return json({
+				id: '/subscriptions/sub/resourceGroups/nrg-commerce',
+				name: deploymentEnvironment.AZURE_RESOURCE_GROUP,
+				location: 'eastasia'
+			});
 		}
 		if (command === 'az' && args[0] === 'containerapp' && args[1] === 'env' && args[2] === 'show') {
 			return json({
+				id: '/subscriptions/sub/resourceGroups/nrg-commerce/providers/Microsoft.App/managedEnvironments/nrg-commerce',
 				name: deploymentEnvironment.AZURE_CONTAINER_APP_ENVIRONMENT,
 				location: 'eastasia'
 			});
+		}
+		if (
+			command === 'az' &&
+			args[0] === 'containerapp' &&
+			args[1] === 'env' &&
+			args[2] === 'certificate' &&
+			args[3] === 'list'
+		) {
+			return json([
+				{
+					id: '/subscriptions/sub/resourceGroups/nrg-commerce/providers/Microsoft.App/managedEnvironments/nrg-commerce/certificates/api-origin-production',
+					name: 'api-origin-production'
+				}
+			]);
 		}
 		if (command === 'az' && args[0] === 'containerapp' && args[1] === 'show') {
 			showCount += 1;
@@ -472,7 +402,7 @@ test('deployApi promotes a healthy new revision after migrations and DNS reconci
 			([command, args]) => command === 'terraform' && args.includes('init')
 		);
 		assert.ok(terraformInit);
-		assert.ok(terraformInit[1].includes('-lockfile=readonly'));
+		assert.ok(terraformInit[1].includes('-upgrade'));
 		const terraformApply = calls.find(
 			([command, args]) => command === 'terraform' && args.includes('apply')
 		);
@@ -488,13 +418,19 @@ test('deployApi promotes a healthy new revision after migrations and DNS reconci
 		assert.ok(bindIndex > addIndex);
 		assert.ok(calls[bindIndex][1].includes('--certificate'));
 		assert.ok(calls[bindIndex][1].includes('api-origin-production'));
-		const certificateUpload = calls.find(
+		const certificateImport = calls.find(
 			([command, args]) =>
-				command === 'az' && args.includes('certificate') && args.includes('upload')
+				command === 'terraform' &&
+				args.includes('import') &&
+				args.includes('azurerm_container_app_environment_certificate.api_origin')
 		);
-		assert.ok(certificateUpload);
-		assert.ok(certificateUpload[1].includes('--certificate-file'));
-		assert.ok(certificateUpload[1].includes('--password'));
+		assert.ok(certificateImport);
+		assert.ok(
+			!calls.some(
+				([command, args]) =>
+					command === 'az' && args.includes('certificate') && args.includes('upload')
+			)
+		);
 	} finally {
 		process.argv = originalArgv;
 	}

@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 
 const execFile = promisify(execFileCallback);
-const terraformDirectory = 'infra/api-dns';
+const terraformDirectory = 'infra/api';
 
 export async function defaultRun(command, args, options = {}) {
 	return execFile(command, args, { ...options, maxBuffer: 4 * 1024 * 1024 });

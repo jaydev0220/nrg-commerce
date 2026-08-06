@@ -200,13 +200,13 @@ jobs:
         run: terraform -chdir=infra/cloudflare validate
 
       - name: Validate API DNS Terraform formatting
-        run: terraform -chdir=infra/api-dns fmt -check -diff
+        run: terraform -chdir=infra/api fmt -check -diff
 
-      - name: Initialize API DNS Terraform providers
-        run: terraform -chdir=infra/api-dns init -backend=false -input=false -lockfile=readonly
+      - name: Initialize API Terraform providers
+        run: terraform -chdir=infra/api init -backend=false -input=false -upgrade
 
       - name: Validate API DNS Terraform configuration
-        run: terraform -chdir=infra/api-dns validate
+        run: terraform -chdir=infra/api validate
 
       - name: Run tests
         run: pnpm test
@@ -811,6 +811,10 @@ jobs:
 
       - name: Deploy immutable API revision
         env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_USE_OIDC: 'true'
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -943,6 +947,10 @@ jobs:
 
       - name: Deploy immutable API revision
         env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_USE_OIDC: 'true'
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
