@@ -22,6 +22,8 @@ const deploymentEnvironment = {
 	API_DOMAIN: 'api.example.com',
 	CLOUDFLARE_ZONE_ID: '0123456789abcdef0123456789abcdef',
 	API_DNS_TF_WORKSPACE: 'nrg-commerce-api-dns-production',
+	API_ORIGIN_CERTIFICATE_PFX_BASE64: Buffer.from('test-pfx').toString('base64'),
+	API_ORIGIN_CERTIFICATE_PASSWORD: 'certificate-password',
 	TF_CLOUD_ORGANIZATION: 'example',
 	TF_CLOUD_PROJECT: 'commerce',
 	DATABASE_URL: 'postgresql://app:secret@db.example.com/app?sslmode=verify-full',
@@ -484,7 +486,15 @@ test('deployApi promotes a healthy new revision after migrations and DNS reconci
 		);
 		assert.ok(addIndex >= 0);
 		assert.ok(bindIndex > addIndex);
-		assert.ok(!calls[bindIndex][1].includes('--certificate'));
+		assert.ok(calls[bindIndex][1].includes('--certificate'));
+		assert.ok(calls[bindIndex][1].includes('api-origin-production'));
+		const certificateUpload = calls.find(
+			([command, args]) =>
+				command === 'az' && args.includes('certificate') && args.includes('upload')
+		);
+		assert.ok(certificateUpload);
+		assert.ok(certificateUpload[1].includes('--certificate-file'));
+		assert.ok(certificateUpload[1].includes('--password'));
 	} finally {
 		process.argv = originalArgv;
 	}

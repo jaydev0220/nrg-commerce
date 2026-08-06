@@ -137,6 +137,9 @@ export function parseApiDeploymentEnvironment(environment, image, environmentNam
 		containerAppEnvironment: required(environment, 'AZURE_CONTAINER_APP_ENVIRONMENT'),
 		containerAppName: required(environment, 'AZURE_CONTAINER_APP_NAME'),
 		apiDomain: required(environment, 'API_DOMAIN').toLowerCase(),
+		originCertificateName: `api-origin-${environmentName}`,
+		originCertificatePfxBase64: required(environment, 'API_ORIGIN_CERTIFICATE_PFX_BASE64'),
+		originCertificatePassword: required(environment, 'API_ORIGIN_CERTIFICATE_PASSWORD'),
 		zoneId: required(environment, 'CLOUDFLARE_ZONE_ID'),
 		dnsWorkspace: required(environment, 'API_DNS_TF_WORKSPACE'),
 		terraformOrganization: required(environment, 'TF_CLOUD_ORGANIZATION'),
@@ -645,12 +648,43 @@ async function listBoundHostnames(run, config) {
 	return Array.isArray(result) ? result : (result?.value ?? []);
 }
 
+async function uploadOriginCertificate(run, config) {
+	const directory = await mkdtemp(join(tmpdir(), 'nrg-api-origin-cert-'));
+	const certificatePath = join(directory, 'origin.pfx');
+	try {
+		const certificate = Buffer.from(config.originCertificatePfxBase64, 'base64');
+		if (certificate.length === 0) {
+			throw new Error('API_ORIGIN_CERTIFICATE_PFX_BASE64 must decode to a non-empty certificate.');
+		}
+		await writeFile(certificatePath, certificate, { mode: 0o600 });
+		await run('az', [
+			'containerapp',
+			'env',
+			'certificate',
+			'upload',
+			'--name',
+			config.containerAppEnvironment,
+			'--resource-group',
+			config.resourceGroup,
+			'--certificate-file',
+			certificatePath,
+			'--password',
+			config.originCertificatePassword,
+			'--certificate-name',
+			config.originCertificateName,
+			'--output',
+			'none'
+		]);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+}
+
 async function bindCustomDomain(run, config) {
 	const hostnames = await listBoundHostnames(run, config);
 	const existing = hostnames.find(
 		(hostname) => (hostname.name ?? hostname.hostname ?? '').toLowerCase() === config.apiDomain
 	);
-	if (existing?.certificateId) return false;
 
 	if (!existing) {
 		await run('az', [
@@ -680,6 +714,8 @@ async function bindCustomDomain(run, config) {
 		config.apiDomain,
 		'--environment',
 		config.containerAppEnvironment,
+		'--certificate',
+		config.originCertificateName,
 		'--validation-method',
 		'CNAME',
 		'--output',
@@ -802,17 +838,19 @@ export async function deployApi({
 	const cidrs = await fetchCloudflareIpv4Cidrs(fetcher);
 	await reconcileIngressRules({ run, config, cidrs, waitOptions });
 	await applyApiDns(run, config, environment, true, fetcher);
+	await uploadOriginCertificate(run, config);
 	try {
 		await bindCustomDomain(run, config);
 	} catch (error) {
-		if (
-			!/DNS|CNAME|validation|certificate/iu.test(`${error?.message ?? ''} ${error?.stderr ?? ''}`)
-		) {
+		if (!/DNS|CNAME|validation/iu.test(`${error?.message ?? ''} ${error?.stderr ?? ''}`)) {
 			throw error;
 		}
 		await applyApiDns(run, config, environment, false, fetcher);
-		await bindCustomDomain(run, config);
-		await applyApiDns(run, config, environment, true, fetcher);
+		try {
+			await bindCustomDomain(run, config);
+		} finally {
+			await applyApiDns(run, config, environment, true, fetcher);
+		}
 	}
 
 	if (deployment.previousRevision && deployment.previousRevision !== deployment.revision) {

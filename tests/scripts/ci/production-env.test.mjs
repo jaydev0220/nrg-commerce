@@ -25,6 +25,8 @@ const validEnvironment = {
 	HCP_TERRAFORM_TOKEN: 'hcp-token',
 	API_DOMAIN: 'api.example.com',
 	API_DNS_TF_WORKSPACE: 'nrg-commerce-api-dns-production',
+	API_ORIGIN_CERTIFICATE_PFX_BASE64: Buffer.from('test-pfx').toString('base64'),
+	API_ORIGIN_CERTIFICATE_PASSWORD: 'certificate-password',
 	AZURE_CLIENT_ID: 'client-id',
 	AZURE_TENANT_ID: 'tenant-id',
 	AZURE_SUBSCRIPTION_ID: 'subscription-id',
