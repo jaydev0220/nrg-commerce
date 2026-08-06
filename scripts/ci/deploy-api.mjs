@@ -647,13 +647,27 @@ async function listBoundHostnames(run, config) {
 
 async function bindCustomDomain(run, config) {
 	const hostnames = await listBoundHostnames(run, config);
-	if (
-		hostnames.some(
-			(hostname) => (hostname.name ?? hostname.hostname ?? '').toLowerCase() === config.apiDomain
-		)
-	) {
-		return false;
+	const existing = hostnames.find(
+		(hostname) => (hostname.name ?? hostname.hostname ?? '').toLowerCase() === config.apiDomain
+	);
+	if (existing?.certificateId) return false;
+
+	if (!existing) {
+		await run('az', [
+			'containerapp',
+			'hostname',
+			'add',
+			'--name',
+			config.containerAppName,
+			'--resource-group',
+			config.resourceGroup,
+			'--hostname',
+			config.apiDomain,
+			'--output',
+			'none'
+		]);
 	}
+
 	await run('az', [
 		'containerapp',
 		'hostname',

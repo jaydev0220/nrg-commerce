@@ -370,6 +370,8 @@ test('deployApi promotes a healthy new revision after migrations and DNS reconci
 	process.argv = ['node', 'deploy-api.mjs', '--environment', 'production', '--image', image];
 	const calls = [];
 	let showCount = 0;
+	let hostnameAdded = false;
+	let bindAttempts = 0;
 	const app = {
 		id: '/subscriptions/sub/resourceGroups/nrg-commerce/providers/Microsoft.App/containerApps/nrg-commerce-api',
 		properties: {
@@ -406,7 +408,32 @@ test('deployApi promotes a healthy new revision after migrations and DNS reconci
 		}
 		if (command === 'az' && args.includes('access-restriction') && args.includes('list'))
 			return json({ value: [] });
-		if (command === 'az' && args.includes('hostname') && args.includes('list')) return json([]);
+		if (command === 'az' && args.includes('hostname') && args.includes('list')) {
+			return json(
+				hostnameAdded
+					? [
+							{
+								name: deploymentEnvironment.API_DOMAIN,
+								bindingType: 'Disabled',
+								certificateId: null
+							}
+						]
+					: []
+			);
+		}
+		if (command === 'az' && args.includes('hostname') && args.includes('add')) {
+			hostnameAdded = true;
+			return { stdout: '' };
+		}
+		if (command === 'az' && args.includes('hostname') && args.includes('bind')) {
+			bindAttempts += 1;
+			if (bindAttempts === 1) {
+				throw Object.assign(new Error('Managed certificate validation failed'), {
+					stderr: 'ERROR: certificate CNAME validation failed'
+				});
+			}
+			return { stdout: '' };
+		}
 		if (command === 'terraform' && args.includes('state')) return { stdout: '' };
 		return { stdout: '' };
 	};
@@ -449,9 +476,15 @@ test('deployApi promotes a healthy new revision after migrations and DNS reconci
 		);
 		assert.ok(terraformApply);
 		assert.ok(!terraformApply[1].includes('-auto-approve'));
-		const bindCall = calls.find(([, args]) => args.includes('hostname') && args.includes('bind'));
-		assert.ok(bindCall);
-		assert.ok(!bindCall[1].includes('--certificate'));
+		const addIndex = calls.findIndex(
+			([, args]) => args.includes('hostname') && args.includes('add')
+		);
+		const bindIndex = calls.findIndex(
+			([, args]) => args.includes('hostname') && args.includes('bind')
+		);
+		assert.ok(addIndex >= 0);
+		assert.ok(bindIndex > addIndex);
+		assert.ok(!calls[bindIndex][1].includes('--certificate'));
 	} finally {
 		process.argv = originalArgv;
 	}
