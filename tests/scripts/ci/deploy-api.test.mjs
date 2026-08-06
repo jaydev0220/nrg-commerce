@@ -181,6 +181,7 @@ test('buildTemplatePatch replaces runtime environment values and adds health pro
 					{ name: 'sidecar', image: 'sidecar', imageType: 'ContainerImage' }
 				],
 				initContainers: [{ name: 'init', image: 'init', imageType: 'ContainerImage' }],
+				customMetricsSettings: { enabled: true },
 				scale: { minReplicas: 1, maxReplicas: 3 }
 			}
 		}
@@ -194,6 +195,7 @@ test('buildTemplatePatch replaces runtime environment values and adds health pro
 	assert.equal(patch.properties.template.initContainers[0].imageType, undefined);
 	assert.equal(container.env[0].imageType, undefined);
 	assert.ok(!JSON.stringify(patch).includes('imageType'));
+	assert.ok(!JSON.stringify(patch).includes('customMetricsSettings'));
 	assert.ok(
 		container.env.some((entry) => entry.name === 'NODE_ENV' && entry.value === 'production')
 	);

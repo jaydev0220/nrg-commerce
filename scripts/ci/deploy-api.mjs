@@ -229,18 +229,53 @@ const probes = [
 	}
 ];
 
-function stripUnsupportedImageType(value) {
-	if (Array.isArray(value)) return value.map(stripUnsupportedImageType);
+const templatePropertyNames = new Set([
+	'containers',
+	'initContainers',
+	'revisionSuffix',
+	'scale',
+	'serviceBinds',
+	'terminationGracePeriodSeconds',
+	'volumes'
+]);
+const containerPropertyNames = new Set([
+	'args',
+	'command',
+	'env',
+	'image',
+	'name',
+	'probes',
+	'resources',
+	'volumeMounts'
+]);
+const initContainerPropertyNames = new Set([
+	'args',
+	'command',
+	'env',
+	'image',
+	'name',
+	'resources',
+	'volumeMounts'
+]);
+
+function pickProperties(value, propertyNames) {
 	if (!value || typeof value !== 'object') return value;
-	return Object.fromEntries(
-		Object.entries(value)
-			.filter(([key]) => key !== 'imageType')
-			.map(([key, nestedValue]) => [key, stripUnsupportedImageType(nestedValue)])
-	);
+	return Object.fromEntries(Object.entries(value).filter(([key]) => propertyNames.has(key)));
 }
 
 export function buildTemplatePatch(current, image, revisionSuffix, environment = {}) {
-	const template = stripUnsupportedImageType(current?.properties?.template);
+	const currentTemplate = current?.properties?.template;
+	const template = pickProperties(currentTemplate, templatePropertyNames);
+	if (Array.isArray(template?.containers)) {
+		template.containers = template.containers.map((container) =>
+			pickProperties(container, containerPropertyNames)
+		);
+	}
+	if (Array.isArray(template?.initContainers)) {
+		template.initContainers = template.initContainers.map((container) =>
+			pickProperties(container, initContainerPropertyNames)
+		);
+	}
 	if (!template || !Array.isArray(template.containers) || template.containers.length === 0) {
 		throw new Error('Azure Container App has no deployable container template.');
 	}
