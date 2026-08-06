@@ -23,6 +23,8 @@ test('every deployment publication job is restricted to the main branch', async 
 	const workflow = await readFile(workflowPath, 'utf8');
 
 	for (const jobName of [
+		'deploy-infrastructure-staging',
+		'deploy-infrastructure-production',
 		'deploy-workers-staging',
 		'deploy-workers-production',
 		'publish-api-image',
@@ -55,6 +57,19 @@ test('staging contact limits permit the required capacity test without weakening
 	assert.notEqual(staging.namespace_id, production.namespace_id);
 });
 
+test('contact Worker required secrets are declared in every deployed environment', async () => {
+	const config = JSON.parse(await readFile(contactWorkerConfigPath, 'utf8'));
+	const required = [
+		'ALLOWED_ORIGINS',
+		'CONTACT_SENDER_EMAIL',
+		'CONTACT_RECIPIENT_EMAIL',
+		'TURNSTILE_SECRET_KEY'
+	];
+
+	assert.deepEqual(config.env.staging.secrets.required, required);
+	assert.deepEqual(config.env.production.secrets.required, required);
+});
+
 test('CI scans complete repository history for secrets with an immutable scanner', async () => {
 	const workflow = await readFile(workflowPath, 'utf8');
 	const validation = readJob(workflow, 'validate');
@@ -80,6 +95,8 @@ test('deployment credentials are scoped to steps and Terraform applies a saved p
 	const workflow = await readFile(workflowPath, 'utf8');
 
 	for (const jobName of [
+		'deploy-infrastructure-staging',
+		'deploy-infrastructure-production',
 		'deploy-workers-staging',
 		'deploy-workers-production',
 		'deploy-landing-staging',
@@ -90,10 +107,15 @@ test('deployment credentials are scoped to steps and Terraform applies a saved p
 		assert.doesNotMatch(jobConfiguration, /\$\{\{\s*secrets\./u);
 	}
 
-	for (const jobName of ['deploy-workers-staging', 'deploy-workers-production']) {
+	for (const jobName of ['deploy-infrastructure-staging', 'deploy-infrastructure-production']) {
 		const job = readJob(workflow, jobName);
+		assert.match(job, /init .* -lockfile=readonly/u);
 		assert.match(job, /plan .* -out=deployment\.tfplan/u);
 		assert.match(job, /apply .* deployment\.tfplan/u);
+		assert.doesNotMatch(job, /-auto-approve/u);
+	}
+	for (const jobName of ['deploy-workers-staging', 'deploy-workers-production']) {
+		assert.doesNotMatch(readJob(workflow, jobName), /terraform -chdir=/u);
 	}
 
 	const checkoutCount = workflow.match(/uses: actions\/checkout@/gu)?.length ?? 0;
@@ -108,7 +130,10 @@ test('landing uses assets-only Cloudflare deployments with staging promotion', a
 	const staging = readJob(workflow, 'deploy-landing-staging');
 	const production = readJob(workflow, 'deploy-landing-production');
 
-	assert.match(workers, /needs: \[changes, deploy-workers-staging, publish-api-image\]/u);
+	assert.match(
+		workers,
+		/needs: \[changes, deploy-infrastructure-production, deploy-workers-staging, publish-api-image\]/u
+	);
 	assert.match(workers, /needs\.publish-api-image\.result == 'success'/u);
 	assert.match(workers, /needs\.publish-api-image\.result == 'skipped'/u);
 	assert.match(staging, /environment:\n      name: staging/u);
@@ -133,6 +158,38 @@ test('landing uses assets-only Cloudflare deployments with staging promotion', a
 	assert.notEqual(config.env.staging.name, config.env.production.name);
 });
 
+test('Cloudflare infrastructure is promoted separately from Worker-only deployments', async () => {
+	const workflow = await readFile(workflowPath, 'utf8');
+	const infrastructureStaging = readJob(workflow, 'deploy-infrastructure-staging');
+	const infrastructureProduction = readJob(workflow, 'deploy-infrastructure-production');
+	const workersStaging = readJob(workflow, 'deploy-workers-staging');
+	const workersProduction = readJob(workflow, 'deploy-workers-production');
+
+	assert.match(infrastructureStaging, /needs\.changes\.outputs\.infrastructure == 'true'/u);
+	assert.match(infrastructureProduction, /needs\.changes\.outputs\.infrastructure == 'true'/u);
+	assert.match(
+		infrastructureProduction,
+		/needs\.deploy-infrastructure-staging\.result == 'success'/u
+	);
+	assert.doesNotMatch(workersStaging, /needs\.changes\.outputs\.infrastructure == 'true'/u);
+	assert.match(workersStaging, /needs\.deploy-infrastructure-staging\.result == 'skipped'/u);
+	assert.match(workersProduction, /needs\.deploy-infrastructure-production\.result == 'skipped'/u);
+});
+
+test('CI pins supported Terraform and Azure Container Apps toolchain versions', async () => {
+	const workflow = await readFile(workflowPath, 'utf8');
+	const terraformVersions = workflow.match(/terraform_version: ([^\n]+)/gu) ?? [];
+	assert.ok(terraformVersions.length > 0);
+	assert.ok(terraformVersions.every((entry) => entry === 'terraform_version: 1.15.5'));
+
+	for (const jobName of ['deploy-api-staging', 'deploy-api-production']) {
+		assert.match(
+			readJob(workflow, jobName),
+			/az extension add --name containerapp --version 1\.3\.0b4 --yes/u
+		);
+	}
+});
+
 test('the API publication scans the immutable SHA image and never publishes latest', async () => {
 	const workflow = await readFile(workflowPath, 'utf8');
 	const publication = readJob(workflow, 'publish-api-image');
@@ -155,6 +212,8 @@ test('API staging and production promote the same digest with migrations before 
 	const production = readJob(workflow, 'deploy-api-production');
 
 	assert.match(staging, /needs\.publish-api-image\.result == 'success'/u);
+	assert.match(staging, /needs\.deploy-infrastructure-staging\.result == 'success'/u);
+	assert.match(staging, /needs\.deploy-infrastructure-staging\.result == 'skipped'/u);
 	assert.match(staging, /working-directory: packages\/database/u);
 	assert.match(staging, /run: pnpm db:deploy/u);
 	assert.match(
@@ -162,6 +221,8 @@ test('API staging and production promote the same digest with migrations before 
 		/--image ghcr\.io\/jaydev0220\/nrg-commerce-api@\$\{\{ needs\.publish-api-image\.outputs\.image-digest \}\}/u
 	);
 	assert.match(production, /needs\.deploy-api-staging\.result == 'success'/u);
+	assert.match(production, /needs\.deploy-infrastructure-production\.result == 'success'/u);
+	assert.match(production, /needs\.deploy-infrastructure-production\.result == 'skipped'/u);
 	assert.match(production, /environment:\n      name: production/u);
 	assert.doesNotMatch(staging.slice(0, staging.indexOf('\n    steps:')), /\$\{\{\s*secrets\./u);
 	assert.doesNotMatch(

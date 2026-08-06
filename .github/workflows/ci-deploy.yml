@@ -157,7 +157,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
-          terraform_version: 1.13.5
+          terraform_version: 1.15.5
           terraform_wrapper: false
 
       - name: Install dependencies
@@ -263,6 +263,62 @@ jobs:
           severity-cutoff: high
           output-format: table
 
+  deploy-infrastructure-staging:
+    name: Deploy Cloudflare infrastructure staging
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.validate.result == 'success' &&
+      (needs.build-api-image.result == 'success' || needs.build-api-image.result == 'skipped') &&
+      needs.changes.outputs.infrastructure == 'true'
+    needs: [changes, validate, build-api-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: staging
+    env:
+      ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
+      DEPLOYMENT_ENVIRONMENT: staging
+      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+      TF_CLOUD_PROJECT: ${{ vars.TF_CLOUD_PROJECT }}
+      TF_VAR_admin_origin: https://${{ vars.ADMIN_DOMAIN }}
+      TF_VAR_environment: staging
+      TF_VAR_public_assets_custom_domain: ${{ vars.TF_PUBLIC_ASSETS_CUSTOM_DOMAIN || 'null' }}
+      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.19.0
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.15.5
+          terraform_wrapper: false
+          cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+
+      - name: Validate infrastructure environment
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+        run: node scripts/ci/production-env.mjs infrastructure
+
+      - name: Apply staging Cloudflare infrastructure
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          terraform -chdir=infra/cloudflare init -input=false -lockfile=readonly
+          terraform -chdir=infra/cloudflare plan -input=false -lock-timeout=5m -out=deployment.tfplan
+          terraform -chdir=infra/cloudflare apply -input=false -lock-timeout=5m deployment.tfplan
+
   deploy-workers-staging:
     name: Deploy Cloudflare staging
     if: >-
@@ -271,11 +327,12 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       needs.validate.result == 'success' &&
       (needs.build-api-image.result == 'success' || needs.build-api-image.result == 'skipped') &&
+      (needs.deploy-infrastructure-staging.result == 'success' ||
+       needs.deploy-infrastructure-staging.result == 'skipped') &&
       (needs.changes.outputs.contact == 'true' ||
        needs.changes.outputs.catalog == 'true' ||
-       needs.changes.outputs.admin == 'true' ||
-       needs.changes.outputs.infrastructure == 'true')
-    needs: [changes, validate, build-api-image]
+       needs.changes.outputs.admin == 'true')
+    needs: [changes, validate, build-api-image, deploy-infrastructure-staging]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment:
@@ -288,16 +345,9 @@ jobs:
       CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
       CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
       COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
-      DEPLOYMENT_ENVIRONMENT: staging
       FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
       LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
       LINE_URL: ${{ vars.LINE_URL }}
-      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
-      TF_CLOUD_PROJECT: ${{ vars.TF_CLOUD_PROJECT }}
-      TF_VAR_admin_origin: https://${{ vars.ADMIN_DOMAIN }}
-      TF_VAR_environment: staging
-      TF_VAR_public_assets_custom_domain: ${{ vars.TF_PUBLIC_ASSETS_CUSTOM_DOMAIN || 'null' }}
-      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
       TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
       PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
       PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
@@ -324,31 +374,8 @@ jobs:
           node-version: 24.19.0
           cache: pnpm
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with:
-          terraform_version: 1.13.5
-          terraform_wrapper: false
-          cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-
-      - name: Validate infrastructure environment
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-        run: node scripts/ci/production-env.mjs infrastructure
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Apply staging Cloudflare infrastructure
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          terraform -chdir=infra/cloudflare init -input=false
-          terraform -chdir=infra/cloudflare plan -input=false -lock-timeout=5m -out=deployment.tfplan
-          terraform -chdir=infra/cloudflare apply -input=false -auto-approve -lock-timeout=5m deployment.tfplan
 
       - name: Validate admin environment
         if: needs.changes.outputs.admin == 'true'
@@ -423,14 +450,72 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: pnpm exec wrangler deploy --env staging --domain "$CATALOG_DOMAIN" --var "PUBLIC_API_BASE_URL:$CATALOG_API_BASE_URL"
 
+  deploy-infrastructure-production:
+    name: Deploy Cloudflare infrastructure production
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.infrastructure == 'true' &&
+      needs.deploy-infrastructure-staging.result == 'success' &&
+      (needs.publish-api-image.result == 'success' || needs.publish-api-image.result == 'skipped')
+    needs: [changes, deploy-infrastructure-staging, publish-api-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+    env:
+      ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
+      DEPLOYMENT_ENVIRONMENT: production
+      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+      TF_CLOUD_PROJECT: ${{ vars.TF_CLOUD_PROJECT }}
+      TF_VAR_admin_origin: https://${{ vars.ADMIN_DOMAIN }}
+      TF_VAR_environment: production
+      TF_VAR_public_assets_custom_domain: ${{ vars.TF_PUBLIC_ASSETS_CUSTOM_DOMAIN || 'null' }}
+      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.19.0
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.15.5
+          terraform_wrapper: false
+          cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+
+      - name: Validate infrastructure environment
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+        run: node scripts/ci/production-env.mjs infrastructure
+
+      - name: Apply production Cloudflare infrastructure
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          terraform -chdir=infra/cloudflare init -input=false -lockfile=readonly
+          terraform -chdir=infra/cloudflare plan -input=false -lock-timeout=5m -out=deployment.tfplan
+          terraform -chdir=infra/cloudflare apply -input=false -lock-timeout=5m deployment.tfplan
+
   deploy-workers-production:
     name: Promote Cloudflare production
     if: >-
       always() &&
       github.ref == 'refs/heads/main' &&
       needs.deploy-workers-staging.result == 'success' &&
+      (needs.deploy-infrastructure-production.result == 'success' ||
+       needs.deploy-infrastructure-production.result == 'skipped') &&
       (needs.publish-api-image.result == 'success' || needs.publish-api-image.result == 'skipped')
-    needs: [changes, deploy-workers-staging, publish-api-image]
+    needs: [changes, deploy-infrastructure-production, deploy-workers-staging, publish-api-image]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment:
@@ -443,16 +528,9 @@ jobs:
       CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
       CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
       COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
-      DEPLOYMENT_ENVIRONMENT: production
       FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
       LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
       LINE_URL: ${{ vars.LINE_URL }}
-      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
-      TF_CLOUD_PROJECT: ${{ vars.TF_CLOUD_PROJECT }}
-      TF_VAR_admin_origin: https://${{ vars.ADMIN_DOMAIN }}
-      TF_VAR_environment: production
-      TF_VAR_public_assets_custom_domain: ${{ vars.TF_PUBLIC_ASSETS_CUSTOM_DOMAIN || 'null' }}
-      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
       TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
       PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
       PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
@@ -479,31 +557,8 @@ jobs:
           node-version: 24.19.0
           cache: pnpm
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with:
-          terraform_version: 1.13.5
-          terraform_wrapper: false
-          cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-
-      - name: Validate infrastructure environment
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-        run: node scripts/ci/production-env.mjs infrastructure
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Apply production Cloudflare infrastructure
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          terraform -chdir=infra/cloudflare init -input=false
-          terraform -chdir=infra/cloudflare plan -input=false -lock-timeout=5m -out=deployment.tfplan
-          terraform -chdir=infra/cloudflare apply -input=false -auto-approve -lock-timeout=5m deployment.tfplan
 
       - name: Validate admin environment
         if: needs.changes.outputs.admin == 'true'
@@ -642,12 +697,15 @@ jobs:
   deploy-api-staging:
     name: Deploy API staging
     if: >-
+      always() &&
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       needs.validate.result == 'success' &&
       needs.changes.outputs.api == 'true' &&
+      (needs.deploy-infrastructure-staging.result == 'success' ||
+       needs.deploy-infrastructure-staging.result == 'skipped') &&
       needs.publish-api-image.result == 'success'
-    needs: [changes, validate, build-api-image, publish-api-image]
+    needs: [changes, validate, build-api-image, deploy-infrastructure-staging, publish-api-image]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -707,7 +765,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
-          terraform_version: 1.13.5
+          terraform_version: 1.15.5
           terraform_wrapper: false
           cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
 
@@ -739,6 +797,9 @@ jobs:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: pnpm db:deploy
 
+      - name: Install pinned Azure Container Apps extension
+        run: az extension add --name containerapp --version 1.3.0b4 --yes
+
       - name: Log in to Azure with OIDC
         uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
         with:
@@ -764,11 +825,15 @@ jobs:
   deploy-api-production:
     name: Deploy API production
     if: >-
+      always() &&
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       needs.deploy-api-staging.result == 'success' &&
+      (needs.deploy-infrastructure-production.result == 'success' ||
+       needs.deploy-infrastructure-production.result == 'skipped') &&
       needs.publish-api-image.result == 'success'
-    needs: [changes, validate, publish-api-image, deploy-api-staging]
+    needs:
+      [changes, validate, deploy-infrastructure-production, publish-api-image, deploy-api-staging]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -828,7 +893,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
-          terraform_version: 1.13.5
+          terraform_version: 1.15.5
           terraform_wrapper: false
           cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
 
@@ -859,6 +924,9 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: pnpm db:deploy
+
+      - name: Install pinned Azure Container Apps extension
+        run: az extension add --name containerapp --version 1.3.0b4 --yes
 
       - name: Log in to Azure with OIDC
         uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
