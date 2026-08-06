@@ -239,14 +239,19 @@ export function buildTemplatePatch(current, image, revisionSuffix, environment =
 		0
 	);
 	const containers = template.containers.map((container, index) => {
-		if (index !== containerIndex) return container;
+		const { imageType: _imageType, ...writableContainer } = container;
+		if (index !== containerIndex) return writableContainer;
 		return {
-			...container,
+			...writableContainer,
 			image,
 			env: buildRuntimeEnvTemplate(environment),
 			resources: { ...container.resources, cpu: 0.25, memory: '0.5Gi' },
 			probes
 		};
+	});
+	const initContainers = template.initContainers?.map((container) => {
+		const { imageType: _imageType, ...writableContainer } = container;
+		return writableContainer;
 	});
 
 	return {
@@ -255,6 +260,7 @@ export function buildTemplatePatch(current, image, revisionSuffix, environment =
 				...template,
 				revisionSuffix,
 				containers,
+				...(initContainers ? { initContainers } : {}),
 				scale: { ...template.scale, minReplicas: 0, maxReplicas: 1 }
 			}
 		}
