@@ -48,7 +48,7 @@ project-root/
 - **Framework:** Svelte 5
 - **Styling:** Tailwind CSS 4
 - **Testing:** Playwright, Vitest
-- **Deployment:** Docker
+- **Deployment:** Cloudflare Workers Static Assets via `@sveltejs/adapter-cloudflare`
 
 #### `apps/catalog`
 
