@@ -112,6 +112,17 @@ test('release jobs have bounded timeouts and Terraform setup where required', as
 	assert.match(jobBlock(workflow, 'migrate'), /hashicorp\/setup-terraform@[0-9a-f]{40}/u);
 });
 
+test('bootstrap decrypts the saved plan with its step-scoped age identity', async () => {
+	const workflow = await readFile(
+		new URL('.github/workflows/bootstrap-production.yml', root),
+		'utf8'
+	);
+	assert.match(
+		jobBlock(workflow, 'apply'),
+		/- name: Decrypt bootstrap plan\s+env:\s+TF_PLAN_AGE_IDENTITY: \$\{\{ secrets\.TF_PLAN_AGE_IDENTITY \}\}\s+run: \|\s+test -n "\$TF_PLAN_AGE_IDENTITY"\s+printf '%s' "\$TF_PLAN_AGE_IDENTITY"[\s\S]*?age --decrypt --identity identity\.txt/u
+	);
+});
+
 test('release manifest captures provider control-plane version identifiers', async () => {
 	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
 	assert.match(workflow, /wrangler versions list[\s\S]*?--json/u);

@@ -127,7 +127,11 @@ jobs:
         with:
           name: bootstrap-${{ inputs.phase }}
       - run: sudo apt-get update && sudo apt-get install --yes age
-      - run: |
+      - name: Decrypt bootstrap plan
+        env:
+          TF_PLAN_AGE_IDENTITY: ${{ secrets.TF_PLAN_AGE_IDENTITY }}
+        run: |
+          test -n "$TF_PLAN_AGE_IDENTITY"
           printf '%s' "$TF_PLAN_AGE_IDENTITY" > identity.txt
           chmod 600 identity.txt
           age --decrypt --identity identity.txt --output infra/production/bootstrap.tfplan bootstrap.tfplan.age
