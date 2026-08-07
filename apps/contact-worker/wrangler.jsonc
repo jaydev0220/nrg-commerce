@@ -39,39 +39,8 @@
 	"workers_dev": false,
 	"preview_urls": false,
 	"env": {
-		"staging": {
-			"name": "contact-worker-staging",
-			"secrets": {
-				"required": [
-					"ALLOWED_ORIGINS",
-					"CONTACT_SENDER_EMAIL",
-					"CONTACT_RECIPIENT_EMAIL",
-					"TURNSTILE_SECRET_KEY"
-				]
-			},
-			"send_email": [{ "name": "EMAIL" }],
-			"ratelimits": [
-				{
-					"name": "CONTACT_RATE_LIMITER",
-					"namespace_id": "724051002",
-					"simple": { "limit": 1000, "period": 60 }
-				}
-			],
-			"queues": {
-				"producers": [{ "binding": "CONTACT_QUEUE", "queue": "nrg-commerce-staging-contact" }],
-				"consumers": [
-					{
-						"queue": "nrg-commerce-staging-contact",
-						"max_batch_size": 10,
-						"max_batch_timeout": 5,
-						"max_retries": 5,
-						"dead_letter_queue": "nrg-commerce-staging-contact-dlq"
-					}
-				]
-			}
-		},
 		"production": {
-			"name": "contact-worker",
+			"name": "nrg-commerce-contact",
 			"secrets": {
 				"required": [
 					"ALLOWED_ORIGINS",
@@ -85,7 +54,7 @@
 				{
 					"name": "CONTACT_RATE_LIMITER",
 					"namespace_id": "724051003",
-					"simple": { "limit": 10, "period": 60 }
+					"simple": { "limit": 5, "period": 60 }
 				}
 			],
 			"queues": {

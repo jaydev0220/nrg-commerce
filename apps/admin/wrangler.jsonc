@@ -19,16 +19,10 @@
 	"workers_dev": false,
 	"preview_urls": false,
 	"env": {
-		"staging": {
-			"name": "admin-staging",
-			"vars": {
-				"PUBLIC_API_BASE_URL": "https://api-staging.invalid"
-			}
-		},
 		"production": {
-			"name": "admin",
+			"name": "nrg-commerce-admin",
 			"vars": {
-				"PUBLIC_API_BASE_URL": "https://api.invalid"
+				"PUBLIC_API_BASE_URL": "https://api.nrglabware.com"
 			}
 		}
 	}

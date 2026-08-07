@@ -18,16 +18,18 @@
 	"workers_dev": false,
 	"preview_urls": false,
 	"env": {
-		"staging": {
-			"name": "catalog-staging",
-			"vars": {
-				"PUBLIC_API_BASE_URL": "https://api-staging.invalid"
-			}
-		},
 		"production": {
-			"name": "catalog",
+			"name": "nrg-commerce-catalog",
 			"vars": {
-				"PUBLIC_API_BASE_URL": "https://api.invalid"
+				"PUBLIC_API_BASE_URL": "https://api.nrglabware.com",
+				"PUBLIC_CDN_BASE_URL": "https://cdn.nrglabware.com",
+				"PUBLIC_CTA_URL": "https://catalog.nrglabware.com",
+				"PUBLIC_FACEBOOK_URL": "https://www.facebook.com/100057611824911",
+				"PUBLIC_HOME_URL": "https://www.nrglabware.com",
+				"PUBLIC_LINE_URL": "https://line.me/ti/p/xYZS-jqz4e",
+				"PUBLIC_COOKIE_DOMAIN": "nrglabware.com",
+				"PUBLIC_CONTACT_WORKER_URL": "https://contact.nrglabware.com",
+				"PUBLIC_TURNSTILE_SITE_KEY": ""
 			}
 		}
 	}

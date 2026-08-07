@@ -1,0 +1,10 @@
+cloudflare_account_id            = "00000000000000000000000000000000"
+cloudflare_terraform_api_token   = "set-through-protected-environment"
+r2_admin_access_key_id           = "set-through-protected-environment"
+r2_admin_secret_access_key       = "set-through-protected-environment"
+neon_org_id                      = "replace-with-neon-organization"
+neon_api_key                     = "set-through-protected-environment"
+azure_subscription_id            = "replace-with-subscription"
+azure_tenant_id                  = "replace-with-tenant"
+azure_budget_amount              = 25
+api_image                        = "ghcr.io/jaydev0220/nrg-commerce-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
