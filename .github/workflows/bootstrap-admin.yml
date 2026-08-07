@@ -1,0 +1,62 @@
+name: Bootstrap first administrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      email: { description: Administrator email, required: true, type: string }
+      name:
+        {
+          description: Administrator display name,
+          required: true,
+          default: Administrator,
+          type: string
+        }
+
+permissions: { contents: read }
+
+concurrency:
+  group: nrg-commerce-production
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
+        with: { version: 11.15.1, run_install: false }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
+        with: { node-version: 24.19.0, cache: pnpm }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - run: pnpm install --frozen-lockfile && pnpm --filter @packages/database db:generate && pnpm --filter @apps/api build
+      - run: terraform -chdir=infra/production init -input=false -lockfile=readonly
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+      - run: sudo apt-get update && sudo apt-get install --yes age
+      - name: Seed roles and encrypt one-time credential
+        run: |
+          set -euo pipefail
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          export DATABASE_URL="$(terraform -chdir=infra/production output -raw neon_owner_database_url)"
+          pnpm --filter @packages/database db:seed
+          pnpm --filter @apps/api bootstrap:admin -- --email "$ADMIN_EMAIL" --name "$ADMIN_NAME" > "$tmp/admin.txt"
+          age --encrypt --recipient "$ADMIN_AGE_RECIPIENT" --output "$RUNNER_TEMP/first-admin.txt.age" "$tmp/admin.txt"
+          rm -f "$tmp/admin.txt"
+        env:
+          ADMIN_EMAIL: ${{ inputs.email }}
+          ADMIN_NAME: ${{ inputs.name }}
+          ADMIN_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4
+        with:
+          name: first-admin-credential
+          path: ${{ runner.temp }}/first-admin.txt.age
+          retention-days: 1

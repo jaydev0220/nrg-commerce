@@ -1,118 +1,66 @@
-name: CI and Deploy
+name: CI and production release
 
 on:
   pull_request:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      target:
-        description: Deployment target
-        required: true
-        default: all
-        type: choice
-        options:
-          - all
-          - landing
-          - catalog
-          - contact
-          - admin
-          - api
-          - infrastructure
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number) || 'ci-release' }}
+  group: ${{ github.event_name == 'pull_request' && format('nrg-commerce-pr-{0}', github.event.pull_request.number) || 'nrg-commerce-production' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  NODE_VERSION: 24.19.0
+  PNPM_VERSION: 11.15.1
+  TF_VERSION: 1.15.5
+  TF_CLOUD_PROJECT: nrg-commerce
+  IMAGE_NAME: ghcr.io/jaydev0220/nrg-commerce-api
+
 jobs:
-  changes:
-    name: Detect deployment targets
+  quality:
+    name: Quality and type checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      landing: ${{ steps.targets.outputs.landing }}
-      catalog: ${{ steps.targets.outputs.catalog }}
-      contact: ${{ steps.targets.outputs.contact }}
-      admin: ${{ steps.targets.outputs.admin }}
-      api: ${{ steps.targets.outputs.api }}
-      infrastructure: ${{ steps.targets.outputs.infrastructure }}
+    timeout-minutes: 25
     steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24.19.0
-
-      - name: Determine affected targets
-        id: targets
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
+        with: { version: 11.15.1, run_install: false }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
+        with: { node-version: 24.19.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Check formatting and lint
         env:
-          BASE_SHA: ${{ github.event.before || github.event.pull_request.base.sha }}
-          CURRENT_SHA: ${{ github.sha }}
-          MANUAL_TARGET: ${{ inputs.target }}
-        run: |
-          if [[ -n "$MANUAL_TARGET" ]]; then
-            node scripts/ci/affected-targets.mjs --manual-target "$MANUAL_TARGET"
-          elif [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
-            node scripts/ci/affected-targets.mjs --manual-target all
-          else
-            git diff --name-only "$BASE_SHA" "$CURRENT_SHA" | node scripts/ci/affected-targets.mjs
-          fi
+          CI: 'true'
+        run: pnpm --workspace-root run lint
+      - run: pnpm check
 
-  dependency-review:
-    name: Review dependency changes
-    if: github.event_name == 'pull_request'
+  tests:
+    name: Tests and migration checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-
-      - name: Reject vulnerable dependency changes
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
-        with:
-          fail-on-severity: high
-
-  validate:
-    name: Validate monorepo
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:18@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a
         env:
           POSTGRES_DB: nrg_commerce_ci
-          POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
-        ports:
-          - 5432:5432
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U postgres -d nrg_commerce_ci"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      ALLOWED_ORIGINS: https://www.example.test,https://catalog.example.test
       CI: 'true'
-      CONTACT_RECIPIENT_EMAIL: recipient@example.test
-      CONTACT_SENDER_EMAIL: sender@example.test
+      NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_ci
       DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_ci
       SHADOW_DATABASE_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
       SHADOW_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_shadow
-      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_ci
       PUBLIC_API_BASE_URL: http://127.0.0.1:4174
       PUBLIC_CDN_BASE_URL: https://cdn.example.test
       PUBLIC_COOKIE_DOMAIN: example.test
@@ -123,991 +71,530 @@ jobs:
       PUBLIC_LINE_URL: https://line.me/ti/p/example
       PUBLIC_SITE_URL: https://www.example.test
       PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+      CONTACT_SENDER_EMAIL: sender@example.test
+      CONTACT_RECIPIENT_EMAIL: recipient@example.test
       TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA
     steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Verify immutable GitHub Action references
-        run: node scripts/ci/verify-actions-pinned.mjs
-
-      - name: Scan repository history for secrets
-        run: >-
-          docker run --rm
-          --volume "$GITHUB_WORKSPACE:/repo:ro"
-          zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
-          detect --source=/repo --no-banner --redact --exit-code=1
-          --gitleaks-ignore-path=/repo/.gitleaksignore
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-        with:
-          version: 11.15.1
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24.19.0
-          cache: pnpm
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with:
-          terraform_version: 1.15.5
-          terraform_wrapper: false
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Audit dependencies
-        run: pnpm audit --audit-level moderate
-
-      - name: Generate project types
-        run: pnpm ci:generate
-
-      - name: Prepare database migration shadow
-        working-directory: packages/database
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
+        with: { version: 11.15.1, run_install: false }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
+        with: { node-version: 24.19.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm ci:generate
+      - working-directory: packages/database
         run: pnpm db:shadow:create
-
-      - name: Apply database migrations
-        working-directory: packages/database
+      - working-directory: packages/database
         run: pnpm db:deploy
-
-      - name: Detect database migration drift
-        working-directory: packages/database
+      - working-directory: packages/database
         run: pnpm db:diff
+      - run: node scripts/ci/check-migrations.mjs
+      - run: pnpm test
+      - run: pnpm test:coverage
+      - run: pnpm test:e2e
 
-      - name: Install Chromium
-        run: apps/admin/node_modules/.bin/playwright install --with-deps chromium
-
-      - name: Check formatting and lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm check
-
-      - name: Validate Terraform formatting
-        run: terraform -chdir=infra/cloudflare fmt -check -diff
-
-      - name: Initialize Terraform providers
-        run: terraform -chdir=infra/cloudflare init -backend=false -input=false -lockfile=readonly
-
-      - name: Validate Terraform configuration
-        run: terraform -chdir=infra/cloudflare validate
-
-      - name: Validate API DNS Terraform formatting
-        run: terraform -chdir=infra/api fmt -check -diff
-
-      - name: Initialize API Terraform providers
-        run: terraform -chdir=infra/api init -backend=false -input=false -upgrade
-
-      - name: Validate API DNS Terraform configuration
-        run: terraform -chdir=infra/api validate
-
-      - name: Run tests
-        run: pnpm test
-
-      - name: Enforce coverage thresholds
-        run: pnpm test:coverage
-
-      - name: Build all workspaces
-        run: pnpm build
-
-      - name: Verify admin Worker output
-        run: node scripts/ci/verify-admin-build.mjs apps/admin/.svelte-kit/cloudflare "$PUBLIC_API_BASE_URL"
-
-      - name: Verify prerendered landing output
-        run: node scripts/ci/verify-landing-build.mjs apps/landing/.svelte-kit/cloudflare "$PUBLIC_CONTACT_WORKER_URL" "$PUBLIC_SITE_URL"
-
-      - name: Run browser journeys
-        run: pnpm test:e2e
-
-  build-api-image:
-    name: Build and scan API container
-    if: needs.changes.outputs.api == 'true'
-    needs: [changes, validate]
+  build:
+    name: Build production-shaped artifacts
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      PUBLIC_API_BASE_URL: https://api.example.test
+      PUBLIC_CDN_BASE_URL: https://cdn.example.test
+      PUBLIC_COOKIE_DOMAIN: example.test
+      PUBLIC_CONTACT_WORKER_URL: https://contact.example.test
+      PUBLIC_CTA_URL: https://catalog.example.test
+      PUBLIC_FACEBOOK_URL: https://www.facebook.com/example
+      PUBLIC_HOME_URL: https://www.example.test
+      PUBLIC_LINE_URL: https://line.me/ti/p/example
+      PUBLIC_SITE_URL: https://www.example.test
+      PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+      CONTACT_SENDER_EMAIL: sender@example.test
+      CONTACT_RECIPIENT_EMAIL: recipient@example.test
+      TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
+        with: { version: 11.15.1, run_install: false }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
+        with: { node-version: 24.19.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  terraform:
+    name: Terraform validation and IaC scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - run: terraform -chdir=infra/production fmt -check -diff
+      - run: terraform -chdir=infra/production init -backend=false -input=false -upgrade
+      - run: terraform -chdir=infra/production validate
+      - uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93 # v6.2.2
+        with: { tflint_version: v0.64.0 }
+      - run: tflint --chdir infra/production --init && tflint --chdir infra/production
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with: { version: v0.69.3 }
+      - uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: config
+          scan-ref: infra/production
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+  security:
+    name: Supply-chain and secret checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read
+      pull-requests: read
     steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { fetch-depth: 0, persist-credentials: false }
+      - if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # actions/dependency-review-action v5
+        with: { fail-on-severity: moderate }
+      - run: node scripts/ci/verify-actions-pinned.mjs
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
+        with: { version: 11.15.1, run_install: false }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
+        with: { node-version: 24.19.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level moderate
+      - run: |
+          docker run --rm --volume "$GITHUB_WORKSPACE:/repo:ro" \
+            zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            detect --source=/repo --no-banner --redact --exit-code=1 --gitleaks-ignore-path=/repo/.gitleaksignore
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-
-      - name: Build API image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
-        with:
-          context: .
-          file: apps/api/Dockerfile
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: nrg-commerce-api:${{ github.sha }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
-
-      - name: Scan API image
-        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
-        with:
-          image: nrg-commerce-api:${{ github.sha }}
-          fail-build: true
-          severity-cutoff: high
-          output-format: table
-
-  deploy-infrastructure-staging:
-    name: Deploy Cloudflare infrastructure staging
-    if: >-
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      needs.validate.result == 'success' &&
-      (needs.build-api-image.result == 'success' || needs.build-api-image.result == 'skipped') &&
-      needs.changes.outputs.infrastructure == 'true'
-    needs: [changes, validate, build-api-image]
+  gate:
+    name: Validation gate
+    if: always()
+    needs: [quality, tests, build, terraform, security]
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    environment:
-      name: staging
-    env:
-      ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
-      DEPLOYMENT_ENVIRONMENT: staging
-      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
-      TF_CLOUD_PROJECT: ${{ vars.TF_CLOUD_PROJECT }}
-      TF_VAR_admin_origin: https://${{ vars.ADMIN_DOMAIN }}
-      TF_VAR_environment: staging
-      TF_VAR_public_assets_custom_domain: ${{ vars.TF_PUBLIC_ASSETS_CUSTOM_DOMAIN || 'null' }}
-      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
+      - if: needs.quality.result != 'success' || needs.tests.result != 'success' || needs.build.result != 'success' || needs.terraform.result != 'success' || needs.security.result != 'success'
+        run: exit 1
 
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24.19.0
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with:
-          terraform_version: 1.15.5
-          terraform_wrapper: false
-          cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-
-      - name: Validate infrastructure environment
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-        run: node scripts/ci/production-env.mjs infrastructure
-
-      - name: Apply staging Cloudflare infrastructure
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  fresh-main:
+    name: Reject stale release commits
+    if: github.event_name != 'pull_request'
+    needs: [gate]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Require the current main commit
         run: |
-          terraform -chdir=infra/cloudflare init -input=false -lockfile=readonly
-          terraform -chdir=infra/cloudflare plan -input=false -lock-timeout=5m -out=deployment.tfplan
-          terraform -chdir=infra/cloudflare apply -input=false -lock-timeout=5m deployment.tfplan
-
-  deploy-workers-staging:
-    name: Deploy Cloudflare staging
-    if: >-
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      needs.validate.result == 'success' &&
-      (needs.build-api-image.result == 'success' || needs.build-api-image.result == 'skipped') &&
-      (needs.deploy-infrastructure-staging.result == 'success' ||
-       needs.deploy-infrastructure-staging.result == 'skipped') &&
-      (needs.changes.outputs.contact == 'true' ||
-       needs.changes.outputs.catalog == 'true' ||
-       needs.changes.outputs.admin == 'true')
-    needs: [changes, validate, build-api-image, deploy-infrastructure-staging]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    environment:
-      name: staging
-    env:
-      ADMIN_API_BASE_URL: ${{ vars.ADMIN_API_BASE_URL }}
-      ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
-      CATALOG_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
-      CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
-      CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
-      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
-      COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
-      FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
-      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
-      LINE_URL: ${{ vars.LINE_URL }}
-      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
-      PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
-      PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
-      PUBLIC_CONTACT_WORKER_URL: https://${{ vars.CONTACT_DOMAIN }}
-      PUBLIC_FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
-      PUBLIC_HOME_URL: ${{ vars.LANDING_SITE_URL }}
-      PUBLIC_LINE_URL: ${{ vars.LINE_URL }}
-      PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-        with:
-          version: 11.15.1
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24.19.0
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate admin environment
-        if: needs.changes.outputs.admin == 'true'
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node scripts/ci/production-env.mjs admin
-
-      - name: Build admin Worker
-        if: needs.changes.outputs.admin == 'true'
-        env:
-          PUBLIC_API_BASE_URL: ${{ vars.ADMIN_API_BASE_URL }}
-        run: pnpm --filter @apps/admin build
-
-      - name: Verify admin Worker output
-        if: needs.changes.outputs.admin == 'true'
-        run: node scripts/ci/verify-admin-build.mjs apps/admin/.svelte-kit/cloudflare "$ADMIN_API_BASE_URL"
-
-      - name: Deploy admin Worker
-        if: needs.changes.outputs.admin == 'true'
-        working-directory: apps/admin
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: pnpm exec wrangler deploy --env staging --domain "$ADMIN_DOMAIN" --var "PUBLIC_API_BASE_URL:$ADMIN_API_BASE_URL"
-
-      - name: Validate contact Worker environment
-        if: needs.changes.outputs.contact == 'true'
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node scripts/ci/production-env.mjs contact
-
-      - name: Update contact Worker secrets
-        if: needs.changes.outputs.contact == 'true'
-        working-directory: apps/contact-worker
-        env:
-          ALLOWED_ORIGINS: ${{ secrets.CONTACT_ALLOWED_ORIGINS }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CONTACT_RECIPIENT_EMAIL: ${{ secrets.CONTACT_RECIPIENT_EMAIL }}
-          CONTACT_SENDER_EMAIL: ${{ secrets.CONTACT_SENDER_EMAIL }}
-          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
-        run: node ../../scripts/ci/contact-secrets.mjs | pnpm exec wrangler secret bulk --env staging
-
-      - name: Deploy contact Worker
-        if: needs.changes.outputs.contact == 'true'
-        working-directory: apps/contact-worker
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: pnpm exec wrangler deploy --env staging --domain "$CONTACT_DOMAIN"
-
-      - name: Validate catalog environment
-        if: needs.changes.outputs.catalog == 'true'
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node scripts/ci/production-env.mjs catalog
-
-      - name: Build catalog Worker
-        if: needs.changes.outputs.catalog == 'true'
-        env:
-          PUBLIC_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
-        run: pnpm --filter @apps/catalog build
-
-      - name: Deploy catalog Worker
-        if: needs.changes.outputs.catalog == 'true'
-        working-directory: apps/catalog
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: pnpm exec wrangler deploy --env staging --domain "$CATALOG_DOMAIN" --var "PUBLIC_API_BASE_URL:$CATALOG_API_BASE_URL"
-
-  deploy-infrastructure-production:
-    name: Deploy Cloudflare infrastructure production
-    if: >-
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      needs.changes.outputs.infrastructure == 'true' &&
-      needs.deploy-infrastructure-staging.result == 'success' &&
-      (needs.publish-api-image.result == 'success' || needs.publish-api-image.result == 'skipped')
-    needs: [changes, deploy-infrastructure-staging, publish-api-image]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    environment:
-      name: production
-    env:
-      ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
-      DEPLOYMENT_ENVIRONMENT: production
-      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
-      TF_CLOUD_PROJECT: ${{ vars.TF_CLOUD_PROJECT }}
-      TF_VAR_admin_origin: https://${{ vars.ADMIN_DOMAIN }}
-      TF_VAR_environment: production
-      TF_VAR_public_assets_custom_domain: ${{ vars.TF_PUBLIC_ASSETS_CUSTOM_DOMAIN || 'null' }}
-      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24.19.0
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with:
-          terraform_version: 1.15.5
-          terraform_wrapper: false
-          cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-
-      - name: Validate infrastructure environment
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-        run: node scripts/ci/production-env.mjs infrastructure
-
-      - name: Apply production Cloudflare infrastructure
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          terraform -chdir=infra/cloudflare init -input=false -lockfile=readonly
-          terraform -chdir=infra/cloudflare plan -input=false -lock-timeout=5m -out=deployment.tfplan
-          terraform -chdir=infra/cloudflare apply -input=false -lock-timeout=5m deployment.tfplan
-
-  deploy-workers-production:
-    name: Promote Cloudflare production
-    if: >-
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      needs.deploy-workers-staging.result == 'success' &&
-      (needs.deploy-infrastructure-production.result == 'success' ||
-       needs.deploy-infrastructure-production.result == 'skipped') &&
-      (needs.publish-api-image.result == 'success' || needs.publish-api-image.result == 'skipped')
-    needs: [changes, deploy-infrastructure-production, deploy-workers-staging, publish-api-image]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    environment:
-      name: production
-    env:
-      ADMIN_API_BASE_URL: ${{ vars.ADMIN_API_BASE_URL }}
-      ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
-      CATALOG_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
-      CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
-      CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
-      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
-      COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
-      FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
-      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
-      LINE_URL: ${{ vars.LINE_URL }}
-      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
-      PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
-      PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
-      PUBLIC_CONTACT_WORKER_URL: https://${{ vars.CONTACT_DOMAIN }}
-      PUBLIC_FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
-      PUBLIC_HOME_URL: ${{ vars.LANDING_SITE_URL }}
-      PUBLIC_LINE_URL: ${{ vars.LINE_URL }}
-      PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-        with:
-          version: 11.15.1
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24.19.0
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate admin environment
-        if: needs.changes.outputs.admin == 'true'
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node scripts/ci/production-env.mjs admin
-
-      - name: Build admin Worker
-        if: needs.changes.outputs.admin == 'true'
-        env:
-          PUBLIC_API_BASE_URL: ${{ vars.ADMIN_API_BASE_URL }}
-        run: pnpm --filter @apps/admin build
-
-      - name: Verify admin Worker output
-        if: needs.changes.outputs.admin == 'true'
-        run: node scripts/ci/verify-admin-build.mjs apps/admin/.svelte-kit/cloudflare "$ADMIN_API_BASE_URL"
-
-      - name: Deploy admin Worker
-        if: needs.changes.outputs.admin == 'true'
-        working-directory: apps/admin
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: pnpm exec wrangler deploy --env production --domain "$ADMIN_DOMAIN" --var "PUBLIC_API_BASE_URL:$ADMIN_API_BASE_URL"
-
-      - name: Validate contact Worker environment
-        if: needs.changes.outputs.contact == 'true'
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node scripts/ci/production-env.mjs contact
-
-      - name: Update contact Worker secrets
-        if: needs.changes.outputs.contact == 'true'
-        working-directory: apps/contact-worker
-        env:
-          ALLOWED_ORIGINS: ${{ secrets.CONTACT_ALLOWED_ORIGINS }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CONTACT_RECIPIENT_EMAIL: ${{ secrets.CONTACT_RECIPIENT_EMAIL }}
-          CONTACT_SENDER_EMAIL: ${{ secrets.CONTACT_SENDER_EMAIL }}
-          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
-        run: node ../../scripts/ci/contact-secrets.mjs | pnpm exec wrangler secret bulk --env production
-
-      - name: Deploy contact Worker
-        if: needs.changes.outputs.contact == 'true'
-        working-directory: apps/contact-worker
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: pnpm exec wrangler deploy --env production --domain "$CONTACT_DOMAIN"
-
-      - name: Validate catalog environment
-        if: needs.changes.outputs.catalog == 'true'
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node scripts/ci/production-env.mjs catalog
-
-      - name: Build catalog Worker
-        if: needs.changes.outputs.catalog == 'true'
-        env:
-          PUBLIC_API_BASE_URL: ${{ vars.CATALOG_API_BASE_URL }}
-        run: pnpm --filter @apps/catalog build
-
-      - name: Deploy catalog Worker
-        if: needs.changes.outputs.catalog == 'true'
-        working-directory: apps/catalog
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: pnpm exec wrangler deploy --env production --domain "$CATALOG_DOMAIN" --var "PUBLIC_API_BASE_URL:$CATALOG_API_BASE_URL"
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = "$(git rev-parse origin/main)"
 
   publish-api-image:
-    name: Publish API container
-    outputs:
-      image-digest: ${{ steps.publish.outputs.digest }}
-    if: >-
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      needs.changes.outputs.api == 'true' &&
-      needs.build-api-image.result == 'success'
-    needs: [changes, build-api-image]
+    name: Publish immutable API image
+    if: github.event_name != 'pull_request'
+    needs: [gate, fresh-main]
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
     permissions:
       contents: read
       packages: write
+    outputs:
+      image-digest: ${{ steps.publish.outputs.digest }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # docker/setup-buildx-action v4
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # docker/login-action v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate image metadata
-        id: metadata
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
-        with:
-          images: ghcr.io/jaydev0220/nrg-commerce-api
-          tags: type=raw,value=${{ github.sha }}
-
-      - name: Build and publish API image
-        id: publish
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      - id: publish
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # docker/build-push-action v7
         with:
           context: .
           file: apps/api/Dockerfile
-          platforms: linux/amd64
           push: true
-          tags: ${{ steps.metadata.outputs.tags }}
-          labels: ${{ steps.metadata.outputs.labels }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
-          provenance: mode=max
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          provenance: true
           sbom: true
-
-      - name: Scan published API image
-        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
+      - uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # anchore/scan-action v7
         with:
-          image: ghcr.io/jaydev0220/nrg-commerce-api@${{ steps.publish.outputs.digest }}
-          fail-build: true
-          severity-cutoff: high
-          output-format: table
+          {
+            image: '${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}',
+            fail-build: true,
+            severity-cutoff: high
+          }
 
-  deploy-api-staging:
-    name: Deploy API staging
-    if: >-
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      needs.validate.result == 'success' &&
-      needs.changes.outputs.api == 'true' &&
-      (needs.deploy-infrastructure-staging.result == 'success' ||
-       needs.deploy-infrastructure-staging.result == 'skipped') &&
-      needs.publish-api-image.result == 'success'
-    needs: [changes, validate, build-api-image, deploy-infrastructure-staging, publish-api-image]
+  plan:
+    name: Plan production infrastructure
+    if: github.event_name != 'pull_request'
+    needs: [gate, publish-api-image]
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    environment: production-plan
+    outputs:
+      plan-sha: ${{ steps.hash.outputs.sha256 }}
     permissions:
       contents: read
       id-token: write
-    environment:
-      name: staging
-      url: https://${{ vars.API_DOMAIN }}
-    env:
-      API_DOMAIN: ${{ vars.API_DOMAIN }}
-      API_DNS_TF_WORKSPACE: ${{ vars.API_DNS_TF_WORKSPACE }}
-      AZURE_CONTAINER_APP_ENVIRONMENT: ${{ vars.AZURE_CONTAINER_APP_ENVIRONMENT }}
-      AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
-      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
-      CORS_ORIGINS: ${{ vars.API_CORS_ORIGINS }}
-      DEPLOYMENT_ENVIRONMENT: staging
-      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
-      TF_CLOUD_PROJECT: ${{ vars.TF_CLOUD_PROJECT }}
-      TRUST_PROXY_HOPS: ${{ vars.API_TRUST_PROXY_HOPS }}
-      BODY_LIMIT: ${{ vars.API_BODY_LIMIT }}
-      LOG_LEVEL: ${{ vars.API_LOG_LEVEL }}
-      COOKIE_SECURE: ${{ vars.API_COOKIE_SECURE }}
-      COOKIE_SAME_SITE: ${{ vars.API_COOKIE_SAME_SITE }}
-      DATABASE_MAX_CONNECTIONS: ${{ vars.API_DATABASE_MAX_CONNECTIONS }}
-      JWT_ISSUER: ${{ vars.API_JWT_ISSUER }}
-      JWT_AUDIENCE: ${{ vars.API_JWT_AUDIENCE }}
-      WEBAUTHN_RP_ID: ${{ vars.API_WEBAUTHN_RP_ID }}
-      WEBAUTHN_RP_NAME: ${{ vars.API_WEBAUTHN_RP_NAME }}
-      WEBAUTHN_ORIGIN: ${{ vars.API_WEBAUTHN_ORIGIN }}
-      R2_BUCKET_NAME: nrg-commerce-staging-product-assets
-      R2_UPLOAD_BUCKET_NAME: nrg-commerce-staging-product-uploads
-      R2_PUBLIC_BASE_URL: ${{ vars.CDN_BASE_URL }}
-      R2_ASSET_KEY_PREFIX: ${{ vars.API_R2_ASSET_KEY_PREFIX }}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.API_OTEL_EXPORTER_OTLP_ENDPOINT }}
-      OTEL_SERVICE_NAME: ${{ vars.API_OTEL_SERVICE_NAME }}
-      OTEL_RESOURCE_ATTRIBUTES: ${{ vars.API_OTEL_RESOURCE_ATTRIBUTES }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # azure/login v3
         with:
-          persist-credentials: false
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-        with:
-          version: 11.15.1
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24.19.0
-          cache: pnpm
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with:
-          terraform_version: 1.15.5
-          terraform_wrapper: false
-          cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate API deployment environment
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+      - name: Validate production-only release configuration
+        run: node scripts/ci/production-env.mjs infrastructure
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
-          REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
-          PENDING_TOKEN_SECRET: ${{ secrets.PENDING_TOKEN_SECRET }}
-          DATA_ENCRYPTION_SECRET: ${{ secrets.DATA_ENCRYPTION_SECRET }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.API_OTEL_EXPORTER_OTLP_HEADERS }}
-          API_ORIGIN_CERTIFICATE_PFX_BASE64: ${{ secrets.API_ORIGIN_CERTIFICATE_PFX_BASE64 }}
-          API_ORIGIN_CERTIFICATE_PASSWORD: ${{ secrets.API_ORIGIN_CERTIFICATE_PASSWORD }}
-        run: node scripts/ci/production-env.mjs api
-
-      - name: Apply staging database migrations
-        working-directory: packages/database
+          DEPLOYMENT_ENVIRONMENT: production
+          ADMIN_DOMAIN: admin.nrglabware.com
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+          TF_WORKSPACE: nrg-commerce-production
+      - run: terraform -chdir=infra/production init -input=false -lockfile=readonly
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-        run: pnpm db:deploy
-
-      - name: Install pinned Azure Container Apps extension
-        run: az extension add --name containerapp --version 1.3.0b4 --yes
-
-      - name: Log in to Azure with OIDC
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Deploy immutable API revision
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+      - name: Load owner URL for Terraform grants
         env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_USE_OIDC: 'true'
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
-          REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
-          PENDING_TOKEN_SECRET: ${{ secrets.PENDING_TOKEN_SECRET }}
-          DATA_ENCRYPTION_SECRET: ${{ secrets.DATA_ENCRYPTION_SECRET }}
-          R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.API_OTEL_EXPORTER_OTLP_HEADERS }}
-          API_ORIGIN_CERTIFICATE_PFX_BASE64: ${{ secrets.API_ORIGIN_CERTIFICATE_PFX_BASE64 }}
-          API_ORIGIN_CERTIFICATE_PASSWORD: ${{ secrets.API_ORIGIN_CERTIFICATE_PASSWORD }}
-        run: node scripts/ci/deploy-api.mjs --environment staging --image ghcr.io/jaydev0220/nrg-commerce-api@${{ needs.publish-api-image.outputs.image-digest }}
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+        run: |
+          owner_url="$(terraform -chdir=infra/production output -raw neon_owner_database_url)"
+          echo "TF_VAR_neon_owner_database_url=$owner_url" >> "$GITHUB_ENV"
+          OWNER_DATABASE_URL="$owner_url" node scripts/ci/write-postgresql-env.mjs "$GITHUB_ENV"
+      - name: Create saved plan
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          TF_VAR_cloudflare_terraform_api_token: ${{ secrets.CLOUDFLARE_TERRAFORM_TOKEN }}
+          TF_VAR_r2_admin_access_key_id: ${{ secrets.R2_ADMIN_ACCESS_KEY_ID }}
+          TF_VAR_r2_admin_secret_access_key: ${{ secrets.R2_ADMIN_SECRET_ACCESS_KEY }}
+          TF_VAR_neon_org_id: ${{ vars.NEON_ORG_ID }}
+          TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
+          TF_VAR_azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+          TF_VAR_azure_budget_amount: ${{ vars.AZURE_BUDGET_AMOUNT }}
+          TF_VAR_api_image: ${{ env.IMAGE_NAME }}@${{ needs.publish-api-image.outputs.image-digest }}
+          TF_VAR_origin_certificate_enabled: ${{ vars.ORIGIN_CERTIFICATE_ENABLED || 'true' }}
+          TF_VAR_enable_cloudflare_proxy: ${{ vars.ENABLE_CLOUDFLARE_PROXY || 'true' }}
+          TF_VAR_runtime_secrets: ${{ secrets.TF_RUNTIME_SECRETS_JSON || '{}' }}
+        run: terraform -chdir=infra/production plan -input=false -lock-timeout=5m -out=deployment.tfplan
+      - run: terraform -chdir=infra/production show -no-color deployment.tfplan > deployment.plan.txt
+      - run: sudo apt-get update && sudo apt-get install --yes age
+      - run: age --encrypt --recipient "$TF_PLAN_AGE_RECIPIENT" --output deployment.tfplan.age infra/production/deployment.tfplan
+        env:
+          TF_PLAN_AGE_RECIPIENT: ${{ vars.TF_PLAN_AGE_RECIPIENT }}
+      - id: hash
+        run: echo "sha256=$(sha256sum deployment.tfplan.age | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4
+        with: { name: production-terraform-plan, path: deployment.tfplan.age, retention-days: 1 }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4
+        with: { name: production-plan-summary, path: deployment.plan.txt, retention-days: 1 }
 
-  deploy-api-production:
-    name: Deploy API production
-    if: >-
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      needs.deploy-api-staging.result == 'success' &&
-      (needs.deploy-infrastructure-production.result == 'success' ||
-       needs.deploy-infrastructure-production.result == 'skipped') &&
-      needs.publish-api-image.result == 'success'
-    needs:
-      [changes, validate, deploy-infrastructure-production, publish-api-image, deploy-api-staging]
+  apply-infrastructure:
+    name: Apply approved production plan
+    if: github.event_name != 'pull_request'
+    needs: [plan]
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    environment: production
     permissions:
       contents: read
       id-token: write
-    environment:
-      name: production
-      url: https://${{ vars.API_DOMAIN }}
-    env:
-      API_DOMAIN: ${{ vars.API_DOMAIN }}
-      API_DNS_TF_WORKSPACE: ${{ vars.API_DNS_TF_WORKSPACE }}
-      AZURE_CONTAINER_APP_ENVIRONMENT: ${{ vars.AZURE_CONTAINER_APP_ENVIRONMENT }}
-      AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
-      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
-      CORS_ORIGINS: ${{ vars.API_CORS_ORIGINS }}
-      DEPLOYMENT_ENVIRONMENT: production
-      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
-      TF_CLOUD_PROJECT: ${{ vars.TF_CLOUD_PROJECT }}
-      TRUST_PROXY_HOPS: ${{ vars.API_TRUST_PROXY_HOPS }}
-      BODY_LIMIT: ${{ vars.API_BODY_LIMIT }}
-      LOG_LEVEL: ${{ vars.API_LOG_LEVEL }}
-      COOKIE_SECURE: ${{ vars.API_COOKIE_SECURE }}
-      COOKIE_SAME_SITE: ${{ vars.API_COOKIE_SAME_SITE }}
-      DATABASE_MAX_CONNECTIONS: ${{ vars.API_DATABASE_MAX_CONNECTIONS }}
-      JWT_ISSUER: ${{ vars.API_JWT_ISSUER }}
-      JWT_AUDIENCE: ${{ vars.API_JWT_AUDIENCE }}
-      WEBAUTHN_RP_ID: ${{ vars.API_WEBAUTHN_RP_ID }}
-      WEBAUTHN_RP_NAME: ${{ vars.API_WEBAUTHN_RP_NAME }}
-      WEBAUTHN_ORIGIN: ${{ vars.API_WEBAUTHN_ORIGIN }}
-      R2_BUCKET_NAME: nrg-commerce-product-assets
-      R2_UPLOAD_BUCKET_NAME: nrg-commerce-product-uploads
-      R2_PUBLIC_BASE_URL: ${{ vars.CDN_BASE_URL }}
-      R2_ASSET_KEY_PREFIX: ${{ vars.API_R2_ASSET_KEY_PREFIX }}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.API_OTEL_EXPORTER_OTLP_ENDPOINT }}
-      OTEL_SERVICE_NAME: ${{ vars.API_OTEL_SERVICE_NAME }}
-      OTEL_RESOURCE_ATTRIBUTES: ${{ vars.API_OTEL_RESOURCE_ATTRIBUTES }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # azure/login v3
         with:
-          persist-credentials: false
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-        with:
-          version: 11.15.1
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24.19.0
-          cache: pnpm
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
-        with:
-          terraform_version: 1.15.5
-          terraform_wrapper: false
-          cli_config_credentials_token: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate API deployment environment
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+      - name: Reject stale plan before apply
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = "$(git rev-parse origin/main)"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact v4
+        with: { name: production-terraform-plan }
+      - run: sudo apt-get update && sudo apt-get install --yes age
+      - run: |
+          printf '%s' "$TF_PLAN_AGE_IDENTITY" > plan-identity.txt
+          chmod 600 plan-identity.txt
+          age --decrypt --identity plan-identity.txt --output infra/production/deployment.tfplan deployment.tfplan.age
+          test "$(sha256sum deployment.tfplan.age | cut -d' ' -f1)" = "${{ needs.plan.outputs.plan-sha }}"
+          rm -f plan-identity.txt deployment.tfplan.age
+          export TF_TOKEN_app_terraform_io="$HCP_TERRAFORM_TOKEN"
+          terraform -chdir=infra/production init -input=false -lockfile=readonly
+          terraform -chdir=infra/production apply -input=false -lock-timeout=5m deployment.tfplan
+          rm -f infra/production/deployment.tfplan deployment.tfplan
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_PLAN_AGE_IDENTITY: ${{ secrets.TF_PLAN_AGE_IDENTITY }}
           HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
-          REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
-          PENDING_TOKEN_SECRET: ${{ secrets.PENDING_TOKEN_SECRET }}
-          DATA_ENCRYPTION_SECRET: ${{ secrets.DATA_ENCRYPTION_SECRET }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.API_OTEL_EXPORTER_OTLP_HEADERS }}
-          API_ORIGIN_CERTIFICATE_PFX_BASE64: ${{ secrets.API_ORIGIN_CERTIFICATE_PFX_BASE64 }}
-          API_ORIGIN_CERTIFICATE_PASSWORD: ${{ secrets.API_ORIGIN_CERTIFICATE_PASSWORD }}
-        run: node scripts/ci/production-env.mjs api
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
 
-      - name: Apply production database migrations
-        working-directory: packages/database
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-        run: pnpm db:deploy
-
-      - name: Install pinned Azure Container Apps extension
-        run: az extension add --name containerapp --version 1.3.0b4 --yes
-
-      - name: Log in to Azure with OIDC
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Deploy immutable API revision
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_USE_OIDC: 'true'
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
-          REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
-          PENDING_TOKEN_SECRET: ${{ secrets.PENDING_TOKEN_SECRET }}
-          DATA_ENCRYPTION_SECRET: ${{ secrets.DATA_ENCRYPTION_SECRET }}
-          R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.API_OTEL_EXPORTER_OTLP_HEADERS }}
-          API_ORIGIN_CERTIFICATE_PFX_BASE64: ${{ secrets.API_ORIGIN_CERTIFICATE_PFX_BASE64 }}
-          API_ORIGIN_CERTIFICATE_PASSWORD: ${{ secrets.API_ORIGIN_CERTIFICATE_PASSWORD }}
-        run: node scripts/ci/deploy-api.mjs --environment production --image ghcr.io/jaydev0220/nrg-commerce-api@${{ needs.publish-api-image.outputs.image-digest }}
-
-  deploy-landing-staging:
-    name: Deploy landing staging
-    if: >-
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      needs.validate.result == 'success' &&
-      needs.changes.outputs.landing == 'true' &&
-      (needs.build-api-image.result == 'success' || needs.build-api-image.result == 'skipped')
-    needs: [changes, validate, build-api-image]
+  sync-secrets:
+    name: Sync runtime secrets
+    if: github.event_name != 'pull_request'
+    needs: [apply-infrastructure]
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    environment:
-      name: staging
-      url: ${{ vars.LANDING_SITE_URL }}
-    env:
-      CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
-      CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
-      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
-      COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
-      FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
-      LANDING_DOMAIN: ${{ vars.LANDING_DOMAIN }}
-      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
-      LINE_URL: ${{ vars.LINE_URL }}
-      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
-      PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
-      PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
-      PUBLIC_CONTACT_WORKER_URL: https://${{ vars.CONTACT_DOMAIN }}
-      PUBLIC_CTA_URL: https://${{ vars.CATALOG_DOMAIN }}
-      PUBLIC_FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
-      PUBLIC_LINE_URL: ${{ vars.LINE_URL }}
-      PUBLIC_SITE_URL: ${{ vars.LANDING_SITE_URL }}
-      PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+    environment: production
+    permissions: { id-token: write, contents: read }
     steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # azure/login v3
         with:
-          persist-credentials: false
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-        with:
-          version: 11.15.1
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24.19.0
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate landing environment
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+      - name: Sync generated and GitHub-owned secrets
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node scripts/ci/production-env.mjs landing
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_RUNTIME_SECRETS_JSON: ${{ secrets.TF_RUNTIME_SECRETS_JSON || '{}' }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          terraform -chdir=infra/production init -input=false -lockfile=readonly
+          KEY_VAULT_NAME="$(terraform -chdir=infra/production output -raw key_vault_name)"
+          set_secret() {
+            local name="$1" value="$2"
+            az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name "$name" --value "$value" --only-show-errors --output none
+          }
+          set_secret database-url "$(terraform -chdir=infra/production output -raw neon_app_database_url)"
+          set_secret direct-url "$(terraform -chdir=infra/production output -raw neon_app_database_url)"
+          set_secret backup-database-url "$(terraform -chdir=infra/production output -raw neon_backup_database_url)"
+          printf '%s' "$TF_RUNTIME_SECRETS_JSON" | jq -r 'to_entries[] | [.key, .value] | @tsv' | while IFS=$'\t' read -r name value; do
+            test -n "$name"
+            secret_name="$(printf '%s' "${name//_/-}" | tr '[:upper:]' '[:lower:]')"
+            set_secret "$secret_name" "$value"
+          done
+          az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --query properties.provisioningState -o tsv
 
-      - name: Build landing site
-        run: pnpm --filter @apps/landing build
-
-      - name: Verify prerendered landing output
-        run: node scripts/ci/verify-landing-build.mjs apps/landing/.svelte-kit/cloudflare "$PUBLIC_CONTACT_WORKER_URL" "$PUBLIC_SITE_URL"
-
-      - name: Deploy landing static assets
-        working-directory: apps/landing
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: pnpm exec wrangler deploy --env staging --domain "$LANDING_DOMAIN"
-
-  deploy-landing-production:
-    name: Deploy landing production
-    if: >-
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      needs.changes.outputs.landing == 'true' &&
-      needs.deploy-landing-staging.result == 'success' &&
-      (needs.build-api-image.result == 'success' || needs.build-api-image.result == 'skipped') &&
-      (needs.deploy-workers-production.result == 'success' || needs.deploy-workers-production.result == 'skipped')
-    needs: [changes, build-api-image, deploy-landing-staging, deploy-workers-production]
+  migrate:
+    name: Migrate and seed database
+    if: github.event_name != 'pull_request'
+    needs: [sync-secrets]
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    environment:
-      name: production
-      url: ${{ vars.LANDING_SITE_URL }}
-    env:
-      CATALOG_DOMAIN: ${{ vars.CATALOG_DOMAIN }}
-      CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
-      CONTACT_DOMAIN: ${{ vars.CONTACT_DOMAIN }}
-      COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
-      FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
-      LANDING_DOMAIN: ${{ vars.LANDING_DOMAIN }}
-      LANDING_SITE_URL: ${{ vars.LANDING_SITE_URL }}
-      LINE_URL: ${{ vars.LINE_URL }}
-      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
-      PUBLIC_CDN_BASE_URL: ${{ vars.CDN_BASE_URL }}
-      PUBLIC_COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
-      PUBLIC_CONTACT_WORKER_URL: https://${{ vars.CONTACT_DOMAIN }}
-      PUBLIC_CTA_URL: https://${{ vars.CATALOG_DOMAIN }}
-      PUBLIC_FACEBOOK_URL: ${{ vars.FACEBOOK_URL }}
-      PUBLIC_LINE_URL: ${{ vars.LINE_URL }}
-      PUBLIC_SITE_URL: ${{ vars.LANDING_SITE_URL }}
-      PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+    environment: production
     steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-        with:
-          version: 11.15.1
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24.19.0
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate landing environment
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
+        with: { version: 11.15.1, run_install: false }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
+        with: { node-version: 24.19.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @packages/database db:generate
+      - run: node scripts/ci/check-migrations.mjs
+      - name: Read owner URL from HCP state and migrate
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node scripts/ci/production-env.mjs landing
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+        run: |
+          terraform -chdir=infra/production init -input=false -lockfile=readonly
+          export DATABASE_URL="$(terraform -chdir=infra/production output -raw neon_owner_database_url)"
+          export DIRECT_URL="$DATABASE_URL"
+          pnpm --filter @packages/database db:deploy
+          pnpm --filter @packages/database db:seed
 
-      - name: Build landing site
-        run: pnpm --filter @apps/landing build
-
-      - name: Verify prerendered landing output
-        run: node scripts/ci/verify-landing-build.mjs apps/landing/.svelte-kit/cloudflare "$PUBLIC_CONTACT_WORKER_URL" "$PUBLIC_SITE_URL"
-
-      - name: Deploy landing static assets
-        working-directory: apps/landing
+  deploy-api:
+    name: Deploy API revision
+    if: github.event_name != 'pull_request'
+    needs: [migrate, publish-api-image]
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions: { id-token: write, contents: read }
+    steps:
+      - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # azure/login v3
+        with:
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+      - run: |
+          set -euo pipefail
+          revision_suffix="api-${GITHUB_SHA::12}"
+          revision_name="${AZURE_CONTAINER_APP_NAME}--${revision_suffix}"
+          az containerapp update --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --image "$API_IMAGE" --revision-suffix "$revision_suffix" --output none
+          for attempt in $(seq 1 30); do
+            revision_status="$(az containerapp revision show --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$revision_name" --query '{running:properties.runningState,health:properties.healthState}' -o json 2>/dev/null || printf '{}')"
+            revision_state="$(jq -r '.running // empty' <<<"$revision_status")"
+            revision_health="$(jq -r '.health // empty' <<<"$revision_status")"
+            if [[ "$revision_state" == Running && "$revision_health" == Healthy ]]; then
+              break
+            fi
+            if [[ "$attempt" -eq 30 ]]; then
+              echo "API revision did not become healthy: $revision_status" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          az containerapp ingress traffic set --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$revision_name" --weight 0 --output none
+          az containerapp ingress traffic set --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$revision_name" --weight 100 --output none
+          az containerapp revision list --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --query "[?properties.trafficWeight==\`100\`].name" -o tsv
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: pnpm exec wrangler deploy --env production --domain "$LANDING_DOMAIN"
+          AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          API_IMAGE: ${{ env.IMAGE_NAME }}@${{ needs.publish-api-image.outputs.image-digest }}
+
+  deploy-contact:
+    name: Deploy contact Worker
+    if: github.event_name != 'pull_request'
+    needs: [migrate]
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
+        with: { version: 11.15.1, run_install: false }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
+        with: { node-version: 24.19.0, cache: pnpm }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - run: pnpm install --frozen-lockfile
+      - name: Read generated Turnstile secret and write contact secrets
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          ALLOWED_ORIGINS: https://www.nrglabware.com,https://catalog.nrglabware.com
+          CONTACT_SENDER_EMAIL: noreply@nrglabware.com
+          CONTACT_RECIPIENT_EMAIL: contact@nrglabware.com
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/production init -input=false -lockfile=readonly
+          TURNSTILE_SECRET_KEY="$(terraform -chdir=infra/production output -raw turnstile_secret_key)" \
+            node scripts/ci/contact-secrets.mjs "$RUNNER_TEMP/contact-secrets.json"
+      - working-directory: apps/contact-worker
+        run: pnpm exec wrangler deploy --env production --domain contact.nrglabware.com --secrets-file "$RUNNER_TEMP/contact-secrets.json"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/contact-secrets.json"
+
+  deploy-frontends:
+    name: Deploy ${{ matrix.app }} Worker
+    if: github.event_name != 'pull_request'
+    needs: [apply-infrastructure, deploy-api, deploy-contact]
+    runs-on: ubuntu-24.04
+    environment: production
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: admin
+            domain: admin.nrglabware.com
+          - app: catalog
+            domain: catalog.nrglabware.com
+          - app: landing
+            domain: www.nrglabware.com
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
+        with: { version: 11.15.1, run_install: false }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
+        with: { node-version: 24.19.0, cache: pnpm }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - run: pnpm install --frozen-lockfile
+      - name: Read generated Turnstile site key
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+        run: |
+          terraform -chdir=infra/production init -input=false -lockfile=readonly
+          echo "PUBLIC_TURNSTILE_SITE_KEY=$(terraform -chdir=infra/production output -raw turnstile_site_key)" >> "$GITHUB_ENV"
+      - name: Build Worker artifact
+        run: pnpm --filter @apps/${{ matrix.app }} build
+        env:
+          PUBLIC_API_BASE_URL: https://api.nrglabware.com
+          PUBLIC_CDN_BASE_URL: https://cdn.nrglabware.com
+          PUBLIC_COOKIE_DOMAIN: nrglabware.com
+          PUBLIC_CONTACT_WORKER_URL: https://contact.nrglabware.com
+          PUBLIC_CTA_URL: https://catalog.nrglabware.com
+          PUBLIC_FACEBOOK_URL: https://www.facebook.com/100057611824911
+          PUBLIC_HOME_URL: https://www.nrglabware.com
+          PUBLIC_LINE_URL: https://line.me/ti/p/xYZS-jqz4e
+          PUBLIC_SITE_URL: https://www.nrglabware.com
+      - name: Verify artifact contents
+        run: |
+          test -f "apps/${{ matrix.app }}/.svelte-kit/cloudflare/_worker.js"
+          test -f "apps/${{ matrix.app }}/.svelte-kit/cloudflare/_headers"
+          test -f "apps/${{ matrix.app }}/.svelte-kit/cloudflare/index.html" || test "${{ matrix.app }}" = landing
+          ! rg -n "(ACCESS_TOKEN_SECRET|REFRESH_TOKEN_SECRET|TURNSTILE_SECRET_KEY|DATABASE_URL)" "apps/${{ matrix.app }}/.svelte-kit/cloudflare" --glob '*.js' --glob '*.html'
+      - working-directory: apps/${{ matrix.app }}
+        run: pnpm exec wrangler deploy --env production --domain "${{ matrix.domain }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+  release-manifest:
+    name: Record release manifest
+    if: github.event_name != 'pull_request'
+    needs: [migrate, deploy-api, deploy-contact, deploy-frontends, publish-api-image]
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions: { id-token: write, contents: read }
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # azure/login v3
+        with:
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
+        with: { version: 11.15.1, run_install: false }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
+        with: { node-version: 24.19.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Capture provider control-plane identifiers
+        env:
+          AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          API_IMAGE_DIGEST: ${{ env.IMAGE_NAME }}@${{ needs.publish-api-image.outputs.image-digest }}
+          TF_RUN_ID: ${{ github.run_id }}
+          MIGRATION_ID: ${{ github.run_id }}
+          RELEASE_STARTED_AT: ${{ github.run_started_at }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          export API_REVISION="$(az containerapp revision list --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --query "[?properties.trafficWeight==\`100\`].name | [0]" -o tsv)"
+          worker_versions='{}'
+          for worker in admin catalog landing contact; do
+            case "$worker" in
+              admin) app=admin ;;
+              catalog) app=catalog ;;
+              landing) app=landing ;;
+              contact) app=contact-worker ;;
+            esac
+            versions="$(cd "apps/$app" && pnpm exec wrangler versions list --env production --name "nrg-commerce-$worker" --json)"
+            version_id="$(printf '%s' "$versions" | jq -r '.. | objects | (.id? // .version_id? // empty) | select(type == "string")' | head -n 1)"
+            test -n "$version_id"
+            worker_versions="$(jq -c --arg worker "$worker" --arg version "$version_id" '. + {($worker): $version}' <<<"$worker_versions")"
+          done
+          export WORKER_VERSIONS_JSON="$worker_versions"
+          node scripts/ci/write-release-manifest.mjs "$RUNNER_TEMP/release-manifest.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4
+        with:
+          name: production-release-manifest
+          path: ${{ runner.temp }}/release-manifest.json
+          retention-days: 90

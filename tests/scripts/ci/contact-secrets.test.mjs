@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
-import { readContactSecrets } from '../../../scripts/ci/contact-secrets.mjs';
+import { readContactSecrets, writeContactSecrets } from '../../../scripts/ci/contact-secrets.mjs';
 
 const validSecrets = {
 	ALLOWED_ORIGINS: 'https://www.example.com',
@@ -51,4 +54,12 @@ test('rejects loopback contact Worker origins', () => {
 		() => readContactSecrets({ ...validSecrets, ALLOWED_ORIGINS: 'https://localhost' }),
 		/ALLOWED_ORIGINS/u
 	);
+});
+
+test('writes contact secrets to a restrictive temporary file', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'nrg-contact-secrets-'));
+	const path = join(directory, 'secrets.json');
+	await writeContactSecrets(path, validSecrets);
+	assert.deepEqual(JSON.parse(await readFile(path, 'utf8')), validSecrets);
+	assert.equal((await stat(path)).mode & 0o077, 0);
 });

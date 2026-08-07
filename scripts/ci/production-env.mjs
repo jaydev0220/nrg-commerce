@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { pathToFileURL } from 'node:url';
 
 const targets = new Set(['landing', 'catalog', 'contact', 'admin', 'api', 'infrastructure']);
@@ -17,26 +18,25 @@ function required(environment, name, errors) {
 	return value ?? '';
 }
 
-function secureUrl(environment, name, errors, options = {}) {
+function secureUrl(environment, name, errors, rootOnly = false) {
 	const value = required(environment, name, errors);
 	if (!value) return '';
-
 	try {
 		const url = new URL(value);
 		if (
 			url.protocol !== 'https:' ||
 			url.username ||
 			url.password ||
+			url.port ||
 			isLoopbackHostname(url.hostname) ||
 			url.search ||
 			url.hash ||
-			(options.rootOnly && (url.pathname !== '/' || value !== url.origin))
-		) {
+			(rootOnly && (url.pathname !== '/' || value !== url.origin))
+		)
 			throw new Error('invalid URL');
-		}
-		return options.rootOnly ? url.origin : value.replace(/\/+$/, '');
+		return rootOnly ? url.origin : value.replace(/\/+$/u, '');
 	} catch {
-		errors.push(`${name} must be a secure HTTPS URL${options.rootOnly ? ' without a path' : ''}.`);
+		errors.push(`${name} must be an HTTPS URL${rootOnly ? ' without a path' : ''}.`);
 		return '';
 	}
 }
@@ -44,89 +44,119 @@ function secureUrl(environment, name, errors, options = {}) {
 function domain(environment, name, errors) {
 	const value = required(environment, name, errors).toLowerCase();
 	if (!value) return '';
-
 	try {
 		const url = new URL(`https://${value}`);
 		if (
 			url.hostname !== value ||
-			isLoopbackHostname(url.hostname) ||
 			url.port ||
+			isLoopbackHostname(url.hostname) ||
 			url.pathname !== '/' ||
 			url.search ||
 			url.hash
 		) {
-			throw new Error('invalid domain');
+			throw new Error('invalid hostname');
 		}
 		return value;
 	} catch {
-		errors.push(`${name} must contain a hostname without a scheme, port, or path.`);
+		errors.push(`${name} must contain a hostname without scheme, port, path, query, or fragment.`);
 		return '';
 	}
 }
 
 function cloudflare(environment, errors) {
-	const cloudflareAccountId = required(environment, 'CLOUDFLARE_ACCOUNT_ID', errors);
-	required(environment, 'CLOUDFLARE_API_TOKEN', errors);
-
-	if (cloudflareAccountId && !/^[0-9a-f]{32}$/u.test(cloudflareAccountId)) {
+	const accountId = required(environment, 'CLOUDFLARE_ACCOUNT_ID', errors);
+	if (accountId && !/^[0-9a-f]{32}$/u.test(accountId)) {
 		errors.push('CLOUDFLARE_ACCOUNT_ID must be a 32-character lowercase hexadecimal ID.');
 	}
-
-	return { cloudflareAccountId };
+	required(environment, 'CLOUDFLARE_API_TOKEN', errors);
+	return { cloudflareAccountId: accountId };
 }
 
-function secureDatabaseUrl(environment, name, errors) {
-	const value = required(environment, name, errors);
-	if (!value) return '';
-
-	try {
-		const url = new URL(value);
-		if (url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') {
-			throw new Error('invalid protocol');
-		}
-		if (isLoopbackHostname(url.hostname) || url.hash) {
-			throw new Error('invalid database host');
-		}
-		if (url.searchParams.get('sslmode') !== 'verify-full') {
-			throw new Error('missing sslmode');
-		}
-	} catch {
-		errors.push(`${name} must use a PostgreSQL URL with sslmode=verify-full.`);
-	}
-
-	return value;
-}
-
-function secureOriginList(environment, name, errors) {
+function origins(environment, name, errors) {
 	const value = required(environment, name, errors);
 	if (!value) return [];
-
-	const origins = value
+	const result = [];
+	for (const raw of value
 		.split(',')
-		.map((origin) => origin.trim())
-		.filter(Boolean)
-		.map((origin) => {
-			try {
-				const url = new URL(origin);
-				if (url.protocol !== 'https:' || url.pathname !== '/' || url.search || url.hash) {
-					throw new Error('invalid origin');
-				}
-				return url.origin;
-			} catch {
-				errors.push(`${name} must contain only secure HTTPS origins.`);
-				return '';
+		.map((item) => item.trim())
+		.filter(Boolean)) {
+		try {
+			const url = new URL(raw);
+			if (
+				url.protocol !== 'https:' ||
+				url.username ||
+				url.password ||
+				url.port ||
+				isLoopbackHostname(url.hostname) ||
+				url.pathname !== '/' ||
+				url.search ||
+				url.hash ||
+				raw !== url.origin
+			) {
+				throw new Error('invalid origin');
 			}
-		});
+			result.push(url.origin);
+		} catch {
+			errors.push(`${name} must contain only exact HTTPS origins.`);
+		}
+	}
+	return result;
+}
 
-	return origins.filter(Boolean);
+function cidrs(environment, name, errors) {
+	const value = required(environment, name, errors);
+	if (!value) return [];
+	const result = [];
+	for (const cidr of value
+		.split(',')
+		.map((item) => item.trim())
+		.filter(Boolean)) {
+		const parts = cidr.split('/');
+		const [address, prefix] = parts;
+		const family = isIP(address ?? '');
+		const max = family === 4 ? 32 : family === 6 ? 128 : -1;
+		const length = Number(prefix);
+		if (
+			parts.length !== 2 ||
+			max < 0 ||
+			!prefix ||
+			!Number.isInteger(length) ||
+			length < 0 ||
+			length > max
+		) {
+			errors.push(`${name} must contain valid IPv4/IPv6 CIDR ranges.`);
+		} else result.push(cidr);
+	}
+	return [...new Set(result)];
+}
+
+function databaseUrl(environment, name, errors) {
+	const value = required(environment, name, errors);
+	if (!value) return '';
+	try {
+		const url = new URL(value);
+		if (
+			!['postgres:', 'postgresql:'].includes(url.protocol) ||
+			!url.hostname ||
+			isLoopbackHostname(url.hostname) ||
+			!url.username ||
+			!url.password ||
+			!url.pathname.slice(1) ||
+			url.hash ||
+			url.searchParams.get('sslmode') !== 'verify-full'
+		) {
+			throw new Error('invalid database URL');
+		}
+	} catch {
+		errors.push(`${name} must be a PostgreSQL URL with sslmode=verify-full.`);
+	}
+	return value;
 }
 
 function api(environment, errors) {
 	const deploymentEnvironment = required(environment, 'DEPLOYMENT_ENVIRONMENT', errors);
-	if (deploymentEnvironment && !['staging', 'production'].includes(deploymentEnvironment)) {
-		errors.push('DEPLOYMENT_ENVIRONMENT must be staging or production.');
-	}
-
+	if (deploymentEnvironment !== 'production')
+		errors.push('DEPLOYMENT_ENVIRONMENT must be production.');
 	for (const name of [
 		'AZURE_CLIENT_ID',
 		'AZURE_TENANT_ID',
@@ -135,12 +165,6 @@ function api(environment, errors) {
 		'AZURE_LOCATION',
 		'AZURE_CONTAINER_APP_ENVIRONMENT',
 		'AZURE_CONTAINER_APP_NAME',
-		'API_DNS_TF_WORKSPACE',
-		'API_ORIGIN_CERTIFICATE_PFX_BASE64',
-		'API_ORIGIN_CERTIFICATE_PASSWORD',
-		'HCP_TERRAFORM_TOKEN',
-		'CLOUDFLARE_ZONE_ID',
-		'DIRECT_URL',
 		'DATABASE_URL',
 		'ACCESS_TOKEN_SECRET',
 		'REFRESH_TOKEN_SECRET',
@@ -149,46 +173,36 @@ function api(environment, errors) {
 		'R2_ACCESS_KEY_ID',
 		'R2_SECRET_ACCESS_KEY',
 		'OTEL_RESOURCE_ATTRIBUTES'
-	]) {
+	])
 		required(environment, name, errors);
-	}
-
-	const cloudflareZoneId = environment['CLOUDFLARE_ZONE_ID']?.trim() ?? '';
-	if (cloudflareZoneId && !/^[0-9a-f]{32}$/u.test(cloudflareZoneId)) {
+	const zoneId = required(environment, 'CLOUDFLARE_ZONE_ID', errors);
+	if (zoneId && !/^[0-9a-f]{32}$/u.test(zoneId))
 		errors.push('CLOUDFLARE_ZONE_ID must be a 32-character lowercase hexadecimal ID.');
-	}
-
-	secureDatabaseUrl(environment, 'DATABASE_URL', errors);
-	secureDatabaseUrl(environment, 'DIRECT_URL', errors);
-	secureOriginList(environment, 'CORS_ORIGINS', errors);
-	secureUrl(environment, 'WEBAUTHN_ORIGIN', errors);
-	secureUrl(environment, 'R2_PUBLIC_BASE_URL', errors);
+	databaseUrl(environment, 'DATABASE_URL', errors);
+	databaseUrl(environment, 'DIRECT_URL', errors);
+	origins(environment, 'CORS_ORIGINS', errors);
+	cidrs(environment, 'TRUSTED_PROXY_CIDRS', errors);
+	secureUrl(environment, 'WEBAUTHN_ORIGIN', errors, true);
+	secureUrl(environment, 'R2_PUBLIC_BASE_URL', errors, true);
 	secureUrl(environment, 'OTEL_EXPORTER_OTLP_ENDPOINT', errors);
 	domain(environment, 'API_DOMAIN', errors);
-
-	const trustProxyHops = required(environment, 'TRUST_PROXY_HOPS', errors);
-	if (trustProxyHops && !/^[1-9]\d*$/u.test(trustProxyHops)) {
-		errors.push('TRUST_PROXY_HOPS must be a positive integer.');
-	}
-
 	return {
 		deploymentEnvironment,
-		apiDomain: environment['API_DOMAIN']?.trim().toLowerCase() ?? '',
-		azureResourceGroup: environment['AZURE_RESOURCE_GROUP']?.trim() ?? '',
-		azureLocation: environment['AZURE_LOCATION']?.trim().toLowerCase() ?? '',
-		azureContainerAppEnvironment: environment['AZURE_CONTAINER_APP_ENVIRONMENT']?.trim() ?? '',
-		azureContainerAppName: environment['AZURE_CONTAINER_APP_NAME']?.trim() ?? '',
-		apiDnsTerraformWorkspace: environment['API_DNS_TF_WORKSPACE']?.trim() ?? ''
+		apiDomain: environment.API_DOMAIN?.trim().toLowerCase() ?? '',
+		azureResourceGroup: environment.AZURE_RESOURCE_GROUP?.trim() ?? '',
+		azureLocation: environment.AZURE_LOCATION?.trim().toLowerCase() ?? '',
+		azureContainerAppEnvironment: environment.AZURE_CONTAINER_APP_ENVIRONMENT?.trim() ?? '',
+		azureContainerAppName: environment.AZURE_CONTAINER_APP_NAME?.trim() ?? ''
 	};
 }
 
 function infrastructure(environment, errors) {
 	const deploymentEnvironment = required(environment, 'DEPLOYMENT_ENVIRONMENT', errors);
-	if (deploymentEnvironment && !['staging', 'production'].includes(deploymentEnvironment)) {
-		errors.push('DEPLOYMENT_ENVIRONMENT must be staging or production.');
-	}
-	required(environment, 'HCP_TERRAFORM_TOKEN', errors);
-
+	if (deploymentEnvironment !== 'production')
+		errors.push('DEPLOYMENT_ENVIRONMENT must be production.');
+	required(environment, 'TF_CLOUD_ORGANIZATION', errors);
+	required(environment, 'TF_CLOUD_PROJECT', errors);
+	required(environment, 'TF_WORKSPACE', errors);
 	return {
 		deploymentEnvironment,
 		adminDomain: domain(environment, 'ADMIN_DOMAIN', errors),
@@ -199,16 +213,22 @@ function infrastructure(environment, errors) {
 	};
 }
 
-function publicSiteValues(environment, errors) {
+function publicValues(environment, errors) {
+	const landingSiteUrl = secureUrl(environment, 'LANDING_SITE_URL', errors, true);
+	const landingDomain = domain(environment, 'LANDING_DOMAIN', errors);
 	const catalogDomain = domain(environment, 'CATALOG_DOMAIN', errors);
 	const contactDomain = domain(environment, 'CONTACT_DOMAIN', errors);
-
+	if (landingSiteUrl && landingDomain && new URL(landingSiteUrl).hostname !== landingDomain) {
+		errors.push('LANDING_DOMAIN must match LANDING_SITE_URL hostname.');
+	}
 	return {
-		landingSiteUrl: secureUrl(environment, 'LANDING_SITE_URL', errors, { rootOnly: true }),
+		landingSiteUrl,
+		landingDomain,
 		catalogDomain,
+		contactDomain,
 		catalogUrl: catalogDomain ? `https://${catalogDomain}` : '',
 		contactUrl: contactDomain ? `https://${contactDomain}` : '',
-		cdnBaseUrl: secureUrl(environment, 'CDN_BASE_URL', errors),
+		cdnBaseUrl: secureUrl(environment, 'CDN_BASE_URL', errors, true),
 		cookieDomain: domain(environment, 'COOKIE_DOMAIN', errors),
 		facebookUrl: secureUrl(environment, 'FACEBOOK_URL', errors),
 		lineUrl: secureUrl(environment, 'LINE_URL', errors),
@@ -220,68 +240,33 @@ export function validateProductionEnvironment(target, environment) {
 	if (!targets.has(target)) throw new Error(`Unknown deployment target: ${target}`);
 	const errors = [];
 	let result;
-
-	if (target === 'infrastructure') {
-		result = infrastructure(environment, errors);
-	} else if (target === 'api') {
-		result = api(environment, errors);
-	} else if (target === 'landing') {
-		const values = publicSiteValues(environment, errors);
-		const landingDomain = domain(environment, 'LANDING_DOMAIN', errors);
-		if (
-			values.landingSiteUrl &&
-			landingDomain &&
-			new URL(values.landingSiteUrl).hostname !== landingDomain
-		) {
-			errors.push('LANDING_DOMAIN must match the hostname in LANDING_SITE_URL.');
-		}
+	if (target === 'infrastructure') result = infrastructure(environment, errors);
+	else if (target === 'api') result = api(environment, errors);
+	else if (target === 'landing')
+		result = { ...publicValues(environment, errors), ...cloudflare(environment, errors) };
+	else if (target === 'catalog')
 		result = {
-			landingSiteUrl: values.landingSiteUrl,
-			landingDomain,
-			catalogUrl: values.catalogUrl,
-			contactUrl: values.contactUrl,
-			cdnBaseUrl: values.cdnBaseUrl,
-			cookieDomain: values.cookieDomain,
-			facebookUrl: values.facebookUrl,
-			lineUrl: values.lineUrl,
-			turnstileSiteKey: values.turnstileSiteKey,
+			...publicValues(environment, errors),
+			catalogApiBaseUrl: secureUrl(environment, 'CATALOG_API_BASE_URL', errors, true),
 			...cloudflare(environment, errors)
 		};
-	} else if (target === 'catalog') {
-		const values = publicSiteValues(environment, errors);
+	else if (target === 'contact')
 		result = {
-			landingSiteUrl: values.landingSiteUrl,
-			catalogDomain: values.catalogDomain,
-			catalogApiBaseUrl: secureUrl(environment, 'CATALOG_API_BASE_URL', errors),
-			contactUrl: values.contactUrl,
-			cdnBaseUrl: values.cdnBaseUrl,
-			cookieDomain: values.cookieDomain,
-			facebookUrl: values.facebookUrl,
-			lineUrl: values.lineUrl,
-			turnstileSiteKey: values.turnstileSiteKey,
-			...cloudflare(environment, errors)
-		};
-	} else if (target === 'contact') {
-		result = {
-			landingSiteUrl: secureUrl(environment, 'LANDING_SITE_URL', errors, { rootOnly: true }),
+			landingSiteUrl: secureUrl(environment, 'LANDING_SITE_URL', errors, true),
 			contactDomain: domain(environment, 'CONTACT_DOMAIN', errors),
 			...cloudflare(environment, errors)
 		};
-	} else {
+	else
 		result = {
 			adminDomain: domain(environment, 'ADMIN_DOMAIN', errors),
-			adminApiBaseUrl: secureUrl(environment, 'ADMIN_API_BASE_URL', errors, {
-				rootOnly: true
-			}),
+			adminApiBaseUrl: secureUrl(environment, 'ADMIN_API_BASE_URL', errors, true),
 			...cloudflare(environment, errors)
 		};
-	}
-
-	if (errors.length > 0) throw new Error(`Invalid deployment environment:\n${errors.join('\n')}`);
+	if (errors.length > 0) throw new Error(`Invalid production environment:\n${errors.join('\n')}`);
 	return result;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
 	validateProductionEnvironment(process.argv[2] ?? '', process.env);
-	process.stdout.write(`Deployment environment for ${process.argv[2]} is valid.\n`);
+	process.stdout.write(`Production environment for ${process.argv[2]} is valid.\n`);
 }

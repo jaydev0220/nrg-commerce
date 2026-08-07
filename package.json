@@ -17,16 +17,17 @@
 		"build": "pnpm -r run build",
 		"check": "pnpm -r run check",
 		"ci:generate": "pnpm --filter @packages/database db:generate && pnpm --filter @apps/admin types && pnpm --filter @apps/catalog types && pnpm --filter @apps/contact-worker types",
-		"format": "prettier --ignore-path .prettierignore --write package.json prettier.config.js '.github/**/*.yml' 'scripts/**/*.mjs' 'tests/**/*.mjs' 'infra/**/*.md' && pnpm -r run format",
-		"lint": "prettier --ignore-path .prettierignore --check package.json prettier.config.js '.github/**/*.yml' 'scripts/**/*.mjs' 'tests/**/*.mjs' 'infra/**/*.md' && pnpm ops:check && pnpm -r run lint",
+		"format": "prettier --ignore-path .prettierignore --write package.json prettier.config.js PLAN.md '.github/**/*.yml' 'scripts/**/*.mjs' 'tests/**/*.mjs' 'infra/**/*.md' && pnpm -r run format",
+		"lint": "prettier --ignore-path .prettierignore --check package.json prettier.config.js PLAN.md '.github/**/*.yml' 'scripts/**/*.mjs' 'tests/**/*.mjs' 'infra/**/*.md' && pnpm ops:check && pnpm -r --if-present run lint",
 		"ops:capacity": "node scripts/operations/verify-capacity.mjs",
+		"ops:check-migrations": "node scripts/ci/check-migrations.mjs",
+		"ops:verify-actions": "node scripts/ci/verify-actions-pinned.mjs",
 		"test": "pnpm run test:ci && pnpm -r run test",
 		"test:ci": "node --test \"tests/scripts/**/*.test.mjs\"",
 		"test:coverage": "pnpm run test:coverage:root && pnpm -r --if-present run test:coverage",
 		"test:coverage:root": "node --test --experimental-test-coverage --test-coverage-include=scripts/**/*.mjs --test-coverage-lines=85 --test-coverage-branches=75 --test-coverage-functions=95 \"tests/scripts/**/*.test.mjs\"",
 		"test:e2e": "pnpm --filter './apps/*' run test:e2e",
-		"ops:check": "bash -n scripts/operations/*.sh",
-		"ops:verify-deployment": "node scripts/operations/verify-deployment.mjs"
+		"ops:check": "bash -n scripts/operations/*.sh"
 	},
 	"devEngines": {
 		"packageManager": {

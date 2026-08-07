@@ -1,38 +1,35 @@
 import { readFile } from 'node:fs/promises';
+import { glob } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-const immutableReferencePattern = /^[0-9a-f]{40}$/u;
-const actionReferencePattern = /^\s*(?:-\s*)?uses:\s*([^\s#]+)@([^\s#]+)/u;
-
-export function findMutableActionReferences(source) {
-	const findings = [];
-
-	for (const [index, line] of source.split(/\r?\n/u).entries()) {
-		const match = actionReferencePattern.exec(line);
-		if (!match || match[1].startsWith('./') || immutableReferencePattern.test(match[2])) continue;
-
-		findings.push({
-			action: match[1],
-			line: index + 1,
-			reference: match[2]
-		});
+export async function findUnpinnedActions(root = '.github/workflows') {
+	const failures = [];
+	for await (const path of glob(`${root}/**/*.yml`)) {
+		const source = await readFile(path, 'utf8');
+		for (const [index, line] of source.split('\n').entries()) {
+			const match = line.match(/^\s*-?\s*uses:\s*([^\s#]+)/u);
+			if (match && !/@[0-9a-f]{40}$/u.test(match[1])) failures.push(`${path}:${index + 1}`);
+		}
 	}
-
-	return findings;
+	return failures;
 }
 
-export async function verifyActionsPinned(workflowPath) {
-	const source = await readFile(workflowPath, 'utf8');
-	const findings = findMutableActionReferences(source);
-	if (findings.length === 0) return;
-
-	const details = findings
-		.map(({ action, line, reference }) => `${workflowPath}:${line} uses ${action}@${reference}`)
-		.join('\n');
-	throw new Error(`External GitHub Actions must use full commit SHAs:\n${details}`);
+export function findMutableActionReferences(source) {
+	const failures = [];
+	for (const [index, line] of source.split('\n').entries()) {
+		const match = line.match(/^\s*-?\s*uses:\s*([^\s#]+)\s*(?:#.*)?$/u);
+		if (!match || match[1].startsWith('./') || match[1].includes('@')) {
+			if (match && !match[1].startsWith('./') && !/@[0-9a-f]{40}$/u.test(match[1])) {
+				const [action, reference] = match[1].split('@');
+				failures.push({ action, line: index + 1, reference });
+			}
+			continue;
+		}
+	}
+	return failures;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-	await verifyActionsPinned(process.argv[2] ?? '.github/workflows/ci-deploy.yml');
-	process.stdout.write('GitHub Action references are pinned.\n');
+	const failures = await findUnpinnedActions();
+	if (failures.length > 0) throw new Error(`Unpinned GitHub Actions:\n${failures.join('\n')}`);
 }

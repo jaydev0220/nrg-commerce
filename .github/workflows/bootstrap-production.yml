@@ -1,0 +1,170 @@
+name: Bootstrap production
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Bootstrap phase
+        required: true
+        type: choice
+        options: [phase-1-base, phase-2-api, phase-3-proxy]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: nrg-commerce-production
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    environment: production-plan
+    outputs:
+      plan-sha: ${{ steps.hash.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # azure/login v3
+        with:
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+      - run: terraform -chdir=infra/production init -input=false -lockfile=readonly
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+      - name: Refuse rerun after bootstrap completion
+        run: |
+          if KEY_VAULT_NAME="$(terraform -chdir=infra/production output -raw key_vault_name 2>/dev/null)"; then
+            if az keyvault show --name "$KEY_VAULT_NAME" --only-show-errors >/dev/null 2>&1 && az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name bootstrap-complete --only-show-errors >/dev/null 2>&1; then
+              echo 'Production bootstrap is already complete.' >&2
+              exit 1
+            fi
+          fi
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+      - name: Require the prior bootstrap phase
+        if: inputs.phase != 'phase-1-base'
+        run: |
+          case "$PHASE" in
+            phase-2-api) marker=bootstrap-phase-1 ;;
+            phase-3-proxy) marker=bootstrap-phase-2 ;;
+            *) exit 1 ;;
+          esac
+          KEY_VAULT_NAME="$(terraform -chdir=infra/production output -raw key_vault_name)"
+          az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "$marker" --only-show-errors >/dev/null
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+          PHASE: ${{ inputs.phase }}
+      - name: Load owner URL for grants
+        if: inputs.phase != 'phase-1-base'
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+        run: |
+          owner_url="$(terraform -chdir=infra/production output -raw neon_owner_database_url)"
+          echo "TF_VAR_neon_owner_database_url=$owner_url" >> "$GITHUB_ENV"
+          OWNER_DATABASE_URL="$owner_url" node scripts/ci/write-postgresql-env.mjs "$GITHUB_ENV"
+      - name: Plan selected phase
+        run: terraform -chdir=infra/production plan -input=false -lock-timeout=5m -out=bootstrap.tfplan
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+          TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          TF_VAR_cloudflare_terraform_api_token: ${{ secrets.CLOUDFLARE_TERRAFORM_TOKEN }}
+          TF_VAR_r2_admin_access_key_id: ${{ secrets.R2_ADMIN_ACCESS_KEY_ID }}
+          TF_VAR_r2_admin_secret_access_key: ${{ secrets.R2_ADMIN_SECRET_ACCESS_KEY }}
+          TF_VAR_neon_org_id: ${{ vars.NEON_ORG_ID }}
+          TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
+          TF_VAR_azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+          TF_VAR_azure_budget_amount: ${{ vars.AZURE_BUDGET_AMOUNT }}
+          TF_VAR_api_image: ${{ vars.BOOTSTRAP_API_IMAGE }}
+          TF_VAR_bootstrap_phase: ${{ inputs.phase }}
+          TF_VAR_origin_certificate_enabled: ${{ inputs.phase == 'phase-1-base' && 'false' || 'true' }}
+          TF_VAR_enable_cloudflare_proxy: ${{ inputs.phase == 'phase-3-proxy' && 'true' || 'false' }}
+          TF_VAR_runtime_secrets: ${{ secrets.TF_RUNTIME_SECRETS_JSON || '{}' }}
+      - run: sudo apt-get update && sudo apt-get install --yes age
+      - run: age --encrypt --recipient "$TF_PLAN_AGE_RECIPIENT" --output bootstrap.tfplan.age infra/production/bootstrap.tfplan
+        env:
+          TF_PLAN_AGE_RECIPIENT: ${{ vars.TF_PLAN_AGE_RECIPIENT }}
+      - id: hash
+        run: echo "sha256=$(sha256sum bootstrap.tfplan.age | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4
+        with:
+          name: bootstrap-${{ inputs.phase }}
+          path: bootstrap.tfplan.age
+          retention-days: 1
+
+  apply:
+    needs: plan
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # azure/login v3
+        with:
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact v4
+        with:
+          name: bootstrap-${{ inputs.phase }}
+      - run: sudo apt-get update && sudo apt-get install --yes age
+      - run: |
+          printf '%s' "$TF_PLAN_AGE_IDENTITY" > identity.txt
+          chmod 600 identity.txt
+          age --decrypt --identity identity.txt --output infra/production/bootstrap.tfplan bootstrap.tfplan.age
+          test "$(sha256sum bootstrap.tfplan.age | cut -d' ' -f1)" = "${{ needs.plan.outputs.plan-sha }}"
+          rm -f identity.txt bootstrap.tfplan.age
+      - name: Import BYOC certificate for phase two or three
+        if: inputs.phase != 'phase-1-base'
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/production init -input=false -lockfile=readonly
+          KEY_VAULT_NAME="$(terraform -chdir=infra/production output -raw key_vault_name)"
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          printf '%s' "$API_ORIGIN_CERTIFICATE_PEM" > "$tmp/cert.pem"
+          printf '%s' "$API_ORIGIN_PRIVATE_KEY_PEM" > "$tmp/key.pem"
+          openssl pkcs12 -export -out "$tmp/origin.pfx" -inkey "$tmp/key.pem" -in "$tmp/cert.pem" -passout pass:"$PFX_PASSWORD"
+          az keyvault certificate import --vault-name "$KEY_VAULT_NAME" --name api-origin-production --file "$tmp/origin.pfx" --password "$PFX_PASSWORD" --output none
+        env:
+          API_ORIGIN_CERTIFICATE_PEM: ${{ secrets.API_ORIGIN_CERTIFICATE_PEM }}
+          API_ORIGIN_PRIVATE_KEY_PEM: ${{ secrets.API_ORIGIN_PRIVATE_KEY_PEM }}
+          PFX_PASSWORD: ${{ secrets.API_ORIGIN_PFX_PASSWORD }}
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+      - run: |
+          terraform -chdir=infra/production init -input=false -lockfile=readonly
+          terraform -chdir=infra/production apply -input=false -lock-timeout=5m bootstrap.tfplan
+          rm -f infra/production/bootstrap.tfplan bootstrap.tfplan
+          KEY_VAULT_NAME="$(terraform -chdir=infra/production output -raw key_vault_name)"
+          case "$PHASE" in
+            phase-1-base) marker=bootstrap-phase-1 ;;
+            phase-2-api) marker=bootstrap-phase-2 ;;
+            phase-3-proxy) marker=bootstrap-complete ;;
+            *) exit 1 ;;
+          esac
+          az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name "$marker" --value "${GITHUB_SHA}" --only-show-errors --output none
+        env:
+          TF_PLAN_AGE_IDENTITY: ${{ secrets.TF_PLAN_AGE_IDENTITY }}
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+          PHASE: ${{ inputs.phase }}

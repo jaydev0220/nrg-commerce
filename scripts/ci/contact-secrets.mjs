@@ -1,9 +1,10 @@
+import { chmod, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-const contactSecretNames = [
+const names = [
 	'ALLOWED_ORIGINS',
-	'CONTACT_RECIPIENT_EMAIL',
 	'CONTACT_SENDER_EMAIL',
+	'CONTACT_RECIPIENT_EMAIL',
 	'TURNSTILE_SECRET_KEY'
 ];
 
@@ -16,53 +17,45 @@ function isLoopbackHostname(hostname) {
 	);
 }
 
-function validateEmail(name, value) {
-	if (value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value)) {
-		throw new Error(`${name} must be a valid email address.`);
-	}
-}
-
-function validateAllowedOrigins(value) {
-	const origins = value
-		.split(',')
-		.map((origin) => origin.trim())
-		.filter(Boolean);
-	if (origins.length === 0) throw new Error('ALLOWED_ORIGINS must contain at least one origin.');
-
-	for (const origin of origins) {
+export function readContactSecrets(environment = process.env) {
+	const values = Object.fromEntries(names.map((name) => [name, environment[name]?.trim() ?? '']));
+	const missing = names.filter((name) => !values[name]);
+	if (missing.length > 0) throw new Error(`Missing contact Worker secrets: ${missing.join(', ')}`);
+	for (const origin of values.ALLOWED_ORIGINS.split(',').map((item) => item.trim())) {
 		try {
 			const url = new URL(origin);
 			if (
 				url.protocol !== 'https:' ||
-				isLoopbackHostname(url.hostname) ||
 				url.username ||
 				url.password ||
+				url.port ||
+				isLoopbackHostname(url.hostname) ||
 				url.pathname !== '/' ||
 				url.search ||
 				url.hash ||
 				origin !== url.origin
-			) {
+			)
 				throw new Error('invalid origin');
-			}
 		} catch {
-			throw new Error('ALLOWED_ORIGINS must contain comma-separated HTTPS origins.');
+			throw new Error('ALLOWED_ORIGINS must contain exact HTTPS origins.');
 		}
 	}
+	for (const name of ['CONTACT_SENDER_EMAIL', 'CONTACT_RECIPIENT_EMAIL']) {
+		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(values[name]))
+			throw new Error(`${name} must be a valid email address.`);
+	}
+	return values;
 }
 
-export function readContactSecrets(environment) {
-	const missing = contactSecretNames.filter((name) => !environment[name]?.trim());
-	if (missing.length > 0) {
-		throw new Error(`Missing contact Worker secrets: ${missing.join(', ')}.`);
-	}
+export const buildContactSecrets = readContactSecrets;
 
-	validateAllowedOrigins(environment.ALLOWED_ORIGINS.trim());
-	validateEmail('CONTACT_RECIPIENT_EMAIL', environment.CONTACT_RECIPIENT_EMAIL.trim());
-	validateEmail('CONTACT_SENDER_EMAIL', environment.CONTACT_SENDER_EMAIL.trim());
-
-	return Object.fromEntries(contactSecretNames.map((name) => [name, environment[name]]));
+export async function writeContactSecrets(path, environment = process.env) {
+	if (!path) throw new Error('Output path is required.');
+	const values = readContactSecrets(environment);
+	await writeFile(path, `${JSON.stringify(values, null, 2)}\n`, { mode: 0o600 });
+	await chmod(path, 0o600);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-	process.stdout.write(JSON.stringify(readContactSecrets(process.env)));
+	await writeContactSecrets(process.argv[2]);
 }

@@ -1,0 +1,44 @@
+name: Backup production database
+
+on:
+  schedule: [{ cron: '0 18 * * *' }]
+  workflow_dispatch:
+
+permissions: { contents: read }
+
+concurrency:
+  group: nrg-commerce-production
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - name: Read backup URL from HCP state
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+        run: |
+          terraform -chdir=infra/production init -input=false -lockfile=readonly
+          echo "DATABASE_URL=$(terraform -chdir=infra/production output -raw neon_backup_database_url)" >> "$GITHUB_ENV"
+      - run: sudo apt-get update && sudo apt-get install --yes age awscli
+      - name: Dump, encrypt and upload
+        run: |
+          set -euo pipefail
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" > "$tmp/database.dump"
+          age --encrypt --recipient "$AGE_RECIPIENT" --output "$tmp/database.dump.age" "$tmp/database.dump"
+          aws s3 cp "$tmp/database.dump.age" "s3://$BACKUP_BUCKET/database/$(date -u +%Y/%m/%d)/${GITHUB_RUN_ID}.dump.age" --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+        env:
+          AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          BACKUP_BUCKET: nrg-commerce-database-backups
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_RUNTIME_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RUNTIME_SECRET_ACCESS_KEY }}

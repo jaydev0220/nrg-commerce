@@ -1,0 +1,87 @@
+name: Monthly database restore drill
+
+on:
+  schedule: [{ cron: '0 19 1 * *' }]
+  workflow_dispatch:
+    inputs:
+      backup_key: { description: R2 backup object key, required: true, type: string }
+
+permissions: { contents: read }
+
+concurrency:
+  group: nrg-commerce-production
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - name: Read Neon production identifiers from HCP state
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          TF_CLOUD_PROJECT: nrg-commerce
+        run: |
+          terraform -chdir=infra/production init -input=false -lockfile=readonly
+          {
+            echo "NEON_PROJECT_ID=$(terraform -chdir=infra/production output -raw neon_project_id)"
+            echo "NEON_PRODUCTION_BRANCH_ID=$(terraform -chdir=infra/production output -raw neon_production_branch_id)"
+          } >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
+        with: { version: 11.15.1, run_install: false }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
+        with: { node-version: 24.19.0, cache: pnpm }
+      - run: sudo apt-get update && sudo apt-get install --yes age awscli postgresql-client
+      - name: Restore into a disposable Neon branch and verify
+        run: |
+          set -Eeuo pipefail
+          tmp=$(mktemp -d)
+          branch_id=''
+          cleanup() {
+            if [[ -n "$branch_id" ]]; then
+              neon_api -X DELETE "$NEON_API_BASE/projects/$NEON_PROJECT_ID/branches/$branch_id?hard_delete=true" >/dev/null || true
+            fi
+            rm -rf "$tmp"
+          }
+          trap cleanup EXIT
+          neon_api() {
+            curl --fail-with-body --silent --show-error --retry 4 --retry-all-errors \
+              --connect-timeout 10 --max-time 60 \
+              -H "Authorization: Bearer $NEON_API_KEY" \
+              -H 'Content-Type: application/json' "$@"
+          }
+          [[ "$BACKUP_KEY" =~ ^database/[A-Za-z0-9._/-]+\.dump\.age$ ]]
+          payload=$(jq -nc --arg name "restore-drill-${GITHUB_RUN_ID}" --arg parent "$NEON_PRODUCTION_BRANCH_ID" \
+            '{branch: {name: $name, parent_id: $parent}, endpoints: [{type: "read_write", region_id: "aws-ap-southeast-1", autoscaling_limit_min_cu: 0.25, autoscaling_limit_max_cu: 1, suspend_timeout_seconds: 300}]}')
+          created=$(neon_api -X POST "$NEON_API_BASE/projects/$NEON_PROJECT_ID/branches" --data "$payload")
+          branch_id=$(jq -er '.branch.id' <<< "$created")
+          connection_uri=''
+          for attempt in $(seq 1 30); do
+            response=$(neon_api "$NEON_API_BASE/projects/$NEON_PROJECT_ID/connection_uri?branch_id=$branch_id&database_name=nrg_commerce&role_name=nrg_commerce_owner" || true)
+            connection_uri=$(jq -r '.uri // empty' <<< "$response" 2>/dev/null || true)
+            [[ -n "$connection_uri" ]] && break
+            sleep 10
+          done
+          test -n "$connection_uri"
+          connection_uri=$(node -e 'const url = new URL(process.argv[1]); url.searchParams.set("sslmode", "verify-full"); process.stdout.write(url.toString())' "$connection_uri")
+          aws s3 cp "s3://nrg-commerce-database-backups/$BACKUP_KEY" "$tmp/backup.age" --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          age --decrypt --identity <(printf '%s' "$BACKUP_AGE_IDENTITY") --output "$tmp/database.dump" "$tmp/backup.age"
+          pg_restore --clean --if-exists --exit-on-error --single-transaction --no-owner --no-privileges --dbname "$connection_uri" "$tmp/database.dump"
+          psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "_prisma_migrations";'
+          psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "Staff";'
+          psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "Product";'
+          pnpm install --frozen-lockfile
+          DATABASE_URL="$connection_uri" DIRECT_URL="$connection_uri" pnpm --filter @packages/database exec prisma migrate status
+        env:
+          BACKUP_KEY: ${{ inputs.backup_key || vars.LATEST_RESTORE_BACKUP_KEY }}
+          BACKUP_AGE_IDENTITY: ${{ secrets.BACKUP_AGE_IDENTITY }}
+          NEON_API_BASE: https://console.neon.tech/api/v2
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_RUNTIME_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RUNTIME_SECRET_ACCESS_KEY }}

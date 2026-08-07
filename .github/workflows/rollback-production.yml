@@ -1,0 +1,59 @@
+name: Roll back production application versions
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_revision: { description: Existing healthy ACA revision, required: true, type: string }
+      admin_version: { description: Worker version ID, required: false, type: string }
+      catalog_version: { description: Worker version ID, required: false, type: string }
+      landing_version: { description: Worker version ID, required: false, type: string }
+      contact_version: { description: Worker version ID, required: false, type: string }
+
+permissions: { contents: read }
+
+concurrency:
+  group: nrg-commerce-production
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
+        with: { version: 11.15.1, run_install: false }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
+        with: { node-version: 24.19.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # azure/login v3
+        with:
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+      - run: |
+          state="$(az containerapp revision show --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$API_REVISION" --query properties.runningState -o tsv)"
+          test "$state" = Running
+          az containerapp ingress traffic set --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$API_REVISION" --weight 100 --output none
+        env:
+          AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          API_REVISION: ${{ inputs.api_revision }}
+      - name: Roll back selected Workers
+        if: inputs.admin_version != '' || inputs.catalog_version != '' || inputs.landing_version != '' || inputs.contact_version != ''
+        run: |
+          set -euo pipefail
+          rollback() { [ -z "$2" ] || (cd "apps/$3" && pnpm exec wrangler rollback "$2" --name "$1" --yes); }
+          rollback nrg-commerce-admin "$ADMIN_VERSION" admin
+          rollback nrg-commerce-catalog "$CATALOG_VERSION" catalog
+          rollback nrg-commerce-landing "$LANDING_VERSION" landing
+          rollback nrg-commerce-contact "$CONTACT_VERSION" contact-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          ADMIN_VERSION: ${{ inputs.admin_version }}
+          CATALOG_VERSION: ${{ inputs.catalog_version }}
+          LANDING_VERSION: ${{ inputs.landing_version }}
+          CONTACT_VERSION: ${{ inputs.contact_version }}

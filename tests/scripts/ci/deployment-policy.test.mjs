@@ -2,231 +2,104 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const workflowPath = new URL('../../../.github/workflows/ci-deploy.yml', import.meta.url);
-const contactWorkerConfigPath = new URL(
-	'../../../apps/contact-worker/wrangler.jsonc',
-	import.meta.url
-);
-const landingWorkerConfigPath = new URL('../../../apps/landing/wrangler.jsonc', import.meta.url);
+const root = new URL('../../../', import.meta.url);
 
-function readJob(source, jobName) {
-	const marker = `  ${jobName}:\n`;
-	const start = source.indexOf(marker);
-	assert.notEqual(start, -1, `Expected workflow job ${jobName}.`);
-	const nextJobPattern = /^ {2}[a-z0-9-]+:\s*$/gmu;
-	nextJobPattern.lastIndex = start + marker.length;
-	const nextJob = nextJobPattern.exec(source);
-	return source.slice(start, nextJob?.index);
+function jobBlock(workflow, name) {
+	const start = workflow.indexOf(`  ${name}:`);
+	assert.notEqual(start, -1, `Missing ${name}`);
+	const next = workflow.slice(start + 4).search(/^  [a-z0-9-]+:\s*$/mu);
+	return workflow.slice(start, next === -1 ? undefined : start + 4 + next);
 }
 
-test('every deployment publication job is restricted to the main branch', async () => {
-	const workflow = await readFile(workflowPath, 'utf8');
-
-	for (const jobName of [
-		'deploy-infrastructure-staging',
-		'deploy-infrastructure-production',
-		'deploy-workers-staging',
-		'deploy-workers-production',
-		'publish-api-image',
-		'deploy-api-staging',
-		'deploy-api-production',
-		'deploy-landing-staging',
-		'deploy-landing-production',
-		'deploy-api-staging',
-		'deploy-api-production'
+test('all production mutations are behind the aggregate validation gate', async () => {
+	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
+	assert.match(workflow, /needs: \[quality, tests, build, terraform, security\]/u);
+	assert.match(workflow, /needs: \[gate, fresh-main\]/u);
+	for (const job of [
+		'plan',
+		'apply-infrastructure',
+		'sync-secrets',
+		'migrate',
+		'deploy-api',
+		'deploy-contact',
+		'deploy-frontends'
 	]) {
-		assert.match(readJob(workflow, jobName), /github\.ref == 'refs\/heads\/main'/u);
+		const block = jobBlock(workflow, job);
+		assert.match(block, /if: github\.event_name != 'pull_request'/u);
+		assert.match(block, /needs:/u);
 	}
 });
 
-test('CI rejects moderate dependency advisories and reconciles Worker variables', async () => {
-	const workflow = await readFile(workflowPath, 'utf8');
-
-	assert.match(workflow, /pnpm audit --audit-level moderate/u);
-	assert.doesNotMatch(workflow, /--keep-vars/u);
+test('the release uses protected plan/apply environments and exact encrypted plan hashes', async () => {
+	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
+	assert.match(workflow, /environment: production-plan/u);
+	assert.match(workflow, /environment: production/u);
+	assert.match(workflow, /age --encrypt --recipient/u);
+	assert.match(workflow, /sha256sum deployment\.tfplan\.age/u);
+	assert.match(workflow, /terraform -chdir=infra\/production apply .*deployment\.tfplan/u);
+	assert.doesNotMatch(workflow, /-auto-approve/u);
 });
 
-test('staging contact limits permit the required capacity test without weakening production', async () => {
-	const config = JSON.parse(await readFile(contactWorkerConfigPath, 'utf8'));
-	const staging = config.env.staging.ratelimits[0];
-	const production = config.env.production.ratelimits[0];
-
-	assert.equal(staging.simple.period, 60);
-	assert.ok(staging.simple.limit >= 400);
-	assert.deepEqual(production.simple, { limit: 10, period: 60 });
-	assert.notEqual(staging.namespace_id, production.namespace_id);
-});
-
-test('contact Worker required secrets are declared in every deployed environment', async () => {
-	const config = JSON.parse(await readFile(contactWorkerConfigPath, 'utf8'));
-	const required = [
-		'ALLOWED_ORIGINS',
-		'CONTACT_SENDER_EMAIL',
-		'CONTACT_RECIPIENT_EMAIL',
-		'TURNSTILE_SECRET_KEY'
-	];
-
-	assert.deepEqual(config.env.staging.secrets.required, required);
-	assert.deepEqual(config.env.production.secrets.required, required);
-});
-
-test('CI scans complete repository history for secrets with an immutable scanner', async () => {
-	const workflow = await readFile(workflowPath, 'utf8');
-	const validation = readJob(workflow, 'validate');
-
-	assert.match(validation, /fetch-depth: 0/u);
-	assert.match(validation, /zricethezav\/gitleaks@sha256:[a-f0-9]{64}/u);
-	assert.match(validation, /detect --source=\/repo --no-banner --redact --exit-code=1/u);
-	assert.match(validation, /--gitleaks-ignore-path=\/repo\/\.gitleaksignore/u);
-});
-
-test('CI applies migrations and rejects migration drift using an isolated shadow database', async () => {
-	const workflow = await readFile(workflowPath, 'utf8');
-	const validation = readJob(workflow, 'validate');
-
-	assert.match(validation, /SHADOW_DATABASE_ADMIN_URL: .*\/postgres/u);
-	assert.match(validation, /SHADOW_DATABASE_URL: .*\/nrg_commerce_shadow/u);
-	assert.match(validation, /run: pnpm db:shadow:create/u);
-	assert.match(validation, /run: pnpm db:deploy/u);
-	assert.match(validation, /run: pnpm db:diff/u);
-});
-
-test('deployment credentials are scoped to steps and Terraform applies a saved plan', async () => {
-	const workflow = await readFile(workflowPath, 'utf8');
-
-	for (const jobName of [
-		'deploy-infrastructure-staging',
-		'deploy-infrastructure-production',
-		'deploy-workers-staging',
-		'deploy-workers-production',
-		'deploy-landing-staging',
-		'deploy-landing-production'
-	]) {
-		const job = readJob(workflow, jobName);
-		const jobConfiguration = job.slice(0, job.indexOf('\n    steps:'));
-		assert.doesNotMatch(jobConfiguration, /\$\{\{\s*secrets\./u);
-	}
-
-	for (const jobName of ['deploy-infrastructure-staging', 'deploy-infrastructure-production']) {
-		const job = readJob(workflow, jobName);
-		assert.match(job, /init .* -lockfile=readonly/u);
-		assert.match(job, /plan .* -out=deployment\.tfplan/u);
-		assert.match(job, /apply .* deployment\.tfplan/u);
-		assert.doesNotMatch(job, /-auto-approve/u);
-	}
-	for (const jobName of ['deploy-workers-staging', 'deploy-workers-production']) {
-		assert.doesNotMatch(readJob(workflow, jobName), /terraform -chdir=/u);
-	}
-
-	const checkoutCount = workflow.match(/uses: actions\/checkout@/gu)?.length ?? 0;
-	const protectedCheckoutCount = workflow.match(/persist-credentials: false/gu)?.length ?? 0;
-	assert.equal(protectedCheckoutCount, checkoutCount);
-});
-
-test('landing uses assets-only Cloudflare deployments with staging promotion', async () => {
-	const workflow = await readFile(workflowPath, 'utf8');
-	const config = JSON.parse(await readFile(landingWorkerConfigPath, 'utf8'));
-	const workers = readJob(workflow, 'deploy-workers-production');
-	const staging = readJob(workflow, 'deploy-landing-staging');
-	const production = readJob(workflow, 'deploy-landing-production');
-
+test('release ordering migrates before API, contact, and frontend deployments', async () => {
+	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
+	assert.match(workflow, /deploy-api:[\s\S]*?needs: \[migrate, publish-api-image\]/u);
+	assert.match(workflow, /deploy-contact:[\s\S]*?needs: \[migrate\]/u);
 	assert.match(
-		workers,
-		/needs: \[changes, deploy-infrastructure-production, deploy-workers-staging, publish-api-image\]/u
+		workflow,
+		/deploy-frontends:[\s\S]*?needs: \[apply-infrastructure, deploy-api, deploy-contact\]/u
 	);
-	assert.match(workers, /needs\.publish-api-image\.result == 'success'/u);
-	assert.match(workers, /needs\.publish-api-image\.result == 'skipped'/u);
-	assert.match(staging, /environment:\n      name: staging/u);
-	assert.match(staging, /wrangler deploy --env staging --domain "\$LANDING_DOMAIN"/u);
-	assert.match(production, /environment:\n      name: production/u);
-	assert.match(
-		production,
-		/needs: \[changes, build-api-image, deploy-landing-staging, deploy-workers-production\]/u
-	);
-	assert.match(production, /needs\.deploy-landing-staging\.result == 'success'/u);
-	assert.match(production, /needs\.deploy-workers-production\.result == 'success'/u);
-	assert.match(production, /needs\.deploy-workers-production\.result == 'skipped'/u);
-	assert.match(production, /wrangler deploy --env production --domain "\$LANDING_DOMAIN"/u);
-
-	assert.equal(config.main, undefined);
-	assert.equal(config.assets.binding, undefined);
-	assert.deepEqual(config.assets, {
-		directory: '.svelte-kit/cloudflare',
-		html_handling: 'auto-trailing-slash',
-		not_found_handling: '404-page'
-	});
-	assert.notEqual(config.env.staging.name, config.env.production.name);
+	assert.match(workflow, /strategy:[\s\S]*?matrix:/u);
+	assert.match(workflow, /revision show[\s\S]*?properties\.healthState/u);
+	assert.match(workflow, /--revision "\$revision_name" --weight 0/u);
+	assert.match(workflow, /--revision "\$revision_name" --weight 100/u);
 });
 
-test('Cloudflare infrastructure is promoted separately from Worker-only deployments', async () => {
-	const workflow = await readFile(workflowPath, 'utf8');
-	const infrastructureStaging = readJob(workflow, 'deploy-infrastructure-staging');
-	const infrastructureProduction = readJob(workflow, 'deploy-infrastructure-production');
-	const workersStaging = readJob(workflow, 'deploy-workers-staging');
-	const workersProduction = readJob(workflow, 'deploy-workers-production');
-
-	assert.match(infrastructureStaging, /needs\.changes\.outputs\.infrastructure == 'true'/u);
-	assert.match(infrastructureProduction, /needs\.changes\.outputs\.infrastructure == 'true'/u);
-	assert.match(
-		infrastructureProduction,
-		/needs\.deploy-infrastructure-staging\.result == 'success'/u
-	);
-	assert.doesNotMatch(workersStaging, /needs\.changes\.outputs\.infrastructure == 'true'/u);
-	assert.match(workersStaging, /needs\.deploy-infrastructure-staging\.result == 'skipped'/u);
-	assert.match(workersProduction, /needs\.deploy-infrastructure-production\.result == 'skipped'/u);
+test('release manifest captures provider control-plane version identifiers', async () => {
+	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
+	assert.match(workflow, /wrangler versions list[\s\S]*?--json/u);
+	assert.match(workflow, /worker_versions=/u);
+	assert.match(workflow, /retention-days: 90/u);
 });
 
-test('CI pins supported Terraform and Azure Container Apps toolchain versions', async () => {
-	const workflow = await readFile(workflowPath, 'utf8');
-	const terraformVersions = workflow.match(/terraform_version: ([^\n]+)/gu) ?? [];
-	assert.ok(terraformVersions.length > 0);
-	assert.ok(terraformVersions.every((entry) => entry === 'terraform_version: 1.15.5'));
+test('contact deployment reads the generated Turnstile secret without a GitHub secret copy', async () => {
+	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
+	assert.match(workflow, /output -raw turnstile_secret_key/u);
+	assert.doesNotMatch(workflow, /TURNSTILE_SECRET_KEY: \$\{\{ secrets\./u);
+});
 
-	for (const jobName of ['deploy-api-staging', 'deploy-api-production']) {
-		assert.match(
-			readJob(workflow, jobName),
-			/az extension add --name containerapp --version 1\.3\.0b4 --yes/u
+test('production workflows never probe public application URLs', async () => {
+	const files = await Promise.all(
+		[
+			'ci-deploy.yml',
+			'bootstrap-production.yml',
+			'bootstrap-admin.yml',
+			'backup-database.yml',
+			'restore-drill.yml',
+			'rollback-production.yml',
+			'certificate-expiry.yml',
+			'terraform-drift.yml'
+		].map((name) => readFile(new URL(`.github/workflows/${name}`, root), 'utf8'))
+	);
+	for (const workflow of files) {
+		assert.doesNotMatch(
+			workflow,
+			/\b(?:curl|wget)\b[^\n]*(?:nrglabware\.com|workers\.dev|azurecontainerapps\.io)|fetch\s*\(/iu
 		);
 	}
+	assert.match(files[4], /console\.neon\.tech\/api\/v2/u);
 });
 
-test('the API publication scans the immutable SHA image and never publishes latest', async () => {
-	const workflow = await readFile(workflowPath, 'utf8');
-	const publication = readJob(workflow, 'publish-api-image');
-	const publishIndex = publication.indexOf('Build and publish API image');
-	const scanIndex = publication.indexOf('Scan published API image');
-
-	assert.ok(publishIndex >= 0);
-	assert.ok(scanIndex > publishIndex);
-	assert.match(publication, /tags: type=raw,value=\$\{\{ github\.sha \}\}/u);
-	assert.match(
-		publication,
-		/image: ghcr\.io\/jaydev0220\/nrg-commerce-api@\$\{\{ steps\.publish\.outputs\.digest \}\}/u
-	);
-	assert.doesNotMatch(publication, /value=latest/u);
+test('restore drill creates and deletes an isolated Neon branch', async () => {
+	const workflow = await readFile(new URL('.github/workflows/restore-drill.yml', root), 'utf8');
+	assert.match(workflow, /POST .*branches/u);
+	assert.match(workflow, /hard_delete=true/u);
+	assert.match(workflow, /prisma migrate status/u);
+	assert.doesNotMatch(workflow, /RESTORE_DRILL_DATABASE_URL/u);
 });
 
-test('API staging and production promote the same digest with migrations before deployment', async () => {
-	const workflow = await readFile(workflowPath, 'utf8');
-	const staging = readJob(workflow, 'deploy-api-staging');
-	const production = readJob(workflow, 'deploy-api-production');
-
-	assert.match(staging, /needs\.publish-api-image\.result == 'success'/u);
-	assert.match(staging, /needs\.deploy-infrastructure-staging\.result == 'success'/u);
-	assert.match(staging, /needs\.deploy-infrastructure-staging\.result == 'skipped'/u);
-	assert.match(staging, /working-directory: packages\/database/u);
-	assert.match(staging, /run: pnpm db:deploy/u);
-	assert.match(
-		staging,
-		/--image ghcr\.io\/jaydev0220\/nrg-commerce-api@\$\{\{ needs\.publish-api-image\.outputs\.image-digest \}\}/u
-	);
-	assert.match(production, /needs\.deploy-api-staging\.result == 'success'/u);
-	assert.match(production, /needs\.deploy-infrastructure-production\.result == 'success'/u);
-	assert.match(production, /needs\.deploy-infrastructure-production\.result == 'skipped'/u);
-	assert.match(production, /environment:\n      name: production/u);
-	assert.doesNotMatch(staging.slice(0, staging.indexOf('\n    steps:')), /\$\{\{\s*secrets\./u);
-	assert.doesNotMatch(
-		production.slice(0, production.indexOf('\n    steps:')),
-		/\$\{\{\s*secrets\./u
-	);
+test('release concurrency is non-canceling after mutation can begin', async () => {
+	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
+	assert.match(workflow, /group:.*nrg-commerce-production/u);
+	assert.match(workflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/u);
+	assert.match(workflow, /Require the current main commit/u);
 });
