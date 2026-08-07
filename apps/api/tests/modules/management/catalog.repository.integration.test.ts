@@ -6,12 +6,11 @@ import { createDatabaseClient } from '@packages/database';
 import { Pool } from 'pg';
 
 import { createPrismaCatalogRepository } from '../../../src/modules/management/catalog.repository.js';
-
-const databaseUrl = process.env['TEST_DATABASE_URL'];
+import { databaseTestOptions, databaseUrl } from '../../test-database.js';
 
 test(
 	'catalog repository consumes a source upload once while storing its normalized asset key',
-	{ skip: databaseUrl ? false : 'TEST_DATABASE_URL is not configured.' },
+	databaseTestOptions,
 	async () => {
 		const pool = new Pool({ connectionString: databaseUrl, max: 3 });
 		const database = createDatabaseClient({ pool });
@@ -105,7 +104,7 @@ test(
 
 test(
 	'catalog repository serializes concurrent category moves to prevent hierarchy cycles',
-	{ skip: databaseUrl ? false : 'TEST_DATABASE_URL is not configured.' },
+	databaseTestOptions,
 	async () => {
 		const pool = new Pool({ connectionString: databaseUrl, max: 3 });
 		const database = createDatabaseClient({ pool });

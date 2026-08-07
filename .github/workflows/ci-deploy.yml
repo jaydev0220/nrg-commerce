@@ -25,6 +25,21 @@ jobs:
     name: Quality and type checks
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    env:
+      CI: 'true'
+      PUBLIC_API_BASE_URL: https://api.example.test
+      PUBLIC_CDN_BASE_URL: https://cdn.example.test
+      PUBLIC_COOKIE_DOMAIN: example.test
+      PUBLIC_CONTACT_WORKER_URL: https://contact.example.test
+      PUBLIC_CTA_URL: https://catalog.example.test
+      PUBLIC_FACEBOOK_URL: https://www.facebook.com/example
+      PUBLIC_HOME_URL: https://www.example.test
+      PUBLIC_LINE_URL: https://line.me/ti/p/example
+      PUBLIC_SITE_URL: https://www.example.test
+      PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+      CONTACT_SENDER_EMAIL: sender@example.test
+      CONTACT_RECIPIENT_EMAIL: recipient@example.test
+      TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
         with: { fetch-depth: 0, persist-credentials: false }
@@ -35,8 +50,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm ci:generate
       - name: Check formatting and lint
-        env:
-          CI: 'true'
         run: pnpm --workspace-root run lint
       - run: pnpm check
 
@@ -59,6 +72,7 @@ jobs:
       CI: 'true'
       NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_ci
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_ci
       DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_ci
       SHADOW_DATABASE_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
       SHADOW_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nrg_commerce_shadow
@@ -130,7 +144,7 @@ jobs:
   terraform:
     name: Terraform validation and IaC scan
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
         with: { persist-credentials: false }
@@ -183,6 +197,7 @@ jobs:
     if: always()
     needs: [quality, tests, build, terraform, security]
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - if: needs.quality.result != 'success' || needs.tests.result != 'success' || needs.build.result != 'success' || needs.terraform.result != 'success' || needs.security.result != 'success'
         run: exit 1
@@ -192,6 +207,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [gate]
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
         with: { fetch-depth: 0, persist-credentials: false }
@@ -205,6 +221,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [gate, fresh-main]
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -241,6 +258,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [gate, publish-api-image]
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     environment: production-plan
     outputs:
       plan-sha: ${{ steps.hash.outputs.sha256 }}
@@ -314,6 +332,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [plan]
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     environment: production
     permissions:
       contents: read
@@ -355,6 +374,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [apply-infrastructure]
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment: production
     permissions: { id-token: write, contents: read }
     steps:
@@ -395,6 +415,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [sync-secrets]
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     environment: production
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
@@ -403,6 +424,8 @@ jobs:
         with: { version: 11.15.1, run_install: false }
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
         with: { node-version: 24.19.0, cache: pnpm }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @packages/database db:generate
       - run: node scripts/ci/check-migrations.mjs
@@ -422,6 +445,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [migrate, publish-api-image]
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment: production
     permissions: { id-token: write, contents: read }
     steps:
@@ -461,6 +485,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [migrate]
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment: production
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
@@ -472,16 +497,23 @@ jobs:
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
         with: { terraform_version: 1.15.5, terraform_wrapper: false }
       - run: pnpm install --frozen-lockfile
-      - name: Read generated Turnstile secret and write contact secrets
+      - name: Validate production contact configuration and write contact secrets
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          DEPLOYMENT_ENVIRONMENT: production
+          LANDING_SITE_URL: https://www.nrglabware.com
+          CONTACT_DOMAIN: contact.nrglabware.com
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           ALLOWED_ORIGINS: https://www.nrglabware.com,https://catalog.nrglabware.com
           CONTACT_SENDER_EMAIL: noreply@nrglabware.com
           CONTACT_RECIPIENT_EMAIL: contact@nrglabware.com
         run: |
           set -euo pipefail
           terraform -chdir=infra/production init -input=false -lockfile=readonly
+          export TURNSTILE_SITE_KEY="$(terraform -chdir=infra/production output -raw turnstile_site_key)"
+          node scripts/ci/production-env.mjs contact
           TURNSTILE_SECRET_KEY="$(terraform -chdir=infra/production output -raw turnstile_secret_key)" \
             node scripts/ci/contact-secrets.mjs "$RUNNER_TEMP/contact-secrets.json"
       - working-directory: apps/contact-worker
@@ -497,6 +529,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [apply-infrastructure, deploy-api, deploy-contact]
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment: production
     strategy:
       fail-fast: false
@@ -518,13 +551,30 @@ jobs:
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
         with: { terraform_version: 1.15.5, terraform_wrapper: false }
       - run: pnpm install --frozen-lockfile
-      - name: Read generated Turnstile site key
+      - name: Read and validate production frontend configuration
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+          DEPLOYMENT_ENVIRONMENT: production
+          LANDING_SITE_URL: https://www.nrglabware.com
+          LANDING_DOMAIN: www.nrglabware.com
+          CATALOG_DOMAIN: catalog.nrglabware.com
+          CONTACT_DOMAIN: contact.nrglabware.com
+          CATALOG_API_BASE_URL: https://api.nrglabware.com
+          ADMIN_API_BASE_URL: https://api.nrglabware.com
+          CDN_BASE_URL: https://cdn.nrglabware.com
+          COOKIE_DOMAIN: nrglabware.com
+          FACEBOOK_URL: https://www.facebook.com/100057611824911
+          LINE_URL: https://line.me/ti/p/xYZS-jqz4e
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
         run: |
+          set -euo pipefail
           terraform -chdir=infra/production init -input=false -lockfile=readonly
-          echo "PUBLIC_TURNSTILE_SITE_KEY=$(terraform -chdir=infra/production output -raw turnstile_site_key)" >> "$GITHUB_ENV"
+          export PUBLIC_TURNSTILE_SITE_KEY="$(terraform -chdir=infra/production output -raw turnstile_site_key)"
+          export TURNSTILE_SITE_KEY="$PUBLIC_TURNSTILE_SITE_KEY"
+          node scripts/ci/production-env.mjs "${{ matrix.app }}"
+          echo "PUBLIC_TURNSTILE_SITE_KEY=$PUBLIC_TURNSTILE_SITE_KEY" >> "$GITHUB_ENV"
       - name: Build Worker artifact
         run: pnpm --filter @apps/${{ matrix.app }} build
         env:
@@ -554,6 +604,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [migrate, deploy-api, deploy-contact, deploy-frontends, publish-api-image]
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment: production
     permissions: { id-token: write, contents: read }
     steps:

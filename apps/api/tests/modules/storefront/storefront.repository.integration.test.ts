@@ -6,12 +6,11 @@ import { createDatabaseClient } from '@packages/database';
 import { Pool } from 'pg';
 
 import { createPrismaStorefrontCatalogRepository } from '../../../src/modules/storefront/storefront.repository.js';
-
-const databaseUrl = process.env['TEST_DATABASE_URL'];
+import { databaseTestOptions, databaseUrl } from '../../test-database.js';
 
 test(
 	'storefront repository filters nested SKU attributes before pagination',
-	{ skip: databaseUrl ? false : 'TEST_DATABASE_URL is not configured.' },
+	databaseTestOptions,
 	async () => {
 		const pool = new Pool({ connectionString: databaseUrl, max: 2 });
 		const database = createDatabaseClient({ pool });

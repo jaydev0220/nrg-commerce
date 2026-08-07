@@ -6,12 +6,11 @@ import { createDatabaseClient } from '@packages/database';
 import { Pool } from 'pg';
 
 import { createPrismaAuthRepository } from '../../../src/modules/auth/auth.repository.js';
-
-const databaseUrl = process.env['TEST_DATABASE_URL'];
+import { databaseTestOptions, databaseUrl } from '../../test-database.js';
 
 test(
 	'auth repository atomically locks failed passwords and consumes TOTP steps once',
-	{ skip: databaseUrl ? false : 'TEST_DATABASE_URL is not configured.' },
+	databaseTestOptions,
 	async () => {
 		const pool = new Pool({ connectionString: databaseUrl, max: 5 });
 		const database = createDatabaseClient({ pool });

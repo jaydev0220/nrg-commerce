@@ -69,6 +69,7 @@ test('validates each production deployment target without returning secrets', ()
 	assert.deepEqual(validateProductionEnvironment('contact', validEnvironment), {
 		landingSiteUrl: 'https://www.example.com',
 		contactDomain: 'contact.example.com',
+		turnstileSiteKey: 'site-key',
 		cloudflareAccountId: '0123456789abcdef0123456789abcdef'
 	});
 	assert.deepEqual(validateProductionEnvironment('admin', validEnvironment), {

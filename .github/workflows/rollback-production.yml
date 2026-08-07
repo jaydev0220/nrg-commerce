@@ -18,6 +18,7 @@ concurrency:
 jobs:
   rollback:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment: production
     permissions: { contents: read, id-token: write }
     steps:
@@ -34,8 +35,10 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
           client-id: ${{ vars.AZURE_CLIENT_ID }}
       - run: |
-          state="$(az containerapp revision show --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$API_REVISION" --query properties.runningState -o tsv)"
-          test "$state" = Running
+          set -euo pipefail
+          state="$(az containerapp revision show --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$API_REVISION" --query '{running:properties.runningState,health:properties.healthState}' -o json)"
+          test "$(jq -r '.running' <<<"$state")" = Running
+          test "$(jq -r '.health' <<<"$state")" = Healthy
           az containerapp ingress traffic set --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$API_REVISION" --weight 100 --output none
         env:
           AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}

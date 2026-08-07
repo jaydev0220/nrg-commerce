@@ -1,7 +1,7 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
 	"name": "contact-worker-local",
-	"compatibility_date": "2026-07-21",
+	"compatibility_date": "2026-07-23",
 	"compatibility_flags": ["nodejs_compat"],
 	"main": "src/index.ts",
 	"send_email": [{ "name": "EMAIL" }],

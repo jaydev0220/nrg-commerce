@@ -40,6 +40,43 @@ test('the release uses protected plan/apply environments and exact encrypted pla
 	assert.doesNotMatch(workflow, /-auto-approve/u);
 });
 
+test('quality and database tests provide the complete CI environment contract', async () => {
+	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
+	const quality = jobBlock(workflow, 'quality');
+	for (const name of [
+		'CI',
+		'PUBLIC_API_BASE_URL',
+		'PUBLIC_CDN_BASE_URL',
+		'PUBLIC_COOKIE_DOMAIN',
+		'PUBLIC_CONTACT_WORKER_URL',
+		'PUBLIC_CTA_URL',
+		'PUBLIC_FACEBOOK_URL',
+		'PUBLIC_HOME_URL',
+		'PUBLIC_LINE_URL',
+		'PUBLIC_SITE_URL',
+		'PUBLIC_TURNSTILE_SITE_KEY',
+		'CONTACT_SENDER_EMAIL',
+		'CONTACT_RECIPIENT_EMAIL',
+		'TURNSTILE_SECRET_KEY'
+	]) {
+		assert.match(quality, new RegExp(`^      ${name}:`, 'mu'), `Missing quality env ${name}`);
+	}
+
+	const tests = jobBlock(workflow, 'tests');
+	assert.match(tests, /^      DATABASE_URL:/mu);
+	assert.match(tests, /^      TEST_DATABASE_URL:/mu);
+	assert.match(tests, /postgres:18@sha256:[0-9a-f]{64}/u);
+
+	const helpers = await Promise.all([
+		readFile(new URL('apps/api/tests/test-database.ts', root), 'utf8'),
+		readFile(new URL('packages/database/tests/test-database.ts', root), 'utf8')
+	]);
+	for (const helper of helpers) {
+		assert.match(helper, /process\.env\['CI'\] === 'true'/u);
+		assert.match(helper, /TEST_DATABASE_URL must be configured/u);
+	}
+});
+
 test('release ordering migrates before API, contact, and frontend deployments', async () => {
 	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
 	assert.match(workflow, /deploy-api:[\s\S]*?needs: \[migrate, publish-api-image\]/u);
@@ -54,6 +91,27 @@ test('release ordering migrates before API, contact, and frontend deployments', 
 	assert.match(workflow, /--revision "\$revision_name" --weight 100/u);
 });
 
+test('release jobs have bounded timeouts and Terraform setup where required', async () => {
+	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
+	for (const [job, timeout] of [
+		['gate', 5],
+		['fresh-main', 5],
+		['publish-api-image', 30],
+		['terraform', 30],
+		['plan', 30],
+		['apply-infrastructure', 30],
+		['sync-secrets', 15],
+		['migrate', 30],
+		['deploy-api', 15],
+		['deploy-contact', 15],
+		['deploy-frontends', 15],
+		['release-manifest', 15]
+	]) {
+		assert.match(jobBlock(workflow, job), new RegExp(`timeout-minutes: ${timeout}`, 'u'));
+	}
+	assert.match(jobBlock(workflow, 'migrate'), /hashicorp\/setup-terraform@[0-9a-f]{40}/u);
+});
+
 test('release manifest captures provider control-plane version identifiers', async () => {
 	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
 	assert.match(workflow, /wrangler versions list[\s\S]*?--json/u);
@@ -64,7 +122,23 @@ test('release manifest captures provider control-plane version identifiers', asy
 test('contact deployment reads the generated Turnstile secret without a GitHub secret copy', async () => {
 	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
 	assert.match(workflow, /output -raw turnstile_secret_key/u);
+	assert.match(workflow, /production-env\.mjs contact/u);
+	assert.match(workflow, /production-env\.mjs "\$\{\{ matrix\.app \}\}"/u);
 	assert.doesNotMatch(workflow, /TURNSTILE_SECRET_KEY: \$\{\{ secrets\./u);
+});
+
+test('production operations pin PostgreSQL 18 client tooling and rollback health', async () => {
+	const [backup, restore, rollback] = await Promise.all(
+		['backup-database.yml', 'restore-drill.yml', 'rollback-production.yml'].map((name) =>
+			readFile(new URL(`.github/workflows/${name}`, root), 'utf8')
+		)
+	);
+	for (const workflow of [backup, restore]) {
+		assert.match(workflow, /postgres:18@sha256:[0-9a-f]{64}/u);
+		assert.match(workflow, /docker run .*POSTGRES_IMAGE/u);
+	}
+	assert.match(rollback, /properties\.healthState/u);
+	assert.match(rollback, /Healthy/u);
 });
 
 test('production workflows never probe public application URLs', async () => {

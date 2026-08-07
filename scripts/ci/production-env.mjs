@@ -254,6 +254,7 @@ export function validateProductionEnvironment(target, environment) {
 		result = {
 			landingSiteUrl: secureUrl(environment, 'LANDING_SITE_URL', errors, true),
 			contactDomain: domain(environment, 'CONTACT_DOMAIN', errors),
+			turnstileSiteKey: required(environment, 'TURNSTILE_SITE_KEY', errors),
 			...cloudflare(environment, errors)
 		};
 	else

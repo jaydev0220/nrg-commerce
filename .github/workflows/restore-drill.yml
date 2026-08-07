@@ -15,6 +15,7 @@ concurrency:
 jobs:
   restore:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     environment: production
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
@@ -36,7 +37,7 @@ jobs:
         with: { version: 11.15.1, run_install: false }
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
         with: { node-version: 24.19.0, cache: pnpm }
-      - run: sudo apt-get update && sudo apt-get install --yes age awscli postgresql-client
+      - run: sudo apt-get update && sudo apt-get install --yes age awscli
       - name: Restore into a disposable Neon branch and verify
         run: |
           set -Eeuo pipefail
@@ -71,10 +72,11 @@ jobs:
           connection_uri=$(node -e 'const url = new URL(process.argv[1]); url.searchParams.set("sslmode", "verify-full"); process.stdout.write(url.toString())' "$connection_uri")
           aws s3 cp "s3://nrg-commerce-database-backups/$BACKUP_KEY" "$tmp/backup.age" --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
           age --decrypt --identity <(printf '%s' "$BACKUP_AGE_IDENTITY") --output "$tmp/database.dump" "$tmp/backup.age"
-          pg_restore --clean --if-exists --exit-on-error --single-transaction --no-owner --no-privileges --dbname "$connection_uri" "$tmp/database.dump"
-          psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "_prisma_migrations";'
-          psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "Staff";'
-          psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "Product";'
+          docker run --rm --network host --volume "$tmp:/restore:ro" "$POSTGRES_IMAGE" \
+            pg_restore --clean --if-exists --exit-on-error --single-transaction --no-owner --no-privileges --dbname "$connection_uri" /restore/database.dump
+          docker run --rm --network host "$POSTGRES_IMAGE" psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "_prisma_migrations";'
+          docker run --rm --network host "$POSTGRES_IMAGE" psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "Staff";'
+          docker run --rm --network host "$POSTGRES_IMAGE" psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "Product";'
           pnpm install --frozen-lockfile
           DATABASE_URL="$connection_uri" DIRECT_URL="$connection_uri" pnpm --filter @packages/database exec prisma migrate status
         env:
@@ -85,3 +87,4 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_RUNTIME_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RUNTIME_SECRET_ACCESS_KEY }}
+          POSTGRES_IMAGE: postgres:18@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a

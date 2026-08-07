@@ -3,8 +3,7 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 
 import pg, { type PoolClient } from 'pg';
-
-const databaseUrl = process.env['TEST_DATABASE_URL'];
+import { databaseTestOptions, databaseUrl } from '../test-database.js';
 
 async function expectDatabaseError(
 	client: PoolClient,
@@ -26,34 +25,30 @@ async function expectDatabaseError(
 	}
 }
 
-test(
-	'initial migration is applied without failures',
-	{ skip: databaseUrl ? false : 'TEST_DATABASE_URL is not configured.' },
-	async () => {
-		const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
-		try {
-			const result = await pool.query<{
-				finished_at: Date | null;
-				rolled_back_at: Date | null;
-			}>(
-				`SELECT "finished_at", "rolled_back_at"
+test('initial migration is applied without failures', databaseTestOptions, async () => {
+	const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+	try {
+		const result = await pool.query<{
+			finished_at: Date | null;
+			rolled_back_at: Date | null;
+		}>(
+			`SELECT "finished_at", "rolled_back_at"
 				 FROM "_prisma_migrations"
 				 WHERE "migration_name" = $1`,
-				['20260721000000_initial']
-			);
+			['20260721000000_initial']
+		);
 
-			assert.equal(result.rowCount, 1);
-			assert.ok(result.rows[0]?.finished_at);
-			assert.equal(result.rows[0]?.rolled_back_at, null);
-		} finally {
-			await pool.end();
-		}
+		assert.equal(result.rowCount, 1);
+		assert.ok(result.rows[0]?.finished_at);
+		assert.equal(result.rows[0]?.rolled_back_at, null);
+	} finally {
+		await pool.end();
 	}
-);
+});
 
 test(
 	'database constraints reject invalid security and order records',
-	{ skip: databaseUrl ? false : 'TEST_DATABASE_URL is not configured.' },
+	databaseTestOptions,
 	async () => {
 		const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
 		const client = await pool.connect();

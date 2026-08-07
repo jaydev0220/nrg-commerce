@@ -8,12 +8,11 @@ import { Pool } from 'pg';
 
 import { AppError } from '../../../src/errors/app-error.js';
 import { createPrismaOrderRepository } from '../../../src/modules/management/order/order.repository.js';
-
-const databaseUrl = process.env['TEST_DATABASE_URL'];
+import { databaseTestOptions, databaseUrl } from '../../test-database.js';
 
 test(
 	'order repository enforces lifecycle timestamps and restores inventory once',
-	{ skip: databaseUrl ? false : 'TEST_DATABASE_URL is not configured.' },
+	databaseTestOptions,
 	async () => {
 		const pool = new Pool({ connectionString: databaseUrl, max: 5 });
 		const database = createDatabaseClient({ pool });
@@ -165,7 +164,7 @@ test(
 
 test(
 	'order repository searches order identifiers and text fields safely',
-	{ skip: databaseUrl ? false : 'TEST_DATABASE_URL is not configured.' },
+	databaseTestOptions,
 	async () => {
 		const pool = new Pool({ connectionString: databaseUrl, max: 5 });
 		const database = createDatabaseClient({ pool });
