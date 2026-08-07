@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isIP } from 'node:net';
 import type { LogLevel } from '@packages/database';
 import { z } from 'zod';
 
@@ -7,7 +8,7 @@ export type AppConfig = {
 	port: number;
 	databaseUrl: string;
 	databaseMaxConnections: number;
-	trustProxyHops: number | false;
+	trustedProxyCidrs: string[];
 	corsOrigins: string[];
 	bodyLimit: string;
 	logLevel: LogLevel;
@@ -56,7 +57,7 @@ const productionRequiredVariables = [
 	'DATA_ENCRYPTION_SECRET',
 	'JWT_ISSUER',
 	'JWT_AUDIENCE',
-	'TRUST_PROXY_HOPS',
+	'TRUSTED_PROXY_CIDRS',
 	'WEBAUTHN_RP_ID',
 	'WEBAUTHN_RP_NAME',
 	'WEBAUTHN_ORIGIN',
@@ -107,9 +108,31 @@ function readPositiveInteger(
 	return result.data;
 }
 
-function readTrustProxyHops(value: string | undefined): number | false {
-	if (value === undefined) return false;
-	return readPositiveInteger(value, 1, 'TRUST_PROXY_HOPS');
+function readTrustedProxyCidrs(value: string | undefined): string[] {
+	if (!value?.trim()) return [];
+
+	const cidrs = value
+		.split(',')
+		.map((item) => item.trim())
+		.filter(Boolean);
+	for (const cidr of cidrs) {
+		const parts = cidr.split('/');
+		const [address, prefix] = parts;
+		const addressType = isIP(address ?? '');
+		const prefixLength = Number(prefix);
+		const maximum = addressType === 4 ? 32 : addressType === 6 ? 128 : -1;
+		if (
+			maximum < 0 ||
+			parts.length !== 2 ||
+			!prefix ||
+			!Number.isInteger(prefixLength) ||
+			prefixLength < 0 ||
+			prefixLength > maximum
+		) {
+			throw new Error('TRUSTED_PROXY_CIDRS must contain valid IPv4/IPv6 CIDR ranges.');
+		}
+	}
+	return [...new Set(cidrs)];
 }
 
 function readStringArray(value: string | undefined, fallback: string[]): string[] {
@@ -291,8 +314,8 @@ function validateProductionConfig(environment: NodeJS.ProcessEnv, config: AppCon
 		throw new Error('R2_UPLOAD_BUCKET_NAME must be separate from the public R2 bucket.');
 	}
 
-	if (config.trustProxyHops === false) {
-		throw new Error('TRUST_PROXY_HOPS must be configured in production.');
+	if (config.trustedProxyCidrs.length === 0) {
+		throw new Error('TRUSTED_PROXY_CIDRS must be configured in production.');
 	}
 }
 
@@ -368,9 +391,6 @@ function validateConfig(config: AppConfig): void {
 	}
 
 	assertNumberInRange(config.databaseMaxConnections, 1, 100, 'DATABASE_MAX_CONNECTIONS');
-	if (config.trustProxyHops !== false) {
-		assertNumberInRange(config.trustProxyHops, 1, 5, 'TRUST_PROXY_HOPS');
-	}
 	assertNumberInRange(config.accessTokenTtlSeconds, 60, 3_600, 'ACCESS_TOKEN_TTL_SECONDS');
 	assertNumberInRange(config.refreshTokenTtlSeconds, 3_600, 2_592_000, 'REFRESH_TOKEN_TTL_SECONDS');
 	assertNumberInRange(config.pendingTokenTtlSeconds, 60, 900, 'PENDING_TOKEN_TTL_SECONDS');
@@ -431,7 +451,7 @@ export function readAppConfig(environment: NodeJS.ProcessEnv = process.env): App
 			10,
 			'DATABASE_MAX_CONNECTIONS'
 		),
-		trustProxyHops: readTrustProxyHops(environment['TRUST_PROXY_HOPS']),
+		trustedProxyCidrs: readTrustedProxyCidrs(environment['TRUSTED_PROXY_CIDRS']),
 		corsOrigins: readStringArray(environment['CORS_ORIGINS'], [
 			'http://localhost:4173',
 			'http://localhost:5173'

@@ -14,7 +14,7 @@ const validProductionEnvironment = {
 	DATA_ENCRYPTION_SECRET: 'data-encryption-secret-0123456789abcdef',
 	JWT_ISSUER: 'https://api.example.com',
 	JWT_AUDIENCE: 'nrg-commerce-admin',
-	TRUST_PROXY_HOPS: '1',
+	TRUSTED_PROXY_CIDRS: '173.245.48.0/20,2606:4700::/32',
 	WEBAUTHN_RP_ID: 'example.com',
 	WEBAUTHN_RP_NAME: 'NRG Commerce',
 	WEBAUTHN_ORIGIN: 'https://admin.example.com',
@@ -188,7 +188,15 @@ test('database pool size defaults to ten and accepts positive integers', () => {
 });
 
 test('security and resource configuration values stay within operational bounds', () => {
-	assert.throws(() => readAppConfig({ TRUST_PROXY_HOPS: '6' }), /TRUST_PROXY_HOPS/);
+	assert.throws(() => readAppConfig({ TRUSTED_PROXY_CIDRS: 'not-a-cidr' }), /TRUSTED_PROXY_CIDRS/);
+	assert.throws(
+		() => readAppConfig({ TRUSTED_PROXY_CIDRS: '10.0.0.0/8/extra' }),
+		/TRUSTED_PROXY_CIDRS/
+	);
+	assert.deepEqual(
+		readAppConfig({ TRUSTED_PROXY_CIDRS: '10.0.0.0/8,10.0.0.0/8' }).trustedProxyCidrs,
+		['10.0.0.0/8']
+	);
 	assert.throws(
 		() => readAppConfig({ ACCESS_TOKEN_TTL_SECONDS: '30' }),
 		/ACCESS_TOKEN_TTL_SECONDS/

@@ -17,7 +17,7 @@ function createTestConfig() {
 		port: 0,
 		databaseUrl: 'postgresql://postgres:postgres@localhost:5432/nrg_commerce',
 		databaseMaxConnections: 10,
-		trustProxyHops: false as const,
+		trustedProxyCidrs: [],
 		corsOrigins: ['http://localhost:4173', 'http://localhost:5173'],
 		bodyLimit: '64kb',
 		cookieSecure: false,

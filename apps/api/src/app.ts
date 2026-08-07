@@ -213,8 +213,8 @@ export function createApp(dependencies: AppDependencies = {}) {
 		});
 	}
 
-	if (config.trustProxyHops !== false) {
-		app.set('trust proxy', config.trustProxyHops);
+	if (config.trustedProxyCidrs.length > 0) {
+		app.set('trust proxy', config.trustedProxyCidrs);
 	}
 
 	app.use(createRequestContextMiddleware());
