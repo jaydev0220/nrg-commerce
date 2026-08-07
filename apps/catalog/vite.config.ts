@@ -66,7 +66,7 @@ export default defineConfig(({ mode }) => {
 				reporter: ['text'],
 				include: ['src/**/*.{js,ts,svelte}'],
 				exclude: ['src/**/*.d.ts', 'src/lib/paraglide/**'],
-				thresholds: { lines: 56, branches: 39, functions: 58 }
+				thresholds: { lines: 58, branches: 44, functions: 61 }
 			},
 			projects: [
 				{
