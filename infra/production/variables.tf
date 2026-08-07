@@ -29,6 +29,15 @@ variable "cloudflare_account_id" {
   }
 }
 
+variable "cloudflare_zone_id" {
+  type        = string
+  description = "Cloudflare production zone ID."
+  validation {
+    condition     = can(regex("^[0-9a-f]{32}$", var.cloudflare_zone_id))
+    error_message = "cloudflare_zone_id must be a 32-character lowercase hexadecimal ID."
+  }
+}
+
 variable "cloudflare_terraform_api_token" {
   type        = string
   sensitive   = true

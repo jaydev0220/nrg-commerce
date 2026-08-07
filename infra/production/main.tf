@@ -52,6 +52,13 @@ data "cloudflare_zone" "production" {
   }
 }
 
+check "cloudflare_zone_id" {
+  assert {
+    condition     = data.cloudflare_zone.production.id == var.cloudflare_zone_id
+    error_message = "cloudflare_zone_id must identify the active production zone."
+  }
+}
+
 data "cloudflare_ip_ranges" "current" {}
 
 resource "cloudflare_zone_setting" "always_use_https" {
@@ -103,6 +110,7 @@ resource "cloudflare_ruleset" "apex_to_www" {
   rules = [{
     action     = "redirect"
     expression = "(http.host eq \"${var.domain}\")"
+    ref        = "apex-to-www"
     action_parameters = {
       from_value = {
         status_code = 301
@@ -609,8 +617,11 @@ resource "azurerm_consumption_budget_resource_group" "production" {
   amount            = var.azure_budget_amount
   time_grain        = "Monthly"
   time_period {
-    start_date = "2026-01-01T00:00:00Z"
+    start_date = formatdate("YYYY-MM-01'T'00:00:00Z", plantimestamp())
     end_date   = "2036-01-01T00:00:00Z"
+  }
+  lifecycle {
+    ignore_changes = [time_period[0].start_date]
   }
   notification {
     enabled        = true
@@ -646,7 +657,6 @@ resource "neon_project" "production" {
   default_endpoint_settings {
     autoscaling_limit_min_cu = 0.25
     autoscaling_limit_max_cu = 1
-    suspend_timeout_seconds  = 300
   }
 }
 
@@ -662,7 +672,6 @@ resource "neon_endpoint" "production" {
   region_id                = "aws-ap-southeast-1"
   autoscaling_limit_min_cu = 0.25
   autoscaling_limit_max_cu = 1
-  suspend_timeout_seconds  = 300
   type                     = "read_write"
 }
 

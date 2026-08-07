@@ -281,6 +281,7 @@ jobs:
           DEPLOYMENT_ENVIRONMENT: production
           ADMIN_DOMAIN: admin.nrglabware.com
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TERRAFORM_TOKEN }}
           TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
           TF_CLOUD_PROJECT: nrg-commerce
@@ -302,6 +303,7 @@ jobs:
           TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
           TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
           TF_VAR_cloudflare_terraform_api_token: ${{ secrets.CLOUDFLARE_TERRAFORM_TOKEN }}
           TF_VAR_r2_admin_access_key_id: ${{ secrets.R2_ADMIN_ACCESS_KEY_ID }}
           TF_VAR_r2_admin_secret_access_key: ${{ secrets.R2_ADMIN_SECRET_ACCESS_KEY }}

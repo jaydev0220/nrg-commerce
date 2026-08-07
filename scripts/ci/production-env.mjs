@@ -63,11 +63,16 @@ function domain(environment, name, errors) {
 	}
 }
 
-function cloudflare(environment, errors) {
-	const accountId = required(environment, 'CLOUDFLARE_ACCOUNT_ID', errors);
-	if (accountId && !/^[0-9a-f]{32}$/u.test(accountId)) {
-		errors.push('CLOUDFLARE_ACCOUNT_ID must be a 32-character lowercase hexadecimal ID.');
+function cloudflareId(environment, name, errors) {
+	const value = required(environment, name, errors);
+	if (value && !/^[0-9a-f]{32}$/u.test(value)) {
+		errors.push(`${name} must be a 32-character lowercase hexadecimal ID.`);
 	}
+	return value;
+}
+
+function cloudflare(environment, errors) {
+	const accountId = cloudflareId(environment, 'CLOUDFLARE_ACCOUNT_ID', errors);
 	required(environment, 'CLOUDFLARE_API_TOKEN', errors);
 	return { cloudflareAccountId: accountId };
 }
@@ -175,9 +180,7 @@ function api(environment, errors) {
 		'OTEL_RESOURCE_ATTRIBUTES'
 	])
 		required(environment, name, errors);
-	const zoneId = required(environment, 'CLOUDFLARE_ZONE_ID', errors);
-	if (zoneId && !/^[0-9a-f]{32}$/u.test(zoneId))
-		errors.push('CLOUDFLARE_ZONE_ID must be a 32-character lowercase hexadecimal ID.');
+	cloudflareId(environment, 'CLOUDFLARE_ZONE_ID', errors);
 	databaseUrl(environment, 'DATABASE_URL', errors);
 	databaseUrl(environment, 'DIRECT_URL', errors);
 	origins(environment, 'CORS_ORIGINS', errors);
@@ -206,6 +209,7 @@ function infrastructure(environment, errors) {
 	return {
 		deploymentEnvironment,
 		adminDomain: domain(environment, 'ADMIN_DOMAIN', errors),
+		cloudflareZoneId: cloudflareId(environment, 'CLOUDFLARE_ZONE_ID', errors),
 		hcpTerraformOrganization: required(environment, 'TF_CLOUD_ORGANIZATION', errors),
 		hcpTerraformProject: required(environment, 'TF_CLOUD_PROJECT', errors),
 		hcpTerraformWorkspace: required(environment, 'TF_WORKSPACE', errors),

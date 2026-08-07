@@ -123,6 +123,29 @@ test('bootstrap decrypts the saved plan with its step-scoped age identity', asyn
 	);
 });
 
+test('production Terraform uses provider-compatible values without a redirect ruleset import', async () => {
+	const [main, variables, ...workflows] = await Promise.all([
+		readFile(new URL('infra/production/main.tf', root), 'utf8'),
+		readFile(new URL('infra/production/variables.tf', root), 'utf8'),
+		...['bootstrap-production.yml', 'ci-deploy.yml', 'terraform-drift.yml'].map((name) =>
+			readFile(new URL(`.github/workflows/${name}`, root), 'utf8')
+		)
+	]);
+	assert.match(main, /resource "cloudflare_ruleset" "apex_to_www"/u);
+	assert.doesNotMatch(main, /import\s*\{\s*to = cloudflare_ruleset\.apex_to_www/u);
+	assert.match(main, /ref\s+= "apex-to-www"/u);
+	assert.match(main, /formatdate\("YYYY-MM-01'T'00:00:00Z", plantimestamp\(\)\)/u);
+	assert.match(main, /ignore_changes = \[time_period\[0\]\.start_date\]/u);
+	assert.doesNotMatch(main, /suspend_timeout_seconds/u);
+	assert.match(variables, /variable "cloudflare_zone_id"/u);
+	for (const workflow of workflows) {
+		assert.match(workflow, /TF_VAR_cloudflare_zone_id/u);
+	}
+	const [bootstrap] = workflows;
+	assert.match(bootstrap, /- name: Initialize Terraform for apply/u);
+	assert.match(bootstrap, /- name: Apply bootstrap plan and mark phase/u);
+});
+
 test('release manifest captures provider control-plane version identifiers', async () => {
 	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
 	assert.match(workflow, /wrangler versions list[\s\S]*?--json/u);

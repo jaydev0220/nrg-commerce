@@ -78,10 +78,15 @@ test('validates each production deployment target without returning secrets', ()
 		cloudflareAccountId: '0123456789abcdef0123456789abcdef'
 	});
 	assert.equal(validateProductionEnvironment('api', validEnvironment).apiDomain, 'api.example.com');
-	assert.equal(
-		validateProductionEnvironment('infrastructure', validEnvironment).hcpTerraformWorkspace,
-		'nrg-commerce-production'
-	);
+	assert.deepEqual(validateProductionEnvironment('infrastructure', validEnvironment), {
+		deploymentEnvironment: 'production',
+		adminDomain: 'admin.example.com',
+		cloudflareZoneId: 'fedcba9876543210fedcba9876543210',
+		hcpTerraformOrganization: 'example-organization',
+		hcpTerraformProject: 'nrg-commerce',
+		hcpTerraformWorkspace: 'nrg-commerce-production',
+		cloudflareAccountId: '0123456789abcdef0123456789abcdef'
+	});
 });
 
 test('rejects staging, malformed CIDRs, insecure URLs, and paths', () => {
@@ -135,6 +140,19 @@ test('reports missing values by name without exposing secrets', () => {
 			assert.doesNotMatch(error.message, /access-token-secret|password/u);
 			return true;
 		}
+	);
+});
+
+test('requires a valid Cloudflare zone ID for infrastructure', () => {
+	const name = 'CLOUDFLARE_ZONE_ID';
+	assert.throws(
+		() => validateProductionEnvironment('infrastructure', { ...validEnvironment, [name]: '' }),
+		new RegExp(name, 'u')
+	);
+	assert.throws(
+		() =>
+			validateProductionEnvironment('infrastructure', { ...validEnvironment, [name]: 'invalid' }),
+		new RegExp(name, 'u')
 	);
 });
 
