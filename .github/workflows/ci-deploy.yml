@@ -83,6 +83,8 @@ jobs:
         with: { node-version: 24.19.0, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm ci:generate
+      - name: Install Playwright Chromium
+        run: pnpm --filter @packages/components exec playwright install --with-deps chromium
       - working-directory: packages/database
         run: pnpm db:shadow:create
       - working-directory: packages/database
@@ -121,6 +123,7 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
         with: { node-version: 24.19.0, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - run: pnpm ci:generate
       - run: pnpm build
 
   terraform:
