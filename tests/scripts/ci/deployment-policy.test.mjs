@@ -123,7 +123,7 @@ test('bootstrap decrypts the saved plan with its step-scoped age identity', asyn
 	);
 });
 
-test('production Terraform uses provider-compatible values without a redirect ruleset import', async () => {
+test('production Terraform imports the existing redirect entry point with provider-compatible values', async () => {
 	const [main, variables, ...workflows] = await Promise.all([
 		readFile(new URL('infra/production/main.tf', root), 'utf8'),
 		readFile(new URL('infra/production/variables.tf', root), 'utf8'),
@@ -132,8 +132,13 @@ test('production Terraform uses provider-compatible values without a redirect ru
 		)
 	]);
 	assert.match(main, /resource "cloudflare_ruleset" "apex_to_www"/u);
-	assert.doesNotMatch(main, /import\s*\{\s*to = cloudflare_ruleset\.apex_to_www/u);
+	assert.match(main, /import\s*\{\s*to = cloudflare_ruleset\.apex_to_www/u);
+	assert.match(
+		main,
+		/id = "zones\/\$\{var\.cloudflare_zone_id\}\/9400b85150d84175ab1b1b16e4544e3d"/u
+	);
 	assert.match(main, /ref\s+= "apex-to-www"/u);
+	assert.match(main, /history_retention_seconds\s+= 21600/u);
 	assert.match(main, /formatdate\("YYYY-MM-01'T'00:00:00Z", plantimestamp\(\)\)/u);
 	assert.match(main, /ignore_changes = \[time_period\[0\]\.start_date\]/u);
 	assert.doesNotMatch(main, /suspend_timeout_seconds/u);

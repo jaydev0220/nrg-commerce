@@ -124,6 +124,11 @@ resource "cloudflare_ruleset" "apex_to_www" {
   }]
 }
 
+import {
+  to = cloudflare_ruleset.apex_to_www
+  id = "zones/${var.cloudflare_zone_id}/9400b85150d84175ab1b1b16e4544e3d"
+}
+
 resource "cloudflare_queue" "contact_dlq" {
   account_id = var.cloudflare_account_id
   queue_name = "${local.resource_prefix}-contact-dlq"
@@ -651,7 +656,7 @@ resource "neon_project" "production" {
   org_id                    = var.neon_org_id
   region_id                 = "aws-ap-southeast-1"
   pg_version                = 18
-  history_retention_seconds = 604800
+  history_retention_seconds = 21600
   store_password            = "yes"
   default_branch_protected  = true
   default_endpoint_settings {
