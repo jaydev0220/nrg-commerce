@@ -5,6 +5,7 @@ import {
 	attributeMapSchema,
 	booleanLikeSchema,
 	dateSchema,
+	isBoundedJsonValue,
 	jsonValueSchema,
 	moneySchema,
 	resourceSlugSchema,
@@ -85,4 +86,36 @@ test('attributeMapSchema rejects oversized maps and prototype-sensitive keys', (
 		attributeMapSchema.safeParse(JSON.parse('{"__proto__":{"polluted":true}}')).success,
 		false
 	);
+});
+
+test('isBoundedJsonValue enforces node, depth, string, and key limits', () => {
+	assert.equal(isBoundedJsonValue(Array.from({ length: 500 }, () => 0)), false);
+	assert.equal(isBoundedJsonValue('x'.repeat(2_001)), false);
+	assert.equal(isBoundedJsonValue({ ['x'.repeat(101)]: true }), false);
+
+	let nestedValue: unknown = 'leaf';
+	for (let depth = 0; depth < 9; depth += 1) nestedValue = [nestedValue];
+	assert.equal(isBoundedJsonValue(nestedValue), false);
+});
+
+test('isBoundedJsonValue rejects non-finite values and unsupported objects', () => {
+	for (const value of [Number.NaN, Number.POSITIVE_INFINITY, new Date(), () => true]) {
+		assert.equal(isBoundedJsonValue(value), false);
+	}
+
+	const nullPrototype = Object.create(null) as Record<string, unknown>;
+	nullPrototype['value'] = 'accepted';
+	assert.equal(isBoundedJsonValue(nullPrototype), true);
+});
+
+test('isBoundedJsonValue rejects cycles, repeated references, and unsafe keys', () => {
+	const cyclic: Record<string, unknown> = {};
+	cyclic['self'] = cyclic;
+	assert.equal(isBoundedJsonValue(cyclic), false);
+
+	const shared = { value: true };
+	assert.equal(isBoundedJsonValue({ first: shared, second: shared }), false);
+	for (const key of ['__proto__', 'constructor', 'prototype']) {
+		assert.equal(isBoundedJsonValue({ [key]: true }), false, key);
+	}
 });

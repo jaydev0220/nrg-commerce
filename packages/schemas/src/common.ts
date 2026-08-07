@@ -28,12 +28,72 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 	return prototype === Object.prototype || prototype === null;
 }
 
+type JsonTraversalNode = { value: unknown; depth: number };
+
+function validateJsonPrimitive(value: unknown, limits: JsonValueLimits): boolean | undefined {
+	if (value === null || typeof value === 'boolean') return true;
+	if (typeof value === 'number') return Number.isFinite(value);
+	if (typeof value === 'string') return value.length <= limits.maximumStringLength;
+	if (typeof value !== 'object') return false;
+	return undefined;
+}
+
+function pushJsonChildren(
+	node: JsonTraversalNode,
+	stack: JsonTraversalNode[],
+	seen: WeakSet<object>,
+	limits: JsonValueLimits
+): boolean {
+	if (seen.has(node.value as object)) return false;
+	seen.add(node.value as object);
+
+	if (Array.isArray(node.value)) {
+		if (node.value.length > limits.maximumEntries) return false;
+		for (const item of node.value) {
+			stack.push({ value: item, depth: node.depth + 1 });
+		}
+		return true;
+	}
+
+	if (!isPlainRecord(node.value)) return false;
+	const entries = Object.entries(node.value);
+	if (entries.length > limits.maximumEntries) return false;
+	for (const [key, entryValue] of entries) {
+		if (key.length === 0 || key.length > limits.maximumKeyLength || unsafeAttributeKeys.has(key)) {
+			return false;
+		}
+		stack.push({ value: entryValue, depth: node.depth + 1 });
+	}
+	return true;
+}
+
+function exceedsJsonLimits(
+	node: JsonTraversalNode,
+	nodeCount: number,
+	limits: JsonValueLimits
+): boolean {
+	return (
+		(limits.maximumNodes !== undefined && nodeCount > limits.maximumNodes) ||
+		node.depth > limits.maximumDepth
+	);
+}
+
+function visitJsonNode(
+	node: JsonTraversalNode,
+	stack: JsonTraversalNode[],
+	seen: WeakSet<object>,
+	limits: JsonValueLimits
+): boolean {
+	const primitiveResult = validateJsonPrimitive(node.value, limits);
+	return primitiveResult ?? pushJsonChildren(node, stack, seen, limits);
+}
+
 export function isBoundedJsonValue(
 	value: unknown,
 	limits: JsonValueLimits = attributeJsonLimits
 ): value is JsonValue {
 	try {
-		const stack: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
+		const stack: JsonTraversalNode[] = [{ value, depth: 0 }];
 		const seen = new WeakSet<object>();
 		let nodeCount = 0;
 
@@ -42,49 +102,8 @@ export function isBoundedJsonValue(
 			if (!current) break;
 
 			nodeCount += 1;
-			if (
-				(limits.maximumNodes !== undefined && nodeCount > limits.maximumNodes) ||
-				current.depth > limits.maximumDepth
-			) {
-				return false;
-			}
-
-			if (current.value === null || typeof current.value === 'boolean') continue;
-			if (typeof current.value === 'number') {
-				if (!Number.isFinite(current.value)) return false;
-				continue;
-			}
-			if (typeof current.value === 'string') {
-				if (current.value.length > limits.maximumStringLength) return false;
-				continue;
-			}
-
-			if (typeof current.value === 'object') {
-				if (seen.has(current.value)) return false;
-				seen.add(current.value);
-			}
-
-			if (Array.isArray(current.value)) {
-				if (current.value.length > limits.maximumEntries) return false;
-				for (const item of current.value) {
-					stack.push({ value: item, depth: current.depth + 1 });
-				}
-				continue;
-			}
-
-			if (!isPlainRecord(current.value)) return false;
-			const entries = Object.entries(current.value);
-			if (entries.length > limits.maximumEntries) return false;
-			for (const [key, entryValue] of entries) {
-				if (
-					key.length === 0 ||
-					key.length > limits.maximumKeyLength ||
-					unsafeAttributeKeys.has(key)
-				) {
-					return false;
-				}
-				stack.push({ value: entryValue, depth: current.depth + 1 });
-			}
+			if (exceedsJsonLimits(current, nodeCount, limits)) return false;
+			if (!visitJsonNode(current, stack, seen, limits)) return false;
 		}
 
 		return true;
