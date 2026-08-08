@@ -168,6 +168,18 @@ test('production Neon resources stay within Free plan limits and wait for the en
 	}
 });
 
+test('phase-two Azure resources include certificate location and IPv4 ingress ranges', async () => {
+	const main = await readFile(new URL('infra/production/main.tf', root), 'utf8');
+	assert.match(
+		main,
+		/resource "azapi_resource" "origin_certificate" \{[\s\S]*?location\s+= azurerm_container_app_environment\.production\.location[\s\S]*?body = \{/u
+	);
+	assert.match(
+		main,
+		/dynamic "ip_security_restriction" \{\s+for_each = toset\(data\.cloudflare_ip_ranges\.current\.ipv4_cidrs\)/u
+	);
+});
+
 test('release manifest captures provider control-plane version identifiers', async () => {
 	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
 	assert.match(workflow, /wrangler versions list[\s\S]*?--json/u);

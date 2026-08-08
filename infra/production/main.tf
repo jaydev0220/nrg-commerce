@@ -401,6 +401,7 @@ resource "azapi_resource" "origin_certificate" {
   type      = "Microsoft.App/managedEnvironments/certificates@2025-07-01"
   name      = var.origin_certificate_name
   parent_id = azurerm_container_app_environment.production.id
+  location  = azurerm_container_app_environment.production.location
   body = {
     properties = {
       certificateKeyVaultProperties = {
@@ -434,9 +435,7 @@ resource "azurerm_container_app" "api" {
       percentage      = 100
     }
     dynamic "ip_security_restriction" {
-      for_each = toset(
-        concat(data.cloudflare_ip_ranges.current.ipv4_cidrs, data.cloudflare_ip_ranges.current.ipv6_cidrs)
-      )
+      for_each = toset(data.cloudflare_ip_ranges.current.ipv4_cidrs)
       content {
         name             = "cloudflare-${replace(replace(ip_security_restriction.value, "/", "-"), ":", "-")}"
         action           = "Allow"
