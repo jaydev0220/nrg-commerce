@@ -393,6 +393,10 @@ resource "azurerm_container_app_environment" "production" {
     name                  = "Consumption"
     workload_profile_type = "Consumption"
   }
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.certificate_reader.id]
+  }
   tags = local.tags
 }
 

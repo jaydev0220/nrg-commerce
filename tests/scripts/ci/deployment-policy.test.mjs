@@ -168,8 +168,12 @@ test('production Neon resources stay within Free plan limits and wait for the en
 	}
 });
 
-test('phase-two Azure resources include certificate location and IPv4 ingress ranges', async () => {
+test('phase-two Azure resources include the certificate identity, location, and IPv4 ingress ranges', async () => {
 	const main = await readFile(new URL('infra/production/main.tf', root), 'utf8');
+	assert.match(
+		main,
+		/resource "azurerm_container_app_environment" "production" \{[\s\S]*?identity \{\s+type\s+= "UserAssigned"\s+identity_ids\s+= \[azurerm_user_assigned_identity\.certificate_reader\.id\][\s\S]*?\}/u
+	);
 	assert.match(
 		main,
 		/resource "azapi_resource" "origin_certificate" \{[\s\S]*?location\s+= azurerm_container_app_environment\.production\.location[\s\S]*?body = \{/u
