@@ -188,10 +188,6 @@ test('phase-two Azure resources include the certificate identity, location, and 
 	const main = await readFile(new URL('infra/production/main.tf', root), 'utf8');
 	assert.match(
 		main,
-		/import \{\s+for_each = var\.bootstrap_phase == "phase-1-base" \? \{\} : \{ api = 0 \}\s+to\s+= azurerm_container_app\.api\[each\.value\][\s\S]*?id\s+= "\/subscriptions\/\$\{var\.azure_subscription_id\}[\s\S]*?\/containerApps\/ca-\$\{local\.resource_prefix\}-api"\s+\}/u
-	);
-	assert.match(
-		main,
 		/resource "azurerm_container_app_environment" "production" \{[\s\S]*?identity \{\s+type\s+= "UserAssigned"\s+identity_ids\s+= \[azurerm_user_assigned_identity\.certificate_reader\.id\][\s\S]*?\}/u
 	);
 	assert.match(

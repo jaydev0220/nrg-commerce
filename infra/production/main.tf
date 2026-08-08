@@ -417,13 +417,6 @@ resource "azapi_resource" "origin_certificate" {
   depends_on = [azurerm_role_assignment.certificate_reader]
 }
 
-# Temporary recovery import; remove after phase two succeeds.
-import {
-  for_each = var.bootstrap_phase == "phase-1-base" ? {} : { api = 0 }
-  to       = azurerm_container_app.api[each.value]
-  id       = "/subscriptions/${var.azure_subscription_id}/resourceGroups/rg-${local.resource_prefix}/providers/Microsoft.App/containerApps/ca-${local.resource_prefix}-api"
-}
-
 resource "azurerm_container_app" "api" {
   count                        = var.bootstrap_phase == "phase-1-base" ? 0 : 1
   name                         = "ca-${local.resource_prefix}-api"
