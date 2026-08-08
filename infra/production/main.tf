@@ -692,18 +692,24 @@ resource "neon_role" "owner" {
   project_id = neon_project.production.id
   branch_id  = neon_branch.production.id
   name       = "nrg_commerce_owner"
+
+  depends_on = [neon_endpoint.production]
 }
 
 resource "neon_role" "app" {
   project_id = neon_project.production.id
   branch_id  = neon_branch.production.id
   name       = "nrg_commerce_app"
+
+  depends_on = [neon_endpoint.production]
 }
 
 resource "neon_role" "backup" {
   project_id = neon_project.production.id
   branch_id  = neon_branch.production.id
   name       = "nrg_commerce_backup"
+
+  depends_on = [neon_endpoint.production]
 }
 
 resource "postgresql_grant" "app_schema" {

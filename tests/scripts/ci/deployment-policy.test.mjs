@@ -138,10 +138,8 @@ test('production Terraform imports the existing redirect entry point with provid
 		/id = "zones\/\$\{var\.cloudflare_zone_id\}\/9400b85150d84175ab1b1b16e4544e3d"/u
 	);
 	assert.match(main, /ref\s+= "apex-to-www"/u);
-	assert.match(main, /history_retention_seconds\s+= 21600/u);
 	assert.match(main, /formatdate\("YYYY-MM-01'T'00:00:00Z", plantimestamp\(\)\)/u);
 	assert.match(main, /ignore_changes = \[time_period\[0\]\.start_date\]/u);
-	assert.doesNotMatch(main, /suspend_timeout_seconds/u);
 	assert.match(variables, /variable "cloudflare_zone_id"/u);
 	for (const workflow of workflows) {
 		assert.match(workflow, /TF_VAR_cloudflare_zone_id/u);
@@ -149,6 +147,25 @@ test('production Terraform imports the existing redirect entry point with provid
 	const [bootstrap] = workflows;
 	assert.match(bootstrap, /- name: Initialize Terraform for apply/u);
 	assert.match(bootstrap, /- name: Apply bootstrap plan and mark phase/u);
+});
+
+test('production Neon resources stay within Free plan limits and wait for the endpoint', async () => {
+	const main = await readFile(new URL('infra/production/main.tf', root), 'utf8');
+	assert.match(main, /pg_version\s+= 18/u);
+	assert.match(main, /history_retention_seconds\s+= 21600/u);
+	assert.doesNotMatch(main, /default_branch_protected/u);
+	assert.match(main, /resource "neon_branch" "production" \{[\s\S]*?protected\s+= "no"[\s\S]*?\}/u);
+	assert.equal((main.match(/autoscaling_limit_max_cu\s+= 1/gu) ?? []).length, 2);
+	assert.doesNotMatch(main, /suspend_timeout_seconds/u);
+	for (const role of ['owner', 'app', 'backup']) {
+		assert.match(
+			main,
+			new RegExp(
+				`resource "neon_role" "${role}" \\{[\\s\\S]*?depends_on = \\[neon_endpoint\\.production\\][\\s\\S]*?\\}`,
+				'u'
+			)
+		);
+	}
 });
 
 test('release manifest captures provider control-plane version identifiers', async () => {
