@@ -104,7 +104,7 @@ function readCommandInput(): BootstrapAdminInput {
 
 	if (!values.email) {
 		throw new Error(
-			'Usage: pnpm --filter @apps/api bootstrap:admin -- --email <email> [--name <name>]'
+			'Usage: pnpm --filter @apps/api bootstrap:admin --email <email> [--name <name>]'
 		);
 	}
 

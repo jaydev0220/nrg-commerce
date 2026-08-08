@@ -139,6 +139,16 @@ test('bootstrap decrypts the saved plan with its step-scoped age identity', asyn
 	);
 });
 
+test('bootstrap-admin passes named arguments directly to the API CLI', async () => {
+	const workflow = await readFile(new URL('.github/workflows/bootstrap-admin.yml', root), 'utf8');
+	const bootstrap = jobBlock(workflow, 'bootstrap');
+	assert.match(
+		bootstrap,
+		/pnpm --filter @apps\/api bootstrap:admin --email "\$ADMIN_EMAIL" --name "\$ADMIN_NAME"/u
+	);
+	assert.doesNotMatch(bootstrap, /bootstrap:admin -- --email/u);
+});
+
 test('production Terraform imports the existing redirect entry point with provider-compatible values', async () => {
 	const [main, variables, ...workflows] = await Promise.all([
 		readFile(new URL('infra/production/main.tf', root), 'utf8'),

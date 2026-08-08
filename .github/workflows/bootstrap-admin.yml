@@ -46,7 +46,7 @@ jobs:
           trap 'rm -rf "$tmp"' EXIT
           export DATABASE_URL="$(terraform -chdir=infra/production output -raw neon_owner_database_url)"
           pnpm --filter @packages/database db:seed
-          pnpm --filter @apps/api bootstrap:admin -- --email "$ADMIN_EMAIL" --name "$ADMIN_NAME" > "$tmp/admin.txt"
+          pnpm --filter @apps/api bootstrap:admin --email "$ADMIN_EMAIL" --name "$ADMIN_NAME" > "$tmp/admin.txt"
           age --encrypt --recipient "$ADMIN_AGE_RECIPIENT" --output "$RUNNER_TEMP/first-admin.txt.age" "$tmp/admin.txt"
           rm -f "$tmp/admin.txt"
         env:
