@@ -506,7 +506,7 @@ jobs:
             revision_status="$(az containerapp revision show --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$revision_name" --query '{running:properties.runningState,health:properties.healthState}' -o json 2>/dev/null || printf '{}')"
             revision_state="$(jq -r '.running // empty' <<<"$revision_status")"
             revision_health="$(jq -r '.health // empty' <<<"$revision_status")"
-            if [[ "$revision_state" == Running && "$revision_health" == Healthy ]]; then
+            if [[ "$revision_health" == Healthy && ( "$revision_state" == Running || "$revision_state" == ScaledToZero ) ]]; then
               break
             fi
             if [[ "$attempt" -eq 30 ]]; then
@@ -515,8 +515,7 @@ jobs:
             fi
             sleep 10
           done
-          az containerapp ingress traffic set --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$revision_name" --weight 0 --output none
-          az containerapp ingress traffic set --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$revision_name" --weight 100 --output none
+          az containerapp ingress traffic set --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision-weight "${revision_name}=100" --output none
           az containerapp revision list --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --query "[?properties.trafficWeight==\`100\`].name" -o tsv
         env:
           AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}

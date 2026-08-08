@@ -102,8 +102,7 @@ test('release ordering migrates before API, contact, and frontend deployments', 
 	);
 	assert.match(workflow, /strategy:[\s\S]*?matrix:/u);
 	assert.match(workflow, /revision show[\s\S]*?properties\.healthState/u);
-	assert.match(workflow, /--revision "\$revision_name" --weight 0/u);
-	assert.match(workflow, /--revision "\$revision_name" --weight 100/u);
+	assert.match(workflow, /--revision-weight "\$\{revision_name\}=100"/u);
 });
 
 test('release jobs have bounded timeouts and Terraform setup where required', async () => {

@@ -13,10 +13,11 @@ test('API release uses immutable images and control-plane-only revision promotio
 	);
 	assert.match(workflow, /revision_suffix="api-\$\{GITHUB_SHA::12\}"/u);
 	assert.match(workflow, /revision_name="\$\{AZURE_CONTAINER_APP_NAME\}--\$\{revision_suffix\}"/u);
-	assert.match(workflow, /--revision "\$revision_name" --weight 0/u);
 	assert.match(workflow, /properties\.runningState/u);
 	assert.match(workflow, /properties\.healthState/u);
-	assert.match(workflow, /--revision "\$revision_name" --weight 100/u);
+	assert.match(workflow, /"\$revision_state" == Running \|\| "\$revision_state" == ScaledToZero/u);
+	assert.match(workflow, /--revision-weight "\$\{revision_name\}=100"/u);
+	assert.doesNotMatch(workflow, /--revision "\$revision_name" --weight/u);
 	assert.doesNotMatch(workflow, /api\.nrglabware\.com[^\n]*(curl|wget|fetch)/iu);
 });
 
