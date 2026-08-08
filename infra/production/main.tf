@@ -173,7 +173,7 @@ resource "cloudflare_r2_bucket" "database_backups" {
   account_id    = var.cloudflare_account_id
   name          = "${local.resource_prefix}-database-backups"
   location      = "apac"
-  storage_class = "InfrequentAccess"
+  storage_class = "Standard"
 
   lifecycle {
     prevent_destroy = true
