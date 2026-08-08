@@ -10,7 +10,7 @@ test('landing build is included in the production frontend matrix', async () => 
 	assert.match(workflow, /app: landing[\s\S]*?domain: www\.nrglabware\.com/u);
 	assert.match(
 		workflow,
-		/test -f "apps\/\$\{\{ matrix\.app \}\}\/\.svelte-kit\/cloudflare\/_headers"/u
+		/node scripts\/ci\/verify-frontend-artifact\.mjs "\$\{\{ matrix\.app \}\}"/u
 	);
 	assert.match(workflow, /PUBLIC_SITE_URL: https:\/\/www\.nrglabware\.com/u);
 });

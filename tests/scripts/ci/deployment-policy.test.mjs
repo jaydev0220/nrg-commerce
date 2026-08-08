@@ -101,6 +101,7 @@ test('release ordering migrates before API, contact, and frontend deployments', 
 		/deploy-frontends:[\s\S]*?needs: \[apply-infrastructure, deploy-api, deploy-contact\]/u
 	);
 	assert.match(workflow, /strategy:[\s\S]*?matrix:/u);
+	assert.match(workflow, /ADMIN_DOMAIN: admin\.nrglabware\.com/u);
 	assert.match(workflow, /revision show[\s\S]*?properties\.healthState/u);
 	assert.match(workflow, /--revision-weight "\$\{revision_name\}=100"/u);
 });

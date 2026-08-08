@@ -600,6 +600,7 @@ jobs:
           DEPLOYMENT_ENVIRONMENT: production
           LANDING_SITE_URL: https://www.nrglabware.com
           LANDING_DOMAIN: www.nrglabware.com
+          ADMIN_DOMAIN: admin.nrglabware.com
           CATALOG_DOMAIN: catalog.nrglabware.com
           CONTACT_DOMAIN: contact.nrglabware.com
           CATALOG_API_BASE_URL: https://api.nrglabware.com
@@ -630,11 +631,7 @@ jobs:
           PUBLIC_LINE_URL: https://line.me/ti/p/xYZS-jqz4e
           PUBLIC_SITE_URL: https://www.nrglabware.com
       - name: Verify artifact contents
-        run: |
-          test -f "apps/${{ matrix.app }}/.svelte-kit/cloudflare/_worker.js"
-          test -f "apps/${{ matrix.app }}/.svelte-kit/cloudflare/_headers"
-          test -f "apps/${{ matrix.app }}/.svelte-kit/cloudflare/index.html" || test "${{ matrix.app }}" = landing
-          ! rg -n "(ACCESS_TOKEN_SECRET|REFRESH_TOKEN_SECRET|TURNSTILE_SECRET_KEY|DATABASE_URL)" "apps/${{ matrix.app }}/.svelte-kit/cloudflare" --glob '*.js' --glob '*.html'
+        run: node scripts/ci/verify-frontend-artifact.mjs "${{ matrix.app }}"
       - working-directory: apps/${{ matrix.app }}
         run: pnpm exec wrangler deploy --env production --domain "${{ matrix.domain }}"
         env:
