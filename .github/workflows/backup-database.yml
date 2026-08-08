@@ -28,7 +28,9 @@ jobs:
         run: |
           terraform -chdir=infra/production init -input=false -lockfile=readonly
           echo "DATABASE_URL=$(terraform -chdir=infra/production output -raw neon_backup_database_url)" >> "$GITHUB_ENV"
-      - run: sudo apt-get update && sudo apt-get install --yes age awscli
+      - run: sudo apt-get update && sudo apt-get install --yes age
+      - name: Verify AWS CLI
+        run: aws --version
       - name: Dump, encrypt and upload
         run: |
           set -euo pipefail

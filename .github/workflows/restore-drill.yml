@@ -37,7 +37,9 @@ jobs:
         with: { version: 11.15.1, run_install: false }
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
         with: { node-version: 24.19.0, cache: pnpm }
-      - run: sudo apt-get update && sudo apt-get install --yes age awscli
+      - run: sudo apt-get update && sudo apt-get install --yes age
+      - name: Verify AWS CLI
+        run: aws --version
       - name: Restore into a disposable Neon branch and verify
         run: |
           set -Eeuo pipefail
