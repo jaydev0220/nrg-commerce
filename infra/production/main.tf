@@ -658,7 +658,6 @@ resource "neon_project" "production" {
   pg_version                = 18
   history_retention_seconds = 21600
   store_password            = "yes"
-  default_branch_protected  = false
   default_endpoint_settings {
     autoscaling_limit_min_cu = 0.25
     autoscaling_limit_max_cu = 1
@@ -668,7 +667,7 @@ resource "neon_project" "production" {
 resource "neon_branch" "production" {
   project_id = neon_project.production.id
   name       = "production"
-  protected  = "yes"
+  protected  = "no"
 }
 
 resource "neon_endpoint" "production" {
