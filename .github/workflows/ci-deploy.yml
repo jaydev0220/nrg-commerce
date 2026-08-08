@@ -216,10 +216,51 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_SHA" = "$(git rev-parse origin/main)"
 
-  publish-api-image:
-    name: Publish immutable API image
+  bootstrap-status:
+    name: Check production bootstrap completion
     if: github.event_name != 'pull_request'
     needs: [gate, fresh-main]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production-plan
+    outputs:
+      complete: ${{ steps.check.outputs.complete }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
+        with: { persist-credentials: false }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
+        with: { terraform_version: 1.15.5, terraform_wrapper: false }
+      - uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # azure/login v3
+        with:
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+      - run: terraform -chdir=infra/production init -input=false -lockfile=readonly
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+      - id: check
+        name: Check bootstrap-complete marker
+        run: |
+          complete=false
+          if key_vault_name="$(terraform -chdir=infra/production output -raw key_vault_name 2>/dev/null)" &&
+            az keyvault secret show --vault-name "$key_vault_name" --name bootstrap-complete --query id --output tsv --only-show-errors >/dev/null 2>&1; then
+            complete=true
+          else
+            echo '::notice::Production bootstrap is incomplete; release jobs will be skipped.'
+          fi
+          echo "complete=$complete" >> "$GITHUB_OUTPUT"
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+
+  publish-api-image:
+    name: Publish immutable API image
+    if: github.event_name != 'pull_request' && needs.bootstrap-status.outputs.complete == 'true'
+    needs: [gate, fresh-main, bootstrap-status]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -255,8 +296,8 @@ jobs:
 
   plan:
     name: Plan production infrastructure
-    if: github.event_name != 'pull_request'
-    needs: [gate, publish-api-image]
+    if: github.event_name != 'pull_request' && needs.bootstrap-status.outputs.complete == 'true'
+    needs: [gate, publish-api-image, bootstrap-status]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: production-plan

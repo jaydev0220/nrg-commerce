@@ -30,6 +30,21 @@ test('all production mutations are behind the aggregate validation gate', async 
 	}
 });
 
+test('production releases wait for the bootstrap completion marker', async () => {
+	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
+	const status = jobBlock(workflow, 'bootstrap-status');
+	assert.match(status, /needs: \[gate, fresh-main\]/u);
+	assert.match(status, /environment: production-plan/u);
+	assert.match(status, /az keyvault secret show[\s\S]*?--name bootstrap-complete/u);
+	assert.match(status, /complete: \$\{\{ steps\.check\.outputs\.complete \}\}/u);
+
+	for (const job of ['publish-api-image', 'plan']) {
+		const block = jobBlock(workflow, job);
+		assert.match(block, /needs\.bootstrap-status\.outputs\.complete == 'true'/u);
+		assert.match(block, /needs: \[[^\]]*bootstrap-status[^\]]*\]/u);
+	}
+});
+
 test('the release uses protected plan/apply environments and exact encrypted plan hashes', async () => {
 	const workflow = await readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8');
 	assert.match(workflow, /environment: production-plan/u);
@@ -96,6 +111,7 @@ test('release jobs have bounded timeouts and Terraform setup where required', as
 	for (const [job, timeout] of [
 		['gate', 5],
 		['fresh-main', 5],
+		['bootstrap-status', 10],
 		['publish-api-image', 30],
 		['terraform', 30],
 		['plan', 30],
@@ -170,6 +186,10 @@ test('production Neon resources stay within Free plan limits and wait for the en
 
 test('phase-two Azure resources include the certificate identity, location, and IPv4 ingress ranges', async () => {
 	const main = await readFile(new URL('infra/production/main.tf', root), 'utf8');
+	assert.match(
+		main,
+		/import \{\s+for_each = var\.bootstrap_phase == "phase-1-base" \? \{\} : \{ api = 0 \}\s+to\s+= azurerm_container_app\.api\[each\.value\][\s\S]*?id\s+= "\/subscriptions\/\$\{var\.azure_subscription_id\}[\s\S]*?\/containerApps\/ca-\$\{local\.resource_prefix\}-api"\s+\}/u
+	);
 	assert.match(
 		main,
 		/resource "azurerm_container_app_environment" "production" \{[\s\S]*?identity \{\s+type\s+= "UserAssigned"\s+identity_ids\s+= \[azurerm_user_assigned_identity\.certificate_reader\.id\][\s\S]*?\}/u
