@@ -37,7 +37,7 @@ jobs:
         with: { version: 11.15.1, run_install: false }
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
         with: { node-version: 24.19.0, cache: pnpm }
-      - run: sudo apt-get update && sudo apt-get install --yes age
+      - run: sudo apt-get update && sudo apt-get install --yes age ca-certificates
       - name: Verify AWS CLI
         run: aws --version
       - name: Restore into a disposable Neon branch and verify
@@ -74,11 +74,11 @@ jobs:
           connection_uri=$(node -e 'const url = new URL(process.argv[1]); url.searchParams.set("sslmode", "verify-full"); process.stdout.write(url.toString())' "$connection_uri")
           aws s3 cp "s3://nrg-commerce-database-backups/$BACKUP_KEY" "$tmp/backup.age" --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
           age --decrypt --identity <(printf '%s' "$BACKUP_AGE_IDENTITY") --output "$tmp/database.dump" "$tmp/backup.age"
-          docker run --rm --network host --env PGSSLROOTCERT=system --volume "$tmp:/restore:ro" "$POSTGRES_IMAGE" \
+          docker run --rm --network host --env PGSSLROOTCERT=/etc/ssl/certs/ca-certificates.crt --volume /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro --volume "$tmp:/restore:ro" "$POSTGRES_IMAGE" \
             pg_restore --clean --if-exists --exit-on-error --single-transaction --no-owner --no-privileges --dbname "$connection_uri" /restore/database.dump
-          docker run --rm --network host --env PGSSLROOTCERT=system "$POSTGRES_IMAGE" psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "_prisma_migrations";'
-          docker run --rm --network host --env PGSSLROOTCERT=system "$POSTGRES_IMAGE" psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "Staff";'
-          docker run --rm --network host --env PGSSLROOTCERT=system "$POSTGRES_IMAGE" psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "Product";'
+          docker run --rm --network host --env PGSSLROOTCERT=/etc/ssl/certs/ca-certificates.crt --volume /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro "$POSTGRES_IMAGE" psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "_prisma_migrations";'
+          docker run --rm --network host --env PGSSLROOTCERT=/etc/ssl/certs/ca-certificates.crt --volume /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro "$POSTGRES_IMAGE" psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "Staff";'
+          docker run --rm --network host --env PGSSLROOTCERT=/etc/ssl/certs/ca-certificates.crt --volume /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro "$POSTGRES_IMAGE" psql "$connection_uri" --set=ON_ERROR_STOP=1 --command 'select count(*) from "Product";'
           pnpm install --frozen-lockfile
           DATABASE_URL="$connection_uri" DIRECT_URL="$connection_uri" pnpm --filter @packages/database exec prisma migrate status
         env:

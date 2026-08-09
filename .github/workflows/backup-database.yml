@@ -28,7 +28,7 @@ jobs:
         run: |
           terraform -chdir=infra/production init -input=false -lockfile=readonly
           echo "DATABASE_URL=$(terraform -chdir=infra/production output -raw neon_backup_database_url)" >> "$GITHUB_ENV"
-      - run: sudo apt-get update && sudo apt-get install --yes age
+      - run: sudo apt-get update && sudo apt-get install --yes age ca-certificates
       - name: Verify AWS CLI
         run: aws --version
       - name: Dump, encrypt and upload
@@ -36,7 +36,7 @@ jobs:
           set -euo pipefail
           tmp=$(mktemp -d)
           trap 'rm -rf "$tmp"' EXIT
-          docker run --rm --network host --env PGSSLROOTCERT=system "$POSTGRES_IMAGE" \
+          docker run --rm --network host --env PGSSLROOTCERT=/etc/ssl/certs/ca-certificates.crt --volume /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro "$POSTGRES_IMAGE" \
             pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" > "$tmp/database.dump"
           age --encrypt --recipient "$AGE_RECIPIENT" --output "$tmp/database.dump.age" "$tmp/database.dump"
           aws s3 cp "$tmp/database.dump.age" "s3://$BACKUP_BUCKET/database/$(date -u +%Y/%m/%d)/${GITHUB_RUN_ID}.dump.age" --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"

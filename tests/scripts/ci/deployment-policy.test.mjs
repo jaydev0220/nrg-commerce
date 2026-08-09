@@ -234,7 +234,12 @@ test('production operations pin PostgreSQL 18 client tooling and rollback health
 	for (const workflow of [backup, restore]) {
 		assert.match(workflow, /postgres:18@sha256:[0-9a-f]{64}/u);
 		assert.match(workflow, /docker run .*POSTGRES_IMAGE/u);
-		assert.match(workflow, /--env PGSSLROOTCERT=system/u);
+		assert.match(workflow, /apt-get install --yes age ca-certificates/u);
+		assert.match(workflow, /--env PGSSLROOTCERT=\/etc\/ssl\/certs\/ca-certificates\.crt/u);
+		assert.match(
+			workflow,
+			/--volume \/etc\/ssl\/certs\/ca-certificates\.crt:\/etc\/ssl\/certs\/ca-certificates\.crt:ro/u
+		);
 		assert.doesNotMatch(workflow, /apt-get install --yes age awscli/u);
 		assert.match(workflow, /name: Verify AWS CLI\s+run: aws --version/u);
 	}
