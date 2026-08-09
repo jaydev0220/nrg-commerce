@@ -21,35 +21,50 @@
 		consumer: '一般消費者'
 	};
 	const seriesOrder = ['total', 'business', 'consumer'] as const;
-	type ActiveBucket = { index: number; label: string; timestamp: number };
+	type SeriesKey = (typeof seriesOrder)[number];
 
-	let activeBucket = $state<ActiveBucket | null>(null);
+	let activeTimestamp = $state<number | null>(null);
 
-	const pointCount = $derived(trend.series[0]?.points.length ?? 0);
+	const totalPoints = $derived(trend.series.find((series) => series.key === 'total')?.points ?? []);
+	const pointCount = $derived(totalPoints.length);
 	const maxValue = $derived(
 		Math.max(1, ...trend.series.flatMap((series) => series.points.map((point) => point.value)))
 	);
 	const activeTrend = $derived.by(() => {
-		if (!activeBucket) return null;
+		if (totalPoints.length === 0) return null;
+
+		const selectedIndex =
+			activeTimestamp === null
+				? -1
+				: totalPoints.findIndex((point) => point.startAt.getTime() === activeTimestamp);
+		const index = selectedIndex >= 0 ? selectedIndex : totalPoints.length - 1;
+		const point = totalPoints[index];
+		if (!point) return null;
+
+		const timestamp = point.startAt.getTime();
+		const values = seriesOrder.map((key) => ({
+			key,
+			value: trend.series
+				.find((series) => series.key === key)
+				?.points.find((seriesPoint) => seriesPoint.startAt.getTime() === timestamp)?.value
+		}));
+		const coordinates: Array<{ value: number; keys: SeriesKey[] }> = [];
+		for (const item of values) {
+			if (item.value === undefined) continue;
+			const coordinate = coordinates.find((candidate) => candidate.value === item.value);
+			if (coordinate) coordinate.keys.push(item.key);
+			else coordinates.push({ value: item.value, keys: [item.key] });
+		}
 
 		return {
-			...activeBucket,
-			x: chartX(activeBucket.index),
-			values: seriesOrder.map((key) => ({
-				key,
-				value: trend.series
-					.find((series) => series.key === key)
-					?.points.find((point) => point.startAt.getTime() === activeBucket?.timestamp)?.value
-			}))
+			index,
+			label: point.label,
+			timestamp,
+			x: chartX(index),
+			values,
+			coordinates
 		};
 	});
-	const tooltipAlignment = $derived(
-		activeTrend?.index === 0
-			? 'translate-x-0'
-			: activeTrend?.index === pointCount - 1
-				? '-translate-x-full'
-				: '-translate-x-1/2'
-	);
 
 	function chartX(index: number): number {
 		return plotLeft + (index / Math.max(pointCount - 1, 1)) * (plotRight - plotLeft);
@@ -57,6 +72,16 @@
 
 	function chartY(value: number): number {
 		return plotBottom - (value / maxValue) * (plotBottom - plotTop);
+	}
+
+	function bucketRegion(index: number): { x: number; width: number } {
+		if (pointCount <= 1) return { x: plotLeft, width: plotRight - plotLeft };
+
+		const spacing = (plotRight - plotLeft) / (pointCount - 1);
+		const x = chartX(index);
+		const left = index === 0 ? plotLeft : x - spacing / 2;
+		const right = index === pointCount - 1 ? plotRight : x + spacing / 2;
+		return { x: left, width: right - left };
 	}
 
 	function linePoints(series: DashboardTrendSeries): string {
@@ -71,8 +96,9 @@
 		}).format(value);
 	}
 
-	function activateBucket(index: number, label: string, startAt: Date): void {
-		activeBucket = { index, label, timestamp: startAt.getTime() };
+	function activateBucket(index: number): void {
+		const point = totalPoints[index];
+		if (point) activeTimestamp = point.startAt.getTime();
 	}
 
 	function bucketAccessibleLabel(label: string, startAt: Date): string {
@@ -85,6 +111,35 @@
 		});
 
 		return `${label}，${values.join('，')}`;
+	}
+
+	function coordinateColor(keys: SeriesKey[]): string {
+		return keys.length === 1 && keys[0] ? seriesColors[keys[0]] : 'var(--color-text-heading)';
+	}
+
+	function focusBucket(element: SVGRectElement, index: number): void {
+		const target = element.ownerSVGElement?.querySelector<SVGRectElement>(
+			`[data-bucket-index="${index}"]`
+		);
+		target?.focus({ preventScroll: true });
+	}
+
+	function handleBucketKeydown(event: KeyboardEvent, index: number): void {
+		let nextIndex: number | null = null;
+		if (event.key === 'ArrowLeft') nextIndex = Math.max(0, index - 1);
+		if (event.key === 'ArrowRight') nextIndex = Math.min(pointCount - 1, index + 1);
+		if (event.key === 'Home') nextIndex = 0;
+		if (event.key === 'End') nextIndex = pointCount - 1;
+		if (nextIndex === null) return;
+
+		event.preventDefault();
+		activateBucket(nextIndex);
+		focusBucket(event.currentTarget as SVGRectElement, nextIndex);
+	}
+
+	function handleBucketPointer(event: PointerEvent, index: number): void {
+		activateBucket(index);
+		(event.currentTarget as SVGRectElement).focus({ preventScroll: true });
 	}
 </script>
 
@@ -100,41 +155,44 @@
 	{/each}
 </div>
 
+{#if activeTrend}
+	<section
+		id="sales-trend-details"
+		class="mb-3 rounded-md border border-border bg-bg-sunken px-3 py-2"
+		aria-label="所選銷售趨勢"
+		aria-live="polite"
+		aria-atomic="true"
+	>
+		<div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+			<p class="text-sm font-semibold text-text-heading">{activeTrend.label}</p>
+			<p class="text-xs text-text-muted">{formatDateTime(new Date(activeTrend.timestamp))}</p>
+		</div>
+		<dl class="mt-2 grid gap-2 sm:grid-cols-3">
+			{#each activeTrend.values as item (item.key)}
+				<div class="flex items-center justify-between gap-3 text-sm sm:block">
+					<dt class="inline-flex items-center gap-2 text-text-muted">
+						<span
+							class="size-2.5 shrink-0 rounded-full"
+							style={`background: ${seriesColors[item.key]}`}
+						></span>
+						{seriesLabels[item.key]}
+					</dt>
+					<dd class="font-semibold text-text-heading sm:mt-1">
+						{item.value === undefined ? '—' : formatMoney(item.value)}
+					</dd>
+				</div>
+			{/each}
+		</dl>
+	</section>
+{/if}
+
 <div class="overflow-x-auto">
-	<div class="relative min-w-240">
-		{#if activeTrend}
-			<div
-				id="sales-trend-tooltip"
-				class={`pointer-events-none absolute top-2 z-10 w-52 rounded-md border border-border bg-bg-surface px-3 py-2 shadow-sm ${tooltipAlignment}`}
-				style={`left: ${(activeTrend.x / chartWidth) * 100}%;`}
-				role="tooltip"
-			>
-				<p class="text-xs font-semibold text-text-muted">{activeTrend.label}</p>
-				<dl class="mt-2 space-y-1.5">
-					{#each activeTrend.values as item (item.key)}
-						<div class="flex items-center justify-between gap-4 text-sm">
-							<dt class="inline-flex items-center gap-2 text-text-muted">
-								<span
-									class="size-2.5 shrink-0 rounded-full"
-									style={`background: ${seriesColors[item.key]}`}
-								></span>
-								{seriesLabels[item.key]}
-							</dt>
-							<dd class="font-medium text-text-heading">
-								{item.value === undefined ? '—' : formatMoney(item.value)}
-							</dd>
-						</div>
-					{/each}
-				</dl>
-				<p class="mt-2 text-xs text-text-muted">
-					{formatDateTime(new Date(activeTrend.timestamp))}
-				</p>
-			</div>
-		{/if}
+	<div class="min-w-240">
 		<svg
 			viewBox={`0 0 ${chartWidth} ${chartHeight}`}
 			class="block h-80 w-full"
-			role="img"
+			role="group"
+			aria-label="銷售趨勢折線圖。使用方向鍵切換日期。"
 		>
 			{#each [0, 0.25, 0.5, 0.75, 1] as ratio (ratio)}
 				<line
@@ -156,6 +214,7 @@
 				/>
 				{#each series.points as point, index (`${series.key}-${point.startAt.toISOString()}`)}
 					<circle
+						data-point-key={`${series.key}-${index}`}
 						cx={chartX(index)}
 						cy={chartY(point.value)}
 						r="4"
@@ -163,35 +222,60 @@
 					/>
 				{/each}
 			{/each}
-			{#if trend.series[0]}
-				{#each trend.series[0].points as point, index (`label-${point.startAt.toISOString()}`)}
-					<text
-						x={chartX(index)}
-						y="296"
-						text-anchor="middle"
-						class="fill-text-muted text-[11px]"
-					>
-						{point.label}
-					</text>
+			{#if activeTrend}
+				<line
+					x1={activeTrend.x}
+					x2={activeTrend.x}
+					y1={plotTop}
+					y2={plotBottom}
+					class="pointer-events-none stroke-text-muted/50"
+					stroke-width="1"
+					stroke-dasharray="4 4"
+				/>
+				{#each activeTrend.coordinates as coordinate (coordinate.value)}
+					<circle
+						data-active-coordinate
+						data-series-count={coordinate.keys.length}
+						cx={activeTrend.x}
+						cy={chartY(coordinate.value)}
+						r="7"
+						fill="var(--color-bg-surface)"
+						stroke={coordinateColor(coordinate.keys)}
+						stroke-width="3"
+						class="pointer-events-none"
+					/>
 				{/each}
 			{/if}
-		</svg>
-		{#each trend.series as series (series.key)}
-			{#each series.points as point, index (`hit-${series.key}-${point.startAt.toISOString()}`)}
-				<button
-					type="button"
-					class="absolute size-8 -translate-x-1/2 -translate-y-1/2 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-					style={`left: ${(chartX(index) / chartWidth) * 100}%; top: ${chartY(point.value)}px;`}
-					onmouseenter={() => activateBucket(index, point.label, point.startAt)}
-					onmouseleave={() => (activeBucket = null)}
-					onfocus={() => activateBucket(index, point.label, point.startAt)}
-					onblur={() => (activeBucket = null)}
-					aria-label={bucketAccessibleLabel(point.label, point.startAt)}
-					aria-describedby={activeTrend?.timestamp === point.startAt.getTime()
-						? 'sales-trend-tooltip'
-						: undefined}
-				></button>
+			{#each totalPoints as point, index (`label-${point.startAt.toISOString()}`)}
+				<text
+					x={chartX(index)}
+					y="296"
+					text-anchor="middle"
+					class="pointer-events-none fill-text-muted text-[11px]"
+				>
+					{point.label}
+				</text>
 			{/each}
-		{/each}
+			{#each totalPoints as point, index (`hit-${point.startAt.toISOString()}`)}
+				{@const region = bucketRegion(index)}
+				<rect
+					data-bucket-index={index}
+					x={region.x}
+					y={plotTop}
+					width={region.width}
+					height={plotBottom - plotTop}
+					tabindex={activeTrend?.index === index ? 0 : -1}
+					role="button"
+					aria-pressed={activeTrend?.index === index}
+					aria-label={bucketAccessibleLabel(point.label, point.startAt)}
+					aria-describedby="sales-trend-details"
+					class="cursor-pointer fill-transparent focus-visible:fill-brand/5 focus-visible:stroke-brand focus-visible:stroke-2 focus-visible:outline-none"
+					onpointerenter={() => activateBucket(index)}
+					onpointerdown={(event) => handleBucketPointer(event, index)}
+					onfocus={() => activateBucket(index)}
+					onkeydown={(event) => handleBucketKeydown(event, index)}
+				></rect>
+			{/each}
+		</svg>
 	</div>
 </div>
