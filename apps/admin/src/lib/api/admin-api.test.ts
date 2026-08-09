@@ -38,6 +38,7 @@ import {
 	createStaff,
 	deleteProductImage,
 	deleteProductSku,
+	forceDeleteProductSku,
 	deleteStaff,
 	formatDate,
 	getOptionalCurrentStaff,
@@ -49,6 +50,7 @@ import {
 	loadLogDetail,
 	loadLogsPageData,
 	loadProductEditorData,
+	loadArchivedSkuPageData,
 	loadSecuritySettingsData,
 	loadStaffPageData,
 	registerProductImage,
@@ -59,6 +61,7 @@ import {
 	resetStaffMfa,
 	resetStaffPassword,
 	restoreProductImage,
+	restoreProductSku,
 	restoreStaff,
 	revokeAuthSession,
 	revokeOtherAuthSessions,
@@ -321,6 +324,10 @@ const defaultApiResponses: ApiResponseHandler[] = [
 			path.endsWith('/registration/verify') || path.includes('/api/auth/passkeys/'),
 		response: passkeyRecord
 	},
+	{
+		matches: (path, init) => path.includes('/products/skus/') && init.method === 'DELETE',
+		response: { deleted: true, mode: 'force' }
+	},
 	{ matches: (path) => path.includes('/products/skus'), response: skuRecord },
 	{
 		matches: (path) => path.endsWith('/images/upload-url'),
@@ -507,6 +514,14 @@ describe('admin API product contracts', () => {
 		});
 		await updateProductSku('sku-1', { price: 120 });
 		await deleteProductSku('sku-1');
+		await forceDeleteProductSku('sku-1');
+		await restoreProductSku('sku-1', {
+			productId: 'product-1',
+			skuCode: 'SKU-1',
+			price: 100,
+			stockQuantity: 8,
+			attributes: {}
+		});
 		await createImageUploadTarget('product-1', {
 			fileName: 'image.webp',
 			contentType: 'image/webp',
@@ -531,9 +546,36 @@ describe('admin API product contracts', () => {
 			{ method: 'DELETE' },
 			{}
 		);
-		expect(client.requestNoContent).toHaveBeenCalledWith('/api/management/products/skus/sku-1', {
-			method: 'DELETE'
+		expect(client.requestJson).toHaveBeenCalledWith(
+			'/api/management/products/skus/sku-1?force=true',
+			{ method: 'DELETE' },
+			{}
+		);
+		expect(client.requestJson).toHaveBeenCalledWith(
+			'/api/management/products/skus/sku-1/restore',
+			expect.objectContaining({ method: 'POST' }),
+			{}
+		);
+	});
+
+	it('loads archived SKUs with active destination products', async () => {
+		client.requestJson.mockImplementation(async (path: string) => {
+			if (path.startsWith('/api/management/products/skus?')) {
+				return paginated([{ ...skuRecord, deletedAt: timestamp }]);
+			}
+			if (path.startsWith('/api/management/products?')) return paginated([productRecord]);
+			throw new Error(`Unexpected request: ${path}`);
 		});
+
+		const result = await loadArchivedSkuPageData(new URLSearchParams({ search: 'SKU-1' }));
+
+		expect(result.skus[0]?.deletedAt).toBeInstanceOf(Date);
+		expect(result.products[0]?.id).toBe(productRecord.id);
+		expect(client.requestJson).toHaveBeenCalledWith(
+			'/api/management/products/skus?search=SKU-1&archived=true&page=1&limit=20',
+			{},
+			{}
+		);
 	});
 });
 

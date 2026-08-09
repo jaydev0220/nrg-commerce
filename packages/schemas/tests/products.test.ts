@@ -63,6 +63,12 @@ test('productSkuUpdateSchema accepts a bounded attribute update', () => {
 	assert.throws(() => productSkuUpdateSchema.parse({}));
 });
 
+test('productSkuUpdateSchema reserves product reassignment for archived SKU restore', () => {
+	assert.throws(() =>
+		productSkuUpdateSchema.parse({ productId: '00000000-0000-4000-8000-000000000001' })
+	);
+});
+
 test('productCreateSchema accepts optional English catalog content fields', () => {
 	const parsedProduct = productCreateSchema.parse({
 		name: '桌上型數位萬用電表 700 系列',

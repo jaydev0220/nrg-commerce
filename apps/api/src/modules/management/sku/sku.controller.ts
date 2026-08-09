@@ -24,6 +24,7 @@ type SkuManagementController = {
 	createSku: RequestHandler;
 	getSku: RequestHandler;
 	updateSku: RequestHandler;
+	restoreSku: RequestHandler;
 	deleteSku: RequestHandler;
 };
 
@@ -83,6 +84,26 @@ export function createSkuManagementController(dependencies: SkuManagementControl
 				entityType: 'product_sku',
 				entityId: sku.id,
 				metadata: { productId: sku.productId }
+			});
+			response.status(200).json(sku);
+		},
+
+		restoreSku: async (request, response) => {
+			const authContext = requireAuthContext(response);
+			const params = getValidatedParams<SkuParams>(request);
+			const body = getValidatedBody<Parameters<SkuService['restoreSku']>[1]>(request);
+			const { sku, sourceProductId } = await dependencies.skuService.restoreSku(params.skuId, body);
+			const requestContext = getRequestContext(request, response);
+			await dependencies.logService.recordAuditLog({
+				message: 'Staff restored a product SKU.',
+				actorStaffId: authContext.staffId,
+				requestId: requestContext.requestId,
+				method: request.method,
+				path: getRequestPath(request),
+				statusCode: 200,
+				entityType: 'product_sku',
+				entityId: sku.id,
+				metadata: { sourceProductId, productId: sku.productId }
 			});
 			response.status(200).json(sku);
 		},

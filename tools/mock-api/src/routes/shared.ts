@@ -38,7 +38,8 @@ export function projectManagedSku(
 	state: MockState,
 	sku: MockSku,
 	publicOrigin: string,
-	includeImages = true
+	includeImages = true,
+	includeDeletedImages = false
 ) {
 	const product = state.products.find((entry) => entry.id === sku.productId);
 	if (!product) {
@@ -47,7 +48,9 @@ export function projectManagedSku(
 	const category = categoryFor(state, product.categoryId);
 	const images = includeImages
 		? state.images
-				.filter((image) => image.skuId === sku.id && image.deletedAt === null)
+				.filter(
+					(image) => image.skuId === sku.id && (includeDeletedImages || image.deletedAt === null)
+				)
 				.sort((left, right) => left.position - right.position)
 				.map((image) => projectImage(image, publicOrigin))
 		: [];

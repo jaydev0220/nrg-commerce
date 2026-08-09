@@ -46,6 +46,8 @@ export type ProductSkuInput = {
 	notes: string | null;
 };
 
+export type ArchivedSkuRestoreInput = ProductSkuInput & { productId: string };
+
 export type ProductImageUploadInput = {
 	skuId: string | null;
 	file: File;

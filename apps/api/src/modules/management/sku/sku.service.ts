@@ -11,6 +11,7 @@ type SkuServiceDependencies = {
 		| 'findProductById'
 		| 'createSku'
 		| 'updateSku'
+		| 'restoreSku'
 		| 'softDeleteSku'
 		| 'forceDeleteSku'
 		| 'skuCodeExists'
@@ -33,11 +34,12 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 			search?: string;
 			published?: boolean;
 			categoryId?: string;
+			archived?: boolean;
 			sort: 'createdAt' | 'updatedAt' | 'skuCode' | 'price';
 			order: 'asc' | 'desc';
 		}) {
 			return dependencies.repository.listSkus(query, {
-				includeImages: false
+				includeImages: query.archived === true
 			});
 		},
 
@@ -76,7 +78,6 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 		async updateSku(
 			skuId: string,
 			input: {
-				productId?: string;
 				skuCode?: string;
 				price?: number;
 				stockQuantity?: number;
@@ -96,11 +97,40 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 				}
 			}
 
-			if (input.productId && !(await dependencies.repository.findProductById(input.productId))) {
-				throw new AppError(404, 'PRODUCT_NOT_FOUND', 'The referenced product could not be found.');
+			return dependencies.repository.updateSku(skuId, input);
+		},
+
+		async restoreSku(
+			skuId: string,
+			input: {
+				productId: string;
+				skuCode: string;
+				price: number;
+				stockQuantity: number;
+				attributes: Record<string, CatalogJsonValue>;
+				notes?: string | null;
+			}
+		): Promise<{ sku: CatalogSkuRecord; sourceProductId: string }> {
+			const existingSku = ensureSku(
+				await dependencies.repository.findSkuById(skuId, {
+					includeImages: true,
+					includeDeleted: true
+				})
+			);
+			if (!existingSku.deletedAt) {
+				throw new AppError(409, 'SKU_NOT_DELETED', 'The product SKU is not archived.');
+			}
+			if (!(await dependencies.repository.findProductById(input.productId))) {
+				throw new AppError(404, 'PRODUCT_NOT_FOUND', 'The destination product could not be found.');
+			}
+			if (await dependencies.repository.skuCodeExists(input.skuCode, skuId)) {
+				throw new AppError(409, 'SKU_CODE_CONFLICT', 'The provided SKU code is already in use.');
 			}
 
-			return dependencies.repository.updateSku(skuId, input);
+			return {
+				sku: await dependencies.repository.restoreSku(skuId, input),
+				sourceProductId: existingSku.productId
+			};
 		},
 
 		async deleteSku(
@@ -111,7 +141,8 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 		): Promise<'soft' | 'force'> {
 			const existingSku = ensureSku(
 				await dependencies.repository.findSkuById(skuId, {
-					includeImages: true
+					includeImages: true,
+					includeDeleted: input.force
 				})
 			);
 

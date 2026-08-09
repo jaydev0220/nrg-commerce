@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { afterNavigate, invalidateAll } from '$app/navigation';
-	import { PackagePlus } from '@lucide/svelte';
+	import { Archive, PackagePlus } from '@lucide/svelte';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 
 	import {
@@ -36,6 +37,7 @@
 	const canCreate = $derived(permissions.has('product.create'));
 	const canUpdate = $derived(permissions.has('product.update'));
 	const canDelete = $derived(permissions.has('product.delete'));
+	const canReadSkus = $derived(permissions.has('product.sku.read'));
 	const selectableProducts = $derived(
 		data.products.filter((product) => (product.isDeleted ? canUpdate : canUpdate || canDelete))
 	);
@@ -109,15 +111,23 @@
 	<ProductSectionTabs active="products" />
 	<header class="flex flex-wrap items-center justify-between gap-3">
 		<h1 class="text-xl font-semibold text-text-heading">商品管理</h1>
-		{#if canCreate}
-			<button
-				type="button"
-				class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md bg-brand px-4 text-sm font-semibold text-text-on-accent hover:bg-brand-hover"
-				onclick={() => (createOpen = true)}
-			>
-				<PackagePlus class="size-4" />新增商品
-			</button>
-		{/if}
+		<div class="flex flex-wrap gap-2">
+			{#if canReadSkus}<a
+					href={resolve('/products/skus/archived')}
+					class="inline-flex h-10 items-center gap-2 rounded-md border border-border px-4 text-sm font-semibold"
+				>
+					<Archive class="size-4" />已封存 SKU
+				</a>{/if}
+			{#if canCreate}
+				<button
+					type="button"
+					class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md bg-brand px-4 text-sm font-semibold text-text-on-accent hover:bg-brand-hover"
+					onclick={() => (createOpen = true)}
+				>
+					<PackagePlus class="size-4" />新增商品
+				</button>
+			{/if}
+		</div>
 	</header>
 
 	{#if formError}

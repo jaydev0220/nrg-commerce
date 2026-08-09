@@ -29,6 +29,7 @@ type ListSkusInput = {
 	published?: boolean;
 	categoryId?: string;
 	categorySlug?: string;
+	archived?: boolean;
 	minPrice?: number;
 	maxPrice?: number;
 	sort: SkuSortField | StorefrontSkuSortField;
@@ -60,6 +61,7 @@ type FindProductOptions = {
 type FindSkuOptions = {
 	includeImages: boolean;
 	publishedOnly?: boolean;
+	includeDeleted?: boolean;
 };
 
 type ListImagesInput = {
@@ -1077,7 +1079,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			options: ListSkusOptions
 		): Promise<PaginatedResult<CatalogSkuRecord>> {
 			const productWhere = {
-				deletedAt: null,
+				...(input.archived ? {} : { deletedAt: null }),
 				...(options.publishedOnly ? { published: true } : {}),
 				...(input.published !== undefined ? { published: input.published } : {}),
 				...(input.categoryId ? { categoryId: input.categoryId } : {}),
@@ -1093,7 +1095,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					: {})
 			};
 			const where = {
-				deletedAt: null,
+				deletedAt: input.archived ? { not: null } : null,
 				product: {
 					is: productWhere
 				},
@@ -1153,9 +1155,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					...(options.includeImages
 						? {
 								images: {
-									where: {
-										deletedAt: null
-									},
+									...(input.archived ? {} : { where: { deletedAt: null } }),
 									orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
 								}
 							}
@@ -1180,10 +1180,10 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			const sku = await database.productSku.findFirst({
 				where: {
 					id: skuId,
-					deletedAt: null,
+					...(options.includeDeleted ? {} : { deletedAt: null }),
 					product: {
 						is: {
-							deletedAt: null,
+							...(options.includeDeleted ? {} : { deletedAt: null }),
 							...(options.publishedOnly ? { published: true } : {})
 						}
 					}
@@ -1208,9 +1208,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					...(options.includeImages
 						? {
 								images: {
-									where: {
-										deletedAt: null
-									},
+									...(options.includeDeleted ? {} : { where: { deletedAt: null } }),
 									orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
 								}
 							}
@@ -1312,7 +1310,6 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 		async updateSku(
 			skuId: string,
 			input: {
-				productId?: string;
 				skuCode?: string;
 				price?: number;
 				stockQuantity?: number;
@@ -1325,7 +1322,6 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					id: skuId
 				},
 				data: {
-					productId: input.productId,
 					skuCode: input.skuCode,
 					price: input.price,
 					stockQuantity: input.stockQuantity,
@@ -1353,6 +1349,68 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			});
 
 			return mapSkuRecord(sku);
+		},
+
+		async restoreSku(
+			skuId: string,
+			input: {
+				productId: string;
+				skuCode: string;
+				price: number;
+				stockQuantity: number;
+				attributes: Record<string, CatalogJsonValue>;
+				notes?: string | null;
+			}
+		): Promise<CatalogSkuRecord> {
+			return database.$transaction(async (transaction) => {
+				const images = await transaction.productImage.findMany({
+					where: { skuId },
+					select: { id: true }
+				});
+				const imageIds = images.map((image) => image.id);
+				if (imageIds.length > 0) {
+					await transaction.product.updateMany({
+						where: { thumbnailImageId: { in: imageIds } },
+						data: { thumbnailImageId: null }
+					});
+					await transaction.productImage.updateMany({
+						where: { skuId },
+						data: { productId: input.productId }
+					});
+				}
+
+				const sku = await transaction.productSku.update({
+					where: { id: skuId },
+					data: {
+						productId: input.productId,
+						skuCode: input.skuCode,
+						price: input.price,
+						stockQuantity: input.stockQuantity,
+						attributes: input.attributes,
+						notes: input.notes ?? null,
+						deletedAt: null
+					},
+					include: {
+						product: {
+							select: {
+								slug: true,
+								name: true,
+								nameEn: true,
+								description: true,
+								descriptionEn: true,
+								categoryId: true,
+								published: true,
+								category: { select: { slug: true } }
+							}
+						},
+						images: {
+							where: { deletedAt: null },
+							orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+						}
+					}
+				});
+				return mapSkuRecord(sku);
+			});
 		},
 
 		async softDeleteSku(skuId: string): Promise<void> {

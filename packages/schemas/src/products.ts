@@ -145,6 +145,7 @@ export const managementSkuListQuerySchema = paginationQuerySchema.extend({
 	search: searchQuerySchema.optional(),
 	published: booleanLikeSchema.optional(),
 	categoryId: uuidSchema.optional(),
+	archived: booleanLikeSchema.optional(),
 	sort: z.enum(['createdAt', 'updatedAt', 'skuCode', 'price']).default('createdAt'),
 	order: sortOrderSchema.default('desc')
 });
@@ -170,6 +171,8 @@ export const productSkuCreateSchema = z.object({
 	notes: notesSchema.nullable().optional()
 });
 
+export const productSkuRestoreSchema = productSkuCreateSchema;
+
 export const productCreateSchema = z.object({
 	slug: resourceSlugSchema,
 	name: productNameSchema,
@@ -184,7 +187,6 @@ export const productCreateSchema = z.object({
 
 export const productSkuUpdateSchema = nonEmptyUpdate(
 	z.object({
-		productId: uuidSchema.optional(),
 		skuCode: skuCodeSchema.optional(),
 		price: moneySchema.optional(),
 		stockQuantity: z.coerce.number().pipe(z.int().min(0).max(maximumDatabaseInteger)).optional(),

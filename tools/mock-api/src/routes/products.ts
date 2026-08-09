@@ -5,11 +5,15 @@ import {
 	managedProductResponseSchema,
 	managedProductSkuResponseSchema,
 	managementProductListQuerySchema,
+	managementSkuListQuerySchema,
 	paginatedResponseSchema,
 	productBulkUpdateSchema,
 	productCreateSchema,
 	productSkuCreateSchema,
+	productSkuDeleteQuerySchema,
+	productSkuRestoreSchema,
 	productSkuUpdateSchema,
+	skuDeleteResponseSchema,
 	productUpdateSchema
 } from '@packages/schemas';
 import { compareValues, paginate } from '../http/pagination.js';
@@ -126,6 +130,34 @@ export function createProductsRouter(state: MockState, publicOrigin: string): Ro
 		sendJson(response, countResponseSchema, { updatedCount });
 	});
 
+	router.get('/skus', (request, response) => {
+		assertDomainHealthy(state, 'products');
+		const query = parseQuery(request, managementSkuListQuerySchema);
+		const search = query.search?.toLocaleLowerCase();
+		let skus = state.skus.filter((sku) => {
+			const product = state.products.find((entry) => entry.id === sku.productId);
+			if (!product) return false;
+			if (query.archived === true ? !sku.deletedAt : sku.deletedAt) return false;
+			if (query.archived !== true && product.deletedAt) return false;
+			if (query.published !== undefined && product.published !== query.published) return false;
+			if (query.categoryId && product.categoryId !== query.categoryId) return false;
+			if (!search) return true;
+			return [sku.skuCode, product.name, product.nameEn]
+				.filter((value): value is string => Boolean(value))
+				.some((value) => value.toLocaleLowerCase().includes(search));
+		});
+		skus = [...skus].sort((left, right) =>
+			compareValues(left[query.sort], right[query.sort], query.order)
+		);
+		const page = paginate(skus, query);
+		sendJson(response, paginatedResponseSchema(managedProductSkuResponseSchema), {
+			...page,
+			data: page.data.map((sku) =>
+				projectManagedSku(state, sku, publicOrigin, true, query.archived === true)
+			)
+		});
+	});
+
 	router.post('/skus', (request, response) => {
 		assertDomainHealthy(state, 'products');
 		const input = parseBody(request, productSkuCreateSchema);
@@ -157,7 +189,6 @@ export function createProductsRouter(state: MockState, publicOrigin: string): Ro
 		assertDomainHealthy(state, 'products');
 		const input = parseBody(request, productSkuUpdateSchema);
 		const sku = state.skus.find((entry) => entry.id === request.params['skuId']) ?? notFound();
-		if (input.productId) findProduct(state, input.productId);
 		if (input.skuCode) ensureUniqueSkuCode(state, input.skuCode, sku.id);
 		Object.assign(sku, input, { updatedAt: new Date() });
 		sendJson(
@@ -167,12 +198,53 @@ export function createProductsRouter(state: MockState, publicOrigin: string): Ro
 		);
 	});
 
+	router.post('/skus/:skuId/restore', (request, response) => {
+		assertDomainHealthy(state, 'products');
+		const input = parseBody(request, productSkuRestoreSchema);
+		const sku = state.skus.find((entry) => entry.id === request.params['skuId']) ?? notFound();
+		if (!sku.deletedAt) conflict('SKU_NOT_DELETED', 'The product SKU is not archived.');
+		const product = findProduct(state, input.productId);
+		if (product.deletedAt) notFound('The destination product could not be found.');
+		ensureUniqueSkuCode(state, input.skuCode, sku.id);
+		Object.assign(sku, input, {
+			notes: input.notes ?? null,
+			deletedAt: null,
+			updatedAt: new Date()
+		});
+		for (const image of state.images.filter((entry) => entry.skuId === sku.id)) {
+			image.productId = input.productId;
+			image.updatedAt = new Date();
+		}
+		sendJson(
+			response,
+			managedProductSkuResponseSchema,
+			projectManagedSku(state, sku, publicOrigin)
+		);
+	});
+
 	router.delete('/skus/:skuId', (request, response) => {
 		assertDomainHealthy(state, 'products');
+		const query = parseQuery(request, productSkuDeleteQuerySchema);
 		const sku = state.skus.find((entry) => entry.id === request.params['skuId']) ?? notFound();
+		if (query.force) {
+			if (state.images.some((image) => image.skuId === sku.id)) {
+				conflict(
+					'SKU_DELETE_CONFLICT',
+					'Force deleting a product SKU with assigned images is not allowed.'
+				);
+			}
+			state.skus.splice(state.skus.indexOf(sku), 1);
+			for (const order of state.orders) {
+				for (const item of order.items) {
+					if (item.productSkuId === sku.id) item.productSkuId = null;
+				}
+			}
+			sendJson(response, skuDeleteResponseSchema, { deleted: true, mode: 'force' });
+			return;
+		}
 		sku.deletedAt = new Date();
 		sku.updatedAt = sku.deletedAt;
-		response.status(204).end();
+		sendJson(response, skuDeleteResponseSchema, { deleted: true, mode: 'soft' });
 	});
 
 	router.get('/:productId', (request, response) => {

@@ -35,6 +35,7 @@ import {
 	revokedCountResponseSchema,
 	securityActionSchema,
 	securityReauthMethodSchema,
+	skuDeleteResponseSchema,
 	staffCreatedResponseSchema,
 	staffStatusSchema,
 	totpSetupResponseSchema,
@@ -564,9 +565,50 @@ export function updateProductSku(
 }
 
 export function deleteProductSku(skuId: string) {
-	return adminApiClient.requestNoContent(`/api/management/products/skus/${skuId}`, {
+	return json(`/api/management/products/skus/${skuId}`, skuDeleteResponseSchema, {
 		method: 'DELETE'
 	});
+}
+
+export function forceDeleteProductSku(skuId: string) {
+	return json(`/api/management/products/skus/${skuId}?force=true`, skuDeleteResponseSchema, {
+		method: 'DELETE'
+	});
+}
+
+export function restoreProductSku(
+	skuId: string,
+	input: {
+		productId: string;
+		skuCode: string;
+		price: number;
+		stockQuantity: number;
+		attributes: Record<string, unknown>;
+		notes?: string | null;
+	}
+) {
+	return json(
+		`/api/management/products/skus/${skuId}/restore`,
+		managedProductSkuResponseSchema,
+		body('POST', input)
+	);
+}
+
+export async function loadArchivedSkuPageData(searchParams = new URLSearchParams()) {
+	const skuParams = new URLSearchParams(searchParams);
+	skuParams.set('archived', 'true');
+	const productParams = new URLSearchParams({
+		includeDeleted: 'false',
+		includeSkus: 'false',
+		includeImages: 'false',
+		sort: 'name',
+		order: 'asc'
+	});
+	const [skus, products] = await Promise.all([
+		loadPaginatedData('/api/management/products/skus', managedProductSkuResponseSchema, skuParams),
+		collectPaginatedData('/api/management/products', managedProductResponseSchema, productParams)
+	]);
+	return { skus: skus.data, pagination: skus.pagination, products };
 }
 
 export function createImageUploadTarget(

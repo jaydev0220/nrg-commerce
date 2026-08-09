@@ -5,6 +5,7 @@ import {
 	managementSkuListQuerySchema,
 	productSkuCreateSchema,
 	productSkuDeleteQuerySchema,
+	productSkuRestoreSchema,
 	productSkuUpdateSchema,
 	uuidSchema
 } from '@packages/schemas';
@@ -54,6 +55,13 @@ export function createSkuManagementRouter(dependencies: SkuManagementRouterDepen
 		requirePermission('product.sku.update'),
 		validateRequest({ params: skuParamsSchema, body: productSkuUpdateSchema }),
 		controller.updateSku
+	);
+
+	router.post(
+		'/skus/:skuId/restore',
+		requirePermission('product.sku.update'),
+		validateRequest({ params: skuParamsSchema, body: productSkuRestoreSchema }),
+		controller.restoreSku
 	);
 
 	router.delete(
