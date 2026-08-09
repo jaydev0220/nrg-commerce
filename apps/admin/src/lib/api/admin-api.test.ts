@@ -609,6 +609,16 @@ describe('admin API staff and order contracts', () => {
 		expect(result.orders[0]?.id).toBe(ids.order);
 	});
 
+	it('normalizes omitted order notes from older management API responses', async () => {
+		const legacyOrderRecord: Partial<typeof orderRecord> = { ...orderRecord };
+		delete legacyOrderRecord.notes;
+		client.requestJson.mockResolvedValueOnce(paginated([legacyOrderRecord]));
+
+		const result = await loadOrderPageData();
+
+		expect(result.orders[0]?.notes).toBeNull();
+	});
+
 	it('trims SKU lookup search and sends order idempotency and status payloads', async () => {
 		const idempotencyKey = crypto.randomUUID();
 

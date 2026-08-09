@@ -72,7 +72,7 @@ export const orderSchema = z.object({
 	customerEmail: emailAddressSchema.nullable(),
 	customerPhone: orderCustomerPhoneSchema.nullable(),
 	customerAddress: orderAddressSchema.nullable(),
-	notes: notesSchema.nullable(),
+	notes: notesSchema.nullable().default(null),
 	itemCount: z.int().min(0),
 	subtotalAmount: moneySchema,
 	discountLabelId: uuidSchema.nullable(),
