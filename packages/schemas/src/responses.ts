@@ -18,7 +18,7 @@ import {
 	uuidSchema
 } from './common.js';
 import { logSchema } from './logs.js';
-import { invoiceNumberSchema, orderItemSchema, orderSchema } from './orders.js';
+import { orderItemSchema, orderSchema } from './orders.js';
 import {
 	productCategorySchema,
 	productImageSchema,
@@ -194,9 +194,27 @@ export const managedBusinessResponseSchema = businessSchema.extend({
 	label: managedBusinessLabelResponseSchema.nullable()
 });
 
-export const managedOrderItemResponseSchema = orderItemSchema;
+export const managedOrderItemResponseSchema = orderItemSchema.extend({
+	skuCode: z.string(),
+	productName: z.string()
+});
+const managedOrderBusinessResponseSchema = managedBusinessResponseSchema.extend({
+	name: z.string(),
+	contactName: z.string().nullable(),
+	contactEmail: z.string().nullable(),
+	contactPhone: z.string().nullable(),
+	taxId: z.string().nullable(),
+	address: z.string().nullable(),
+	notes: z.string().nullable()
+});
 export const managedOrderResponseSchema = orderSchema.extend({
-	business: managedBusinessResponseSchema.nullable(),
+	invoiceNumber: z.string().max(50).nullable(),
+	customerName: z.string().nullable(),
+	customerEmail: z.string().nullable(),
+	customerPhone: z.string().nullable(),
+	customerAddress: z.string().nullable(),
+	notes: z.string().nullable().default(null),
+	business: managedOrderBusinessResponseSchema.nullable(),
 	items: z.array(managedOrderItemResponseSchema)
 });
 
@@ -224,13 +242,13 @@ export const managedOrderUpdatePreviewResponseSchema = z.object({
 	proposed: z.object({
 		version: z.int().min(0),
 		status: orderSchema.shape.status,
-		invoiceNumber: invoiceNumberSchema.nullable(),
+		invoiceNumber: managedOrderResponseSchema.shape.invoiceNumber,
 		businessId: uuidSchema.nullable(),
-		customerName: orderSchema.shape.customerName,
-		customerEmail: orderSchema.shape.customerEmail,
-		customerPhone: orderSchema.shape.customerPhone,
-		customerAddress: orderSchema.shape.customerAddress,
-		notes: orderSchema.shape.notes,
+		customerName: managedOrderResponseSchema.shape.customerName,
+		customerEmail: managedOrderResponseSchema.shape.customerEmail,
+		customerPhone: managedOrderResponseSchema.shape.customerPhone,
+		customerAddress: managedOrderResponseSchema.shape.customerAddress,
+		notes: managedOrderResponseSchema.shape.notes,
 		itemCount: z.int().min(0),
 		subtotalAmount: z.number().min(0),
 		discountLabelId: uuidSchema.nullable(),
@@ -331,6 +349,10 @@ export const imageDeleteResponseSchema = z.object({
 	deleted: z.boolean(),
 	mode: z.enum(['soft', 'force']),
 	assetDeleted: z.boolean()
+});
+export const skuDeleteResponseSchema = z.object({
+	deleted: z.literal(true),
+	mode: z.enum(['soft', 'force'])
 });
 export const countResponseSchema = z.object({
 	updatedCount: z.int().min(0)

@@ -22,7 +22,10 @@ type OrderCustomerContact = {
 	customerPhone?: string | null;
 };
 
-export function validateOrderCustomerContact(input: OrderCustomerContact): string | null {
+export function validateOrderCustomerContact(
+	input: OrderCustomerContact,
+	options: { validatePhoneFormat?: boolean } = {}
+): string | null {
 	const businessId = input.businessId?.trim() ?? '';
 	const customerName = input.customerName?.trim() ?? '';
 	const customerPhone = input.customerPhone?.trim() ?? '';
@@ -36,6 +39,7 @@ export function validateOrderCustomerContact(input: OrderCustomerContact): strin
 	}
 
 	if (
+		options.validatePhoneFormat !== false &&
 		customerPhone &&
 		(!customerPhoneRegex.test(customerPhone) ||
 			customerPhone.length > 32 ||

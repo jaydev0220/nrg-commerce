@@ -126,4 +126,29 @@ describe('order detail drawer', () => {
 		await screen.getByRole('button', { name: '確認並儲存' }).click();
 		expect(onsave).toHaveBeenCalledWith(order.id, onpreview.mock.calls[0]?.[1]);
 	});
+
+	it('allows unrelated edits while preserving unchanged legacy invoice and phone values', async () => {
+		const legacyOrder: ManagedOrder = {
+			...order,
+			invoiceNumber: 'INV-LEGACY',
+			customerPhone: 'legacy-extension'
+		};
+		const onpreview = vi.fn().mockResolvedValue(createPreview());
+		const screen = await render(OrderDetailDrawer, {
+			order: legacyOrder,
+			statusOptions: [{ value: 'pending', label: '待處理' }],
+			onclose: vi.fn(),
+			onpreview,
+			onsave: vi.fn(),
+			onreload: vi.fn()
+		});
+
+		await screen.getByRole('textbox', { name: '備註' }).fill('Follow up');
+		await screen.getByRole('button', { name: '檢視變更' }).click();
+
+		expect(onpreview).toHaveBeenCalledWith(order.id, {
+			version: order.version,
+			notes: 'Follow up'
+		});
+	});
 });

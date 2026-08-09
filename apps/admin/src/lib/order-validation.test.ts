@@ -56,4 +56,17 @@ describe('order customer validation', () => {
 			})
 		).toBe('請輸入有效的客戶電話（需包含 7 到 15 位數字）。');
 	});
+
+	it('can preserve an unchanged legacy phone while still checking required contact fields', () => {
+		expect(
+			validateOrderCustomerContact(
+				{
+					businessId: null,
+					customerName: '一般消費者',
+					customerPhone: 'legacy-extension'
+				},
+				{ validatePhoneFormat: false }
+			)
+		).toBeNull();
+	});
 });

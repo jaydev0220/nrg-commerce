@@ -619,6 +619,25 @@ describe('admin API staff and order contracts', () => {
 		expect(result.orders[0]?.notes).toBeNull();
 	});
 
+	it('preserves legacy stored order text without applying write transforms', async () => {
+		client.requestJson.mockResolvedValueOnce(
+			paginated([
+				{
+					...orderRecord,
+					invoiceNumber: 'legacy-2026/01',
+					customerEmail: 'legacy mailbox',
+					customerPhone: 'extension 9'
+				}
+			])
+		);
+
+		const result = await loadOrderPageData();
+
+		expect(result.orders[0]?.invoiceNumber).toBe('legacy-2026/01');
+		expect(result.orders[0]?.customerEmail).toBe('legacy mailbox');
+		expect(result.orders[0]?.customerPhone).toBe('extension 9');
+	});
+
 	it('trims SKU lookup search and sends order idempotency and status payloads', async () => {
 		const idempotencyKey = crypto.randomUUID();
 

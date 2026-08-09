@@ -5,6 +5,7 @@ import {
 	createCustomDraft,
 	createOrderItemDrafts,
 	createSkuDraft,
+	onlyChangedOrderInput,
 	toOrderUpdateItems,
 	validateOrderItemDrafts
 } from './order-editor';
@@ -101,5 +102,28 @@ describe('order item editor', () => {
 		);
 		first.quantity = 0;
 		expect(validateOrderItemDrafts([first])).toBe('品項數量必須至少為 1。');
+	});
+
+	it('omits unchanged legacy fields while retaining edited fields', () => {
+		const legacyOrder = { ...order, invoiceNumber: 'legacy-2026/01', customerPhone: 'ext. 9' };
+		const unchangedItems = toOrderUpdateItems(createOrderItemDrafts(legacyOrder));
+
+		expect(
+			onlyChangedOrderInput(legacyOrder, {
+				version: legacyOrder.version,
+				invoiceNumber: legacyOrder.invoiceNumber,
+				customerPhone: legacyOrder.customerPhone,
+				notes: 'Updated note',
+				items: unchangedItems
+			})
+		).toEqual({ version: 4, notes: 'Updated note' });
+		expect(
+			onlyChangedOrderInput(legacyOrder, {
+				version: legacyOrder.version,
+				invoiceNumber: legacyOrder.invoiceNumber,
+				customerPhone: legacyOrder.customerPhone,
+				items: unchangedItems
+			})
+		).toBeNull();
 	});
 });
