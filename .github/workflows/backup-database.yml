@@ -36,7 +36,7 @@ jobs:
           set -euo pipefail
           tmp=$(mktemp -d)
           trap 'rm -rf "$tmp"' EXIT
-          docker run --rm --network host "$POSTGRES_IMAGE" \
+          docker run --rm --network host --env PGSSLROOTCERT=system "$POSTGRES_IMAGE" \
             pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" > "$tmp/database.dump"
           age --encrypt --recipient "$AGE_RECIPIENT" --output "$tmp/database.dump.age" "$tmp/database.dump"
           aws s3 cp "$tmp/database.dump.age" "s3://$BACKUP_BUCKET/database/$(date -u +%Y/%m/%d)/${GITHUB_RUN_ID}.dump.age" --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
