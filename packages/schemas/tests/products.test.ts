@@ -77,6 +77,39 @@ test('productCreateSchema accepts optional English catalog content fields', () =
 	assert.equal(parsedProduct.descriptionEn, 'Primary English description');
 });
 
+test('product metadata fields are trimmed, nullable, and bounded', () => {
+	const parsedProduct = productCreateSchema.parse({
+		name: 'Product',
+		slug: 'product',
+		notes: ' Product note ',
+		baseUnit: ' box '
+	});
+
+	assert.equal(parsedProduct.notes, 'Product note');
+	assert.equal(parsedProduct.baseUnit, 'box');
+	assert.deepEqual(productUpdateSchema.parse({ notes: null, baseUnit: null }), {
+		notes: null,
+		baseUnit: null
+	});
+	assert.throws(() => productCreateSchema.parse({ name: 'Product', slug: 'product', notes: ' ' }));
+	assert.throws(() =>
+		productCreateSchema.parse({ name: 'Product', slug: 'product', baseUnit: 'a'.repeat(51) })
+	);
+});
+
+test('product SKU notes are supported on create and update', () => {
+	const created = productSkuCreateSchema.parse({
+		productId: 'c1cf3cbb-c58b-4409-a449-85b086c9089a',
+		skuCode: 'SKU-001',
+		price: 19.99,
+		stockQuantity: 1,
+		notes: ' Fragile '
+	});
+
+	assert.equal(created.notes, 'Fragile');
+	assert.deepEqual(productSkuUpdateSchema.parse({ notes: null }), { notes: null });
+});
+
 test('managementProductListQuerySchema parses include flags from query strings', () => {
 	const parsedQuery = managementProductListQuerySchema.parse({
 		includeSkus: 'true',

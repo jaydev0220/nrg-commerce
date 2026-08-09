@@ -42,6 +42,8 @@
 				nameEn: String(values.get('nameEn') ?? '').trim() || null,
 				description: String(values.get('description') ?? '').trim() || null,
 				descriptionEn: String(values.get('descriptionEn') ?? '').trim() || null,
+				notes: String(values.get('notes') ?? '').trim() || null,
+				baseUnit: String(values.get('baseUnit') ?? '').trim() || null,
 				categoryId: String(values.get('categoryId') ?? '').trim() || null,
 				published: values.get('published') === 'on'
 			});
@@ -112,6 +114,15 @@
 				{/each}
 			</select>
 		</label>
+		<label class="block text-sm font-medium">
+			基本單位
+			<input
+				name="baseUnit"
+				value={product.baseUnit ?? ''}
+				maxlength="50"
+				class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3"
+			/>
+		</label>
 		<label class="block text-sm font-medium md:col-span-2">
 			商品描述
 			<textarea
@@ -126,6 +137,15 @@
 				name="descriptionEn"
 				rows="3"
 				class="mt-1 w-full rounded-md border border-border bg-bg-surface p-3">{product.descriptionEn ??
+					''}</textarea>
+		</label>
+		<label class="block text-sm font-medium md:col-span-2">
+			備註
+			<textarea
+				name="notes"
+				maxlength="10000"
+				rows="3"
+				class="mt-1 w-full rounded-md border border-border bg-bg-surface p-3">{product.notes ??
 					''}</textarea>
 		</label>
 		<label class="flex items-center gap-2 text-sm font-medium">

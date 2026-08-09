@@ -53,6 +53,7 @@
 		const skuCode = String(values.get('skuCode') ?? '').trim();
 		const price = Number(values.get('price'));
 		const stockQuantity = Number(values.get('stockQuantity'));
+		const notes = String(values.get('notes') ?? '').trim() || null;
 		if (
 			!skuCode ||
 			!Number.isFinite(price) ||
@@ -70,7 +71,7 @@
 		);
 		busy = true;
 		try {
-			await onsave({ skuCode, price, stockQuantity, attributes });
+			await onsave({ skuCode, price, stockQuantity, attributes, notes });
 			onclose();
 		} catch (error) {
 			errorMessage = message(error);
@@ -129,6 +130,15 @@
 				value={sku?.stockQuantity ?? 0}
 				class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3"
 			/>
+		</label>
+		<label class="block text-sm font-medium">
+			備註
+			<textarea
+				name="notes"
+				maxlength="10000"
+				rows="3"
+				class="mt-1 w-full rounded-md border border-border bg-bg-surface p-3">{sku?.notes ??
+					''}</textarea>
 		</label>
 		<fieldset>
 			<legend class="mb-2 text-sm font-medium">規格屬性</legend>

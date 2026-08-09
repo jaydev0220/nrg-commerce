@@ -70,6 +70,8 @@ export function createProductService(dependencies: ProductServiceDependencies) {
 			nameEn?: string;
 			description?: string;
 			descriptionEn?: string;
+			notes?: string | null;
+			baseUnit?: string | null;
 			categoryId?: string | null;
 			published: boolean;
 		}): Promise<CatalogProductRecord> {
@@ -100,6 +102,8 @@ export function createProductService(dependencies: ProductServiceDependencies) {
 				nameEn?: string | null;
 				description?: string | null;
 				descriptionEn?: string | null;
+				notes?: string | null;
+				baseUnit?: string | null;
 				categoryId?: string | null;
 				published?: boolean;
 			}

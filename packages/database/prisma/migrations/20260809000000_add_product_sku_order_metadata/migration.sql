@@ -1,0 +1,9 @@
+ALTER TABLE "Product"
+ADD COLUMN "notes" TEXT,
+ADD COLUMN "baseUnit" TEXT;
+
+ALTER TABLE "ProductSku"
+ADD COLUMN "notes" TEXT;
+
+ALTER TABLE "Order"
+ADD COLUMN "notes" TEXT;

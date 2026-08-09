@@ -18,6 +18,7 @@ const order = {
 	customerEmail: null,
 	customerPhone: '0912345678',
 	customerAddress: null,
+	notes: null,
 	itemCount: 2,
 	subtotalAmount: 200,
 	discountLabelId: null,

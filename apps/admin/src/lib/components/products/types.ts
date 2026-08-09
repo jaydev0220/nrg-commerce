@@ -20,6 +20,8 @@ export type ProductCreateInput = {
 	nameEn?: string;
 	description?: string;
 	descriptionEn?: string;
+	notes?: string | null;
+	baseUnit?: string | null;
 	categoryId?: string | null;
 	published: boolean;
 };
@@ -30,6 +32,8 @@ export type ProductProfileInput = {
 	nameEn: string | null;
 	description: string | null;
 	descriptionEn: string | null;
+	notes: string | null;
+	baseUnit: string | null;
 	categoryId: string | null;
 	published: boolean;
 };
@@ -39,6 +43,7 @@ export type ProductSkuInput = {
 	price: number;
 	stockQuantity: number;
 	attributes: Record<string, unknown>;
+	notes: string | null;
 };
 
 export type ProductImageUploadInput = {

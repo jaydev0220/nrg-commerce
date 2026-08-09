@@ -60,6 +60,7 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 			price: number;
 			stockQuantity: number;
 			attributes: Record<string, CatalogJsonValue>;
+			notes?: string | null;
 		}): Promise<CatalogSkuRecord> {
 			if (await dependencies.repository.skuCodeExists(input.skuCode)) {
 				throw new AppError(409, 'SKU_CODE_CONFLICT', 'The provided SKU code is already in use.');
@@ -80,6 +81,7 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 				price?: number;
 				stockQuantity?: number;
 				attributes?: Record<string, CatalogJsonValue>;
+				notes?: string | null;
 			}
 		): Promise<CatalogSkuRecord> {
 			const existingSku = ensureSku(

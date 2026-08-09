@@ -365,6 +365,8 @@ test('management product creation records an audit log', async () => {
 					nameEn: null,
 					description: null,
 					descriptionEn: null,
+					notes: null,
+					baseUnit: null,
 					categoryId: null,
 					categorySlug: null,
 					published: false,

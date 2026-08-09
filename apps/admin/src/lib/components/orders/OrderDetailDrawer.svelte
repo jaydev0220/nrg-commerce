@@ -123,6 +123,7 @@
 			customerEmail: optional(values.get('customerEmail')),
 			customerPhone,
 			customerAddress: optional(values.get('customerAddress')),
+			notes: optional(values.get('notes')),
 			items: toOrderUpdateItems(items)
 		};
 		busy = true;
@@ -314,6 +315,15 @@
 								class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3"
 								disabled={busy}
 							/>
+						</label>
+						<label class="block text-sm font-medium sm:col-span-2">
+							備註
+							<textarea
+								name="notes"
+								maxlength="10000"
+								rows="3"
+								class="mt-1 w-full rounded-md border border-border bg-bg-surface p-3"
+								disabled={busy}>{order.notes ?? ''}</textarea>
 						</label>
 					</div>
 

@@ -13,6 +13,7 @@ import {
 	attributeMapSchema,
 	dateSchema,
 	jsonValueSchema,
+	notesSchema,
 	serializedDateSchema,
 	uuidSchema
 } from './common.js';
@@ -141,6 +142,7 @@ export const managedProductSkuResponseSchema = z.object({
 	nameEn: z.string().min(1).nullable(),
 	description: z.string().min(1).nullable(),
 	descriptionEn: z.string().min(1).nullable(),
+	notes: notesSchema.nullable(),
 	categoryId: uuidSchema.nullable(),
 	categorySlug: z.string().min(1).nullable(),
 	price: z.number().min(0),
@@ -161,6 +163,8 @@ export const managedProductResponseSchema = z.object({
 	nameEn: z.string().min(1).nullable(),
 	description: z.string().min(1).nullable(),
 	descriptionEn: z.string().min(1).nullable(),
+	notes: notesSchema.nullable(),
+	baseUnit: z.string().min(1).max(50).nullable(),
 	categoryId: uuidSchema.nullable(),
 	categorySlug: z.string().min(1).nullable(),
 	published: z.boolean(),
@@ -226,6 +230,7 @@ export const managedOrderUpdatePreviewResponseSchema = z.object({
 		customerEmail: orderSchema.shape.customerEmail,
 		customerPhone: orderSchema.shape.customerPhone,
 		customerAddress: orderSchema.shape.customerAddress,
+		notes: orderSchema.shape.notes,
 		itemCount: z.int().min(0),
 		subtotalAmount: z.number().min(0),
 		discountLabelId: uuidSchema.nullable(),
@@ -246,7 +251,8 @@ export const managedOrderUpdatePreviewResponseSchema = z.object({
 					'customerName',
 					'customerEmail',
 					'customerPhone',
-					'customerAddress'
+					'customerAddress',
+					'notes'
 				]),
 				before: z.string().nullable(),
 				after: z.string().nullable()

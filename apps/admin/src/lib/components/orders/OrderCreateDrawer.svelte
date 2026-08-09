@@ -219,6 +219,7 @@
 				customerEmail: optional(values.get('customerEmail')),
 				customerPhone,
 				customerAddress: optional(values.get('customerAddress')),
+				notes: optional(values.get('notes')),
 				discountRate: draftDiscountRate,
 				items: orderItems
 			};
@@ -284,6 +285,14 @@
 				pattern="[A-Za-z0-9]+"
 				class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3 uppercase"
 			/>
+		</label>
+		<label class="block text-sm font-medium">
+			備註
+			<textarea
+				name="notes"
+				maxlength="10000"
+				rows="3"
+				class="mt-1 w-full rounded-md border border-border bg-bg-surface p-3"></textarea>
 		</label>
 		<div class="grid gap-3 rounded-md border border-border bg-bg-sunken p-3 sm:grid-cols-3">
 			<span class="text-sm text-text-muted">

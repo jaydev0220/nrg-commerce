@@ -47,6 +47,8 @@
 				nameEn: optional(values.get('nameEn')),
 				description: optional(values.get('description')),
 				descriptionEn: optional(values.get('descriptionEn')),
+				notes: optional(values.get('notes')) ?? null,
+				baseUnit: optional(values.get('baseUnit')) ?? null,
 				categoryId: optional(values.get('categoryId')) ?? null,
 				published: values.get('published') === 'on'
 			});
@@ -111,6 +113,14 @@
 			</select>
 		</label>
 		<label class="block text-sm font-medium">
+			基本單位
+			<input
+				name="baseUnit"
+				maxlength="50"
+				class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3"
+			/>
+		</label>
+		<label class="block text-sm font-medium">
 			中文說明
 			<textarea
 				name="description"
@@ -121,6 +131,14 @@
 			英文說明
 			<textarea
 				name="descriptionEn"
+				rows="4"
+				class="mt-1 w-full rounded-md border border-border bg-bg-surface p-3"></textarea>
+		</label>
+		<label class="block text-sm font-medium">
+			備註
+			<textarea
+				name="notes"
+				maxlength="10000"
 				rows="4"
 				class="mt-1 w-full rounded-md border border-border bg-bg-surface p-3"></textarea>
 		</label>

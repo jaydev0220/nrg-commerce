@@ -501,6 +501,8 @@ export function createProduct(input: {
 	nameEn?: string;
 	description?: string;
 	descriptionEn?: string;
+	notes?: string | null;
+	baseUnit?: string | null;
 	categoryId?: string | null;
 	published: boolean;
 }) {
@@ -535,6 +537,7 @@ export function createProductSku(input: {
 	price: number;
 	stockQuantity: number;
 	attributes: Record<string, unknown>;
+	notes?: string | null;
 }) {
 	return json(
 		'/api/management/products/skus',
@@ -550,6 +553,7 @@ export function updateProductSku(
 		price?: number;
 		stockQuantity?: number;
 		attributes?: Record<string, unknown>;
+		notes?: string | null;
 	}
 ) {
 	return json(
@@ -818,6 +822,7 @@ export type OrderInput = {
 	customerEmail?: string | null;
 	customerPhone?: string | null;
 	customerAddress?: string | null;
+	notes?: string | null;
 	discountRate?: number;
 	items: Array<{
 		productSkuId?: string;
@@ -859,6 +864,7 @@ export type OrderUpdateInput = {
 	customerEmail?: string | null;
 	customerPhone?: string | null;
 	customerAddress?: string | null;
+	notes?: string | null;
 	items?: OrderUpdateItemInput[];
 };
 

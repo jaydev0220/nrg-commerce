@@ -39,6 +39,18 @@ test('orderCreateSchema accepts null business and optional customer fields for b
 	assert.equal(order.businessId, '0189076c-4f2a-7fe1-b9fd-2d68df455301');
 });
 
+test('order notes are trimmed on create and can be cleared on update', () => {
+	const created = orderCreateSchema.parse({
+		businessId: '0189076c-4f2a-7fe1-b9fd-2d68df455301',
+		notes: ' Internal note ',
+		items: [orderItem]
+	});
+
+	assert.equal(created.notes, 'Internal note');
+	assert.equal(orderUpdateSchema.parse({ version: 1, notes: null }).notes, null);
+	assert.throws(() => orderCreateSchema.parse({ notes: ' ', items: [orderItem] }));
+});
+
 test('orderCreateSchema strips caller-provided snapshots from catalog SKU lines', () => {
 	const order = orderCreateSchema.parse({
 		customerName: 'Walk-in Buyer',

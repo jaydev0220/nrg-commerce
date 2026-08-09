@@ -130,6 +130,7 @@ export const normalizedEmailAddressSchema = z
 	.toLowerCase()
 	.pipe(emailAddressSchema);
 export const searchQuerySchema = z.string().trim().min(1).max(200);
+export const notesSchema = z.string().trim().min(1).max(10_000);
 export const resourceSlugSchema = z
 	.string()
 	.trim()

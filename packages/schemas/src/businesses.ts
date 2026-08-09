@@ -5,6 +5,7 @@ import {
 	dateSchema,
 	emailAddressSchema,
 	nonEmptyUpdate,
+	notesSchema,
 	paginationQuerySchema,
 	searchQuerySchema,
 	sortOrderSchema,
@@ -17,8 +18,6 @@ const contactTextSchema = z.string().trim().min(1).max(200);
 const contactPhoneSchema = z.string().trim().min(1).max(64);
 const taxIdSchema = z.string().trim().min(1).max(64);
 const addressSchema = z.string().trim().min(1).max(1_000);
-const notesSchema = z.string().trim().min(1).max(10_000);
-
 export const businessLabelColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 export const businessLabelSchema = z.object({
 	id: uuidSchema,

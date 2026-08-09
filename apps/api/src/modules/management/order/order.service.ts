@@ -152,6 +152,7 @@ export function createOrderService(dependencies: OrderServiceDependencies) {
 			customerEmail?: string | null;
 			customerPhone?: string | null;
 			customerAddress?: string | null;
+			notes?: string | null;
 			discountRate?: number;
 			items: CreateOrderItem[];
 		}): Promise<CreateOrderResult> {

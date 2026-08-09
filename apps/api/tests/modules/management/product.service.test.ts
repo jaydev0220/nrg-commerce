@@ -12,6 +12,8 @@ function createCatalogProductRecord() {
 		nameEn: 'Canvas Tote',
 		description: 'Everyday bag',
 		descriptionEn: 'Everyday bag',
+		notes: null,
+		baseUnit: null,
 		categoryId: 'category-1',
 		categorySlug: 'bags',
 		published: true,
@@ -32,6 +34,8 @@ test('createProduct allows uncategorized products', async () => {
 				nameEn?: string;
 				description?: string;
 				descriptionEn?: string;
+				notes?: string | null;
+				baseUnit?: string | null;
 				categoryId?: string | null;
 				published: boolean;
 		  }
@@ -121,6 +125,8 @@ test('updateProduct allows clearing the category assignment', async () => {
 				nameEn?: string | null;
 				description?: string | null;
 				descriptionEn?: string | null;
+				notes?: string | null;
+				baseUnit?: string | null;
 				categoryId?: string | null;
 				published?: boolean;
 		  }

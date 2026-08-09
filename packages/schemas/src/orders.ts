@@ -5,6 +5,7 @@ import {
 	dateSchema,
 	emailAddressSchema,
 	moneySchema,
+	notesSchema,
 	paginationQuerySchema,
 	searchQuerySchema,
 	sortOrderSchema,
@@ -71,6 +72,7 @@ export const orderSchema = z.object({
 	customerEmail: emailAddressSchema.nullable(),
 	customerPhone: orderCustomerPhoneSchema.nullable(),
 	customerAddress: orderAddressSchema.nullable(),
+	notes: notesSchema.nullable(),
 	itemCount: z.int().min(0),
 	subtotalAmount: moneySchema,
 	discountLabelId: uuidSchema.nullable(),
@@ -139,6 +141,7 @@ export const orderCreateSchema = z
 		customerEmail: emailAddressSchema.nullable().optional(),
 		customerPhone: orderCustomerPhoneSchema.nullable().optional(),
 		customerAddress: orderAddressSchema.nullable().optional(),
+		notes: notesSchema.nullable().optional(),
 		discountRate: z.coerce.number().min(0).max(100).multipleOf(0.01).optional(),
 		items: z.array(orderLineItemCreateSchema).min(1).max(100)
 	})
@@ -190,6 +193,7 @@ export const orderUpdateSchema = z
 		customerEmail: emailAddressSchema.nullable().optional(),
 		customerPhone: orderCustomerPhoneSchema.nullable().optional(),
 		customerAddress: orderAddressSchema.nullable().optional(),
+		notes: notesSchema.nullable().optional(),
 		items: z.array(orderLineItemUpdateSchema).min(1).max(100).optional()
 	})
 	.superRefine((order, context) => {

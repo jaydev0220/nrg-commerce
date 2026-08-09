@@ -364,6 +364,7 @@ test('updateOrder changes customer fields without replacing item snapshots', asy
 		customerEmail: null,
 		customerPhone: '0912345678',
 		customerAddress: null,
+		notes: null,
 		itemCount: 1,
 		subtotalAmount: 99,
 		discountLabelId: null,

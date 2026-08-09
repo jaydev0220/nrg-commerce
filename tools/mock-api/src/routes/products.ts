@@ -91,6 +91,8 @@ export function createProductsRouter(state: MockState, publicOrigin: string): Ro
 			nameEn: input.nameEn ?? null,
 			description: input.description ?? null,
 			descriptionEn: input.descriptionEn ?? null,
+			notes: input.notes ?? null,
+			baseUnit: input.baseUnit ?? null,
 			categoryId: input.categoryId ?? null,
 			published: input.published,
 			deletedAt: null,
@@ -137,6 +139,7 @@ export function createProductsRouter(state: MockState, publicOrigin: string): Ro
 			price: input.price,
 			stockQuantity: input.stockQuantity,
 			attributes: input.attributes,
+			notes: input.notes ?? null,
 			deletedAt: null,
 			createdAt: now,
 			updatedAt: now

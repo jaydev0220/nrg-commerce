@@ -40,6 +40,7 @@ type CreateOrderInput = {
 	customerEmail?: string | null;
 	customerPhone?: string | null;
 	customerAddress?: string | null;
+	notes?: string | null;
 	itemCount: number;
 	subtotalAmount: number;
 	discountLabelId: string | null;
@@ -187,6 +188,7 @@ function mapOrder(order: {
 	customerEmail: string | null;
 	customerPhone: string | null;
 	customerAddress: string | null;
+	notes: string | null;
 	itemCount: number;
 	subtotalAmount: { toString(): string };
 	discountLabelId: string | null;
@@ -246,6 +248,7 @@ function mapOrder(order: {
 		customerEmail: order.customerEmail,
 		customerPhone: order.customerPhone,
 		customerAddress: order.customerAddress,
+		notes: order.notes,
 		itemCount: order.itemCount,
 		subtotalAmount: Number(order.subtotalAmount.toString()),
 		discountLabelId: order.discountLabelId,
@@ -543,6 +546,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 			input.customerPhone === undefined ? current.customerPhone : input.customerPhone;
 		const customerAddress =
 			input.customerAddress === undefined ? current.customerAddress : input.customerAddress;
+		const notes = input.notes === undefined ? current.notes : input.notes;
 
 		if (input.version !== undefined) {
 			assertConsumerContact({ businessId, customerName, customerPhone });
@@ -570,6 +574,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 			customerEmail,
 			customerPhone,
 			customerAddress,
+			notes,
 			items
 		});
 		await assertInventoryAvailable(transaction, preview);
@@ -664,6 +669,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 					customerEmail: proposed.customerEmail,
 					customerPhone: proposed.customerPhone,
 					customerAddress: proposed.customerAddress,
+					notes: proposed.notes,
 					itemCount: proposed.itemCount,
 					subtotalAmount: proposed.subtotalAmount,
 					discountAmount: proposed.discountAmount,
@@ -699,6 +705,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 				customerEmail: orderRecord.customerEmail,
 				customerPhone: orderRecord.customerPhone,
 				customerAddress: orderRecord.customerAddress,
+				notes: orderRecord.notes,
 				items: orderRecord.items.map((item) => ({
 					id: item.id,
 					productSkuId: item.productSkuId,
@@ -898,6 +905,7 @@ export function createPrismaOrderRepository(database: DatabaseClient) {
 						customerEmail: input.customerEmail ?? null,
 						customerPhone: input.customerPhone ?? null,
 						customerAddress: input.customerAddress ?? null,
+						notes: input.notes ?? null,
 						itemCount: input.itemCount,
 						subtotalAmount: input.subtotalAmount,
 						discountLabelId: input.discountLabelId,

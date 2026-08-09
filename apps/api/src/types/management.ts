@@ -101,6 +101,7 @@ export type ManagedOrderRecord = {
 	customerEmail: string | null;
 	customerPhone: string | null;
 	customerAddress: string | null;
+	notes: string | null;
 	itemCount: number;
 	subtotalAmount: number;
 	discountLabelId: string | null;
@@ -133,7 +134,8 @@ export type ManagedOrderUpdateField =
 	| 'customerName'
 	| 'customerEmail'
 	| 'customerPhone'
-	| 'customerAddress';
+	| 'customerAddress'
+	| 'notes';
 
 export type ManagedOrderFieldChangeRecord = {
 	field: ManagedOrderUpdateField;
@@ -170,6 +172,7 @@ export type ManagedOrderUpdateProposalRecord = {
 	customerEmail: string | null;
 	customerPhone: string | null;
 	customerAddress: string | null;
+	notes: string | null;
 	itemCount: number;
 	subtotalAmount: number;
 	discountLabelId: string | null;

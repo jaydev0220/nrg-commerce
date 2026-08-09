@@ -220,6 +220,8 @@ model Product {
   nameEn           String?
   description      String?
   descriptionEn    String?
+  notes            String?
+  baseUnit         String?
   categoryId       String?              @db.Uuid
   thumbnailImageId String?              @unique @db.Uuid
   published        Boolean              @default(false)
@@ -245,6 +247,7 @@ model ProductSku {
   price         Decimal        @db.Decimal(10, 2)
   stockQuantity Int            @default(0)
   attributes    Json           @db.JsonB
+  notes         String?
   deletedAt     DateTime?      @db.Timestamptz(6)
   createdAt     DateTime       @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime       @updatedAt @db.Timestamptz(6)
@@ -337,6 +340,7 @@ model Order {
   customerEmail          String?
   customerPhone          String?
   customerAddress        String?
+  notes                  String?
   itemCount              Int            @default(0)
   subtotalAmount         Decimal        @default(0) @db.Decimal(10, 2)
   discountLabelId        String?        @db.Uuid

@@ -90,6 +90,7 @@ function buildPreview(state: MockState, order: MockOrder, input: OrderUpdateInpu
 		customerPhone: input.customerPhone !== undefined ? input.customerPhone : order.customerPhone,
 		customerAddress:
 			input.customerAddress !== undefined ? input.customerAddress : order.customerAddress,
+		notes: input.notes !== undefined ? input.notes : order.notes,
 		itemCount: financials.itemCount,
 		subtotalAmount: financials.subtotalAmount,
 		discountLabelId: order.discountLabelId,
@@ -107,7 +108,8 @@ function buildPreview(state: MockState, order: MockOrder, input: OrderUpdateInpu
 		'customerName',
 		'customerEmail',
 		'customerPhone',
-		'customerAddress'
+		'customerAddress',
+		'notes'
 	] as const;
 	const fieldChanges = fields.flatMap((field) =>
 		order[field] === proposed[field]
@@ -173,6 +175,7 @@ function persistPreview(
 	order.customerEmail = preview.proposed.customerEmail;
 	order.customerPhone = preview.proposed.customerPhone;
 	order.customerAddress = preview.proposed.customerAddress;
+	order.notes = preview.proposed.notes;
 	order.itemCount = preview.proposed.itemCount;
 	order.subtotalAmount = preview.proposed.subtotalAmount;
 	order.discountAmount = preview.proposed.discountAmount;

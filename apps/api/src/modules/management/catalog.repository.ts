@@ -192,6 +192,7 @@ function mapSkuRecordFromProduct(
 		price: { toString(): string };
 		stockQuantity: number;
 		attributes: unknown;
+		notes: string | null;
 		deletedAt: Date | null;
 		createdAt: Date;
 		updatedAt: Date;
@@ -214,6 +215,7 @@ function mapSkuRecordFromProduct(
 		availability: sku.stockQuantity > 0 ? 'in_stock' : 'out_of_stock',
 		published: product.published,
 		attributes: (sku.attributes ?? {}) as Record<string, CatalogJsonValue>,
+		notes: sku.notes,
 		deletedAt: sku.deletedAt,
 		createdAt: sku.createdAt,
 		updatedAt: sku.updatedAt,
@@ -238,6 +240,7 @@ function mapSkuRecord(sku: {
 	price: { toString(): string };
 	stockQuantity: number;
 	attributes: unknown;
+	notes: string | null;
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -253,6 +256,8 @@ function mapProductRecord(product: {
 	nameEn: string | null;
 	description: string | null;
 	descriptionEn: string | null;
+	notes: string | null;
+	baseUnit: string | null;
 	categoryId: string | null;
 	published: boolean;
 	deletedAt: Date | null;
@@ -268,6 +273,7 @@ function mapProductRecord(product: {
 		price: { toString(): string };
 		stockQuantity: number;
 		attributes: unknown;
+		notes: string | null;
 		deletedAt: Date | null;
 		createdAt: Date;
 		updatedAt: Date;
@@ -282,6 +288,8 @@ function mapProductRecord(product: {
 		nameEn: product.nameEn,
 		description: product.description,
 		descriptionEn: product.descriptionEn,
+		notes: product.notes,
+		baseUnit: product.baseUnit,
 		categoryId: product.categoryId,
 		categorySlug: product.category?.slug ?? null,
 		published: product.published,
@@ -643,6 +651,8 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			nameEn?: string;
 			description?: string;
 			descriptionEn?: string;
+			notes?: string | null;
+			baseUnit?: string | null;
 			categoryId?: string | null;
 			published: boolean;
 		}): Promise<CatalogProductRecord> {
@@ -653,6 +663,8 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					nameEn: input.nameEn ?? null,
 					description: input.description ?? null,
 					descriptionEn: input.descriptionEn ?? null,
+					notes: input.notes ?? null,
+					baseUnit: input.baseUnit ?? null,
 					categoryId: input.categoryId ?? null,
 					published: input.published
 				},
@@ -676,6 +688,8 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				nameEn?: string | null;
 				description?: string | null;
 				descriptionEn?: string | null;
+				notes?: string | null;
+				baseUnit?: string | null;
 				categoryId?: string | null;
 				published?: boolean;
 			}
@@ -690,6 +704,8 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					nameEn: input.nameEn,
 					description: input.description,
 					descriptionEn: input.descriptionEn,
+					notes: input.notes,
+					baseUnit: input.baseUnit,
 					categoryId: input.categoryId,
 					published: input.published
 				},
@@ -1259,6 +1275,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			price: number;
 			stockQuantity: number;
 			attributes: Record<string, CatalogJsonValue>;
+			notes?: string | null;
 		}): Promise<CatalogSkuRecord> {
 			const sku = await database.productSku.create({
 				data: {
@@ -1266,7 +1283,8 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					skuCode: input.skuCode,
 					price: input.price,
 					stockQuantity: input.stockQuantity,
-					attributes: input.attributes
+					attributes: input.attributes,
+					notes: input.notes ?? null
 				},
 				include: {
 					product: {
@@ -1299,6 +1317,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				price?: number;
 				stockQuantity?: number;
 				attributes?: Record<string, CatalogJsonValue>;
+				notes?: string | null;
 			}
 		): Promise<CatalogSkuRecord> {
 			const sku = await database.productSku.update({
@@ -1310,7 +1329,8 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					skuCode: input.skuCode,
 					price: input.price,
 					stockQuantity: input.stockQuantity,
-					attributes: input.attributes
+					attributes: input.attributes,
+					notes: input.notes
 				},
 				include: {
 					product: {

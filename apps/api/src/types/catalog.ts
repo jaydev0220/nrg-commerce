@@ -27,6 +27,7 @@ export type CatalogSkuRecord = {
 	nameEn: string | null;
 	description: string | null;
 	descriptionEn: string | null;
+	notes: string | null;
 	categoryId: string | null;
 	categorySlug: string | null;
 	price: number;
@@ -47,6 +48,8 @@ export type CatalogProductRecord = {
 	nameEn: string | null;
 	description: string | null;
 	descriptionEn: string | null;
+	notes: string | null;
+	baseUnit: string | null;
 	categoryId: string | null;
 	categorySlug: string | null;
 	published: boolean;

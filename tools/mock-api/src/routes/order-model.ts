@@ -209,6 +209,7 @@ export function createOrderRecord(state: MockState, input: OrderCreateInput): Mo
 		customerEmail: input.customerEmail ?? null,
 		customerPhone: input.customerPhone ?? null,
 		customerAddress: input.customerAddress ?? null,
+		notes: input.notes ?? null,
 		itemCount: financials.itemCount,
 		subtotalAmount: financials.subtotalAmount,
 		discountLabelId: discount.labelId,

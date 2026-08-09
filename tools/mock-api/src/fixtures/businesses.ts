@@ -113,6 +113,7 @@ function makeOrder(input: {
 		customerEmail: input.businessId ? null : 'customer@example.com',
 		customerPhone: input.businessId ? null : '0912345678',
 		customerAddress: input.businessId ? null : 'Taipei City',
+		notes: null,
 		itemCount: input.quantity,
 		subtotalAmount,
 		discountLabelId: input.discountLabelId ?? null,

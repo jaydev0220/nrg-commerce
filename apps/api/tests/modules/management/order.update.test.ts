@@ -8,7 +8,10 @@ import {
 	catalogSnapshotsEqual
 } from '../../../src/modules/management/order/order.update.js';
 
-function createOrder(status: ManagedOrderRecord['status'] = 'pending'): ManagedOrderRecord {
+function createOrder(
+	status: ManagedOrderRecord['status'] = 'pending',
+	notes: string | null = null
+): ManagedOrderRecord {
 	return {
 		id: 'order-1',
 		invoiceNumber: null,
@@ -18,6 +21,7 @@ function createOrder(status: ManagedOrderRecord['status'] = 'pending'): ManagedO
 		customerEmail: null,
 		customerPhone: '0912345678',
 		customerAddress: null,
+		notes,
 		itemCount: 2,
 		subtotalAmount: 200,
 		discountLabelId: 'label-1',
@@ -54,7 +58,8 @@ function preview(
 	order: ManagedOrderRecord,
 	quantity: number,
 	status = order.status,
-	invoiceNumber = order.invoiceNumber
+	invoiceNumber = order.invoiceNumber,
+	notes = order.notes
 ) {
 	return buildOrderUpdatePreview(order, {
 		status,
@@ -64,6 +69,7 @@ function preview(
 		customerEmail: order.customerEmail,
 		customerPhone: order.customerPhone,
 		customerAddress: order.customerAddress,
+		notes,
 		items: [
 			{
 				id: 'item-1',
@@ -140,6 +146,40 @@ test('order update preview reports invoice number changes', () => {
 	assert.equal(result.proposed.invoiceNumber, 'INV001');
 	assert.deepEqual(result.changes.fields, [
 		{ field: 'invoiceNumber', before: null, after: 'INV001' }
+	]);
+});
+
+test('order update preview reports notes changes and supports clearing them', () => {
+	const result = preview(createOrder(), 2, 'pending', null, 'Updated note');
+
+	assert.equal(result.proposed.notes, 'Updated note');
+	assert.deepEqual(result.changes.fields, [
+		{ field: 'notes', before: null, after: 'Updated note' }
+	]);
+
+	const cleared = buildOrderUpdatePreview(createOrder('pending', 'Existing note'), {
+		status: 'pending',
+		invoiceNumber: null,
+		businessId: null,
+		customerName: 'Buyer',
+		customerEmail: null,
+		customerPhone: '0912345678',
+		customerAddress: null,
+		notes: null,
+		items: [
+			{
+				id: 'item-1',
+				productSkuId: 'sku-1',
+				skuCode: 'SKU-1',
+				productName: 'Catalog item',
+				unitPrice: 100,
+				quantity: 2,
+				attributes: { color: 'black' }
+			}
+		]
+	});
+	assert.deepEqual(cleared.changes.fields, [
+		{ field: 'notes', before: 'Existing note', after: null }
 	]);
 });
 

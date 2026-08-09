@@ -70,6 +70,76 @@ test('storefront errors do not advertise a public cache policy', async () => {
 	assert.equal(response.headers['cache-control'], undefined);
 });
 
+test('storefront serializers omit private product and SKU metadata', async () => {
+	const sku = {
+		id: 'sku-1',
+		productId: 'product-1',
+		productSlug: 'private-product',
+		skuCode: 'SKU-1',
+		name: 'Private Product',
+		nameEn: null,
+		description: null,
+		descriptionEn: null,
+		categoryId: null,
+		categorySlug: null,
+		price: 10,
+		stockQuantity: 2,
+		availability: 'in_stock' as const,
+		published: true,
+		attributes: {},
+		notes: 'private SKU note',
+		deletedAt: null,
+		createdAt: new Date(),
+		updatedAt: new Date(),
+		images: []
+	};
+	const product = {
+		id: 'product-1',
+		slug: 'private-product',
+		name: 'Private Product',
+		nameEn: null,
+		description: null,
+		descriptionEn: null,
+		notes: 'private product note',
+		baseUnit: 'piece',
+		categoryId: null,
+		categorySlug: null,
+		published: true,
+		deletedAt: null,
+		createdAt: new Date(),
+		updatedAt: new Date(),
+		thumbnail: null,
+		images: [],
+		skus: [sku]
+	};
+	const app = express();
+	app.use(
+		'/api/storefront/products',
+		createStorefrontCatalogRouter({
+			storefrontService: createStorefrontService({
+				getProductBySlug: async () => product as never,
+				getSkuByCode: async () => sku as never
+			})
+		})
+	);
+	app.use(errorHandler);
+
+	const [productResponse, skuResponse] = await Promise.all([
+		requestApp(app, { path: '/api/storefront/products/private-product' }),
+		requestApp(app, { path: '/api/storefront/products/skus/SKU-1' })
+	]);
+	const publicProduct = productResponse.json<Record<string, unknown>>();
+	const publicSku = skuResponse.json<Record<string, unknown>>();
+
+	assert.equal(productResponse.status, 200);
+	assert.equal(skuResponse.status, 200);
+	assert.equal('notes' in publicProduct, false);
+	assert.equal('baseUnit' in publicProduct, false);
+	const publicSkus = publicProduct['skus'] as Array<Record<string, unknown>>;
+	assert.equal('notes' in publicSkus[0]!, false);
+	assert.equal('notes' in publicSku, false);
+});
+
 test('product list accepts minimum-price sorting and forwards pagination queries', async () => {
 	let receivedQuery: Record<string, unknown> | undefined;
 	const app = express();

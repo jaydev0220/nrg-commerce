@@ -67,6 +67,7 @@ export function projectManagedSku(
 		availability: sku.stockQuantity > 0 ? ('in_stock' as const) : ('out_of_stock' as const),
 		published: product.published,
 		attributes: sku.attributes,
+		notes: sku.notes,
 		deletedAt: sku.deletedAt,
 		createdAt: sku.createdAt,
 		updatedAt: sku.updatedAt,
@@ -135,6 +136,9 @@ export function projectStorefrontProduct(
 				.sort((left, right) => left.position - right.position)
 		: [];
 	const productImages = activeImages.map((image) => storefrontImage(image, publicOrigin));
+	const { notes: _notes, baseUnit: _baseUnit, ...publicProduct } = product;
+	void _notes;
+	void _baseUnit;
 	const skus = options.includeSkus
 		? state.skus
 				.filter((sku) => sku.productId === product.id && sku.deletedAt === null)
@@ -164,7 +168,7 @@ export function projectStorefrontProduct(
 				}))
 		: [];
 	return {
-		...product,
+		...publicProduct,
 		categorySlug: category?.slug ?? null,
 		deletedAt: iso(product.deletedAt),
 		createdAt: product.createdAt.toISOString(),

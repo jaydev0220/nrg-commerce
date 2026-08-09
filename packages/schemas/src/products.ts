@@ -6,6 +6,7 @@ import {
 	dateSchema,
 	moneySchema,
 	nonEmptyUpdate,
+	notesSchema,
 	paginationQuerySchema,
 	resourceSlugSchema,
 	searchQuerySchema,
@@ -31,6 +32,7 @@ const productImageZoomSchema = z.number().min(1).max(3);
 const maximumDatabaseInteger = 2_147_483_647;
 const productNameSchema = z.string().trim().min(1).max(200);
 const productDescriptionSchema = z.string().trim().min(1).max(10_000);
+const productBaseUnitSchema = z.string().trim().min(1).max(50);
 const skuCodeSchema = z.string().trim().min(1).max(120);
 const imageAltTextSchema = z.string().trim().min(1).max(500);
 
@@ -98,6 +100,8 @@ export const productSchema = z.object({
 	nameEn: productNameSchema.nullable(),
 	description: productDescriptionSchema.nullable(),
 	descriptionEn: productDescriptionSchema.nullable(),
+	notes: notesSchema.nullable(),
+	baseUnit: productBaseUnitSchema.nullable(),
 	categoryId: uuidSchema.nullable(),
 	published: z.boolean(),
 	deletedAt: dateSchema.nullable(),
@@ -129,6 +133,7 @@ export const productSkuSchema = z.object({
 	price: moneySchema,
 	stockQuantity: z.int().min(0).max(maximumDatabaseInteger),
 	attributes: attributeMapSchema,
+	notes: notesSchema.nullable(),
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
 	updatedAt: dateSchema,
@@ -161,7 +166,8 @@ export const productSkuCreateSchema = z.object({
 	skuCode: skuCodeSchema,
 	price: moneySchema,
 	stockQuantity: z.coerce.number().pipe(z.int().min(0).max(maximumDatabaseInteger)),
-	attributes: attributeMapSchema.default({})
+	attributes: attributeMapSchema.default({}),
+	notes: notesSchema.nullable().optional()
 });
 
 export const productCreateSchema = z.object({
@@ -170,6 +176,8 @@ export const productCreateSchema = z.object({
 	nameEn: productNameSchema.optional(),
 	description: productDescriptionSchema.optional(),
 	descriptionEn: productDescriptionSchema.optional(),
+	notes: notesSchema.nullable().optional(),
+	baseUnit: productBaseUnitSchema.nullable().optional(),
 	categoryId: uuidSchema.nullable().optional(),
 	published: booleanLikeSchema.default(false)
 });
@@ -180,7 +188,8 @@ export const productSkuUpdateSchema = nonEmptyUpdate(
 		skuCode: skuCodeSchema.optional(),
 		price: moneySchema.optional(),
 		stockQuantity: z.coerce.number().pipe(z.int().min(0).max(maximumDatabaseInteger)).optional(),
-		attributes: attributeMapSchema.optional()
+		attributes: attributeMapSchema.optional(),
+		notes: notesSchema.nullable().optional()
 	})
 );
 
@@ -191,6 +200,8 @@ export const productUpdateSchema = nonEmptyUpdate(
 		nameEn: productNameSchema.nullable().optional(),
 		description: productDescriptionSchema.nullable().optional(),
 		descriptionEn: productDescriptionSchema.nullable().optional(),
+		notes: notesSchema.nullable().optional(),
+		baseUnit: productBaseUnitSchema.nullable().optional(),
 		categoryId: uuidSchema.nullable().optional(),
 		published: booleanLikeSchema.optional()
 	})

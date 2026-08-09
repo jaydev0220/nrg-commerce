@@ -41,6 +41,7 @@ export type OrderUpdateInput = {
 	customerEmail?: string | null;
 	customerPhone?: string | null;
 	customerAddress?: string | null;
+	notes?: string | null;
 	items?: OrderLineItemUpdateInput[];
 };
 
@@ -54,6 +55,7 @@ type ProposedValues = {
 	customerEmail: string | null;
 	customerPhone: string | null;
 	customerAddress: string | null;
+	notes: string | null;
 	items: ResolvedOrderUpdateItem[];
 };
 
@@ -168,7 +170,8 @@ function buildFieldChanges(
 		'customerName',
 		'customerEmail',
 		'customerPhone',
-		'customerAddress'
+		'customerAddress',
+		'notes'
 	];
 
 	return fields.flatMap((field) =>
@@ -252,6 +255,7 @@ export function buildOrderUpdatePreview(
 			customerEmail: proposedValues.customerEmail,
 			customerPhone: proposedValues.customerPhone,
 			customerAddress: proposedValues.customerAddress,
+			notes: proposedValues.notes,
 			itemCount: financials.itemCount,
 			subtotalAmount: financials.subtotalAmount,
 			discountLabelId: current.discountLabelId,

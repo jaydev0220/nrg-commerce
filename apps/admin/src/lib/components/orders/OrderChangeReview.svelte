@@ -19,7 +19,8 @@
 		customerName: '客戶姓名',
 		customerEmail: '電子郵件',
 		customerPhone: '電話',
-		customerAddress: '地址'
+		customerAddress: '地址',
+		notes: '備註'
 	};
 
 	function businessLabel(value: string | null): string {

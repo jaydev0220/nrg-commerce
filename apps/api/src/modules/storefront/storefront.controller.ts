@@ -31,13 +31,17 @@ type StorefrontCatalogController = {
 };
 
 function serializeSku(sku: CatalogSkuRecord) {
-	const { stockQuantity, ...publicSku } = sku;
+	const { stockQuantity, notes, ...publicSku } = sku;
 	void stockQuantity;
+	void notes;
 	return publicSku;
 }
 
 function serializeProduct(product: CatalogProductRecord) {
-	return { ...product, skus: product.skus.map(serializeSku) };
+	const { notes, baseUnit, ...publicProduct } = product;
+	void notes;
+	void baseUnit;
+	return { ...publicProduct, skus: product.skus.map(serializeSku) };
 }
 
 export function createStorefrontCatalogController(dependencies: StorefrontControllerDependencies) {
