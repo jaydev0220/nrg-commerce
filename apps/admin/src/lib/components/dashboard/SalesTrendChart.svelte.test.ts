@@ -51,8 +51,12 @@ function bucketTargets(container: Element): SVGRectElement[] {
 	return Array.from(container.querySelectorAll<SVGRectElement>('[data-bucket-index]'));
 }
 
-function dispatchPointerEvent(element: Element, type: 'pointerenter' | 'pointerdown'): void {
-	element.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true }));
+function dispatchPointerEvent(
+	element: Element,
+	type: 'pointerenter' | 'pointerdown' | 'pointerleave',
+	pointerType = 'mouse'
+): void {
+	element.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerType }));
 }
 
 function selectedValues(container: Element): Array<string | undefined> {
@@ -65,7 +69,7 @@ describe('sales trend chart', () => {
 		const targets = bucketTargets(screen.container);
 
 		expect(targets).toHaveLength(2);
-		expect(selectedValues(screen.container)).toEqual(['$2,400', '$1,400', '$1,000']);
+		expect(screen.container.querySelector('[data-trend-card]')).toBeNull();
 
 		dispatchPointerEvent(targets[0] as SVGRectElement, 'pointerenter');
 		const details = screen.getByRole('region', { name: '所選銷售趨勢' });
@@ -95,16 +99,35 @@ describe('sales trend chart', () => {
 		expect(targets[0]?.getAttribute('aria-describedby')).toBe('sales-trend-details');
 	});
 
-	it('persists a timestamp selected with a pointer', async () => {
+	it('keeps a touch selection until the next outside interaction', async () => {
 		const screen = await render(SalesTrendChart, { trend: createTrend() });
 		const firstTarget = bucketTargets(screen.container)[0];
 
-		dispatchPointerEvent(firstTarget as SVGRectElement, 'pointerdown');
+		dispatchPointerEvent(firstTarget as SVGRectElement, 'pointerdown', 'touch');
 
 		await expect
 			.element(screen.getByRole('region', { name: '所選銷售趨勢' }))
 			.toHaveTextContent('7/20');
 		expect(firstTarget?.getAttribute('aria-pressed')).toBe('true');
+
+		document.body.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch' })
+		);
+		await tick();
+		expect(screen.container.querySelector('[data-trend-card]')).toBeNull();
+	});
+
+	it('hides pointer details when the cursor leaves the graph', async () => {
+		const screen = await render(SalesTrendChart, { trend: createTrend() });
+		const firstTarget = bucketTargets(screen.container)[0];
+		dispatchPointerEvent(firstTarget as SVGRectElement, 'pointerenter');
+		await tick();
+		expect(screen.container.querySelector('[data-trend-card]')).not.toBeNull();
+
+		const graph = screen.container.querySelector('.relative.min-w-240');
+		dispatchPointerEvent(graph as Element, 'pointerleave');
+		await tick();
+		expect(screen.container.querySelector('[data-trend-card]')).toBeNull();
 	});
 
 	it('shows missing values without treating them as zero', async () => {
@@ -158,6 +181,21 @@ describe('sales trend chart', () => {
 				expect(centerY).toBeLessThanOrEqual(targetBounds.bottom);
 			}
 		}
+	});
+
+	it('clamps the compact details card inside both plot edges', async () => {
+		const screen = await render(SalesTrendChart, { trend: createTrend() });
+		const targets = bucketTargets(screen.container);
+
+		dispatchPointerEvent(targets[0] as SVGRectElement, 'pointerenter');
+		await tick();
+		const firstCard = screen.container.querySelector('foreignObject[data-trend-card]');
+		expect(firstCard?.getAttribute('x')).toBe('48');
+
+		dispatchPointerEvent(targets[1] as SVGRectElement, 'pointerenter');
+		await tick();
+		const lastCard = screen.container.querySelector('foreignObject[data-trend-card]');
+		expect(Number(lastCard?.getAttribute('x')) + Number(lastCard?.getAttribute('width'))).toBe(928);
 	});
 
 	it('covers the full plot for one point and renders no targets for empty data', async () => {

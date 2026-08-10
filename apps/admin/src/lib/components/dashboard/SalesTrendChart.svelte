@@ -10,6 +10,8 @@
 	const plotRight = 928;
 	const plotTop = 28;
 	const plotBottom = 264;
+	const tooltipWidth = 224;
+	const tooltipHeight = 126;
 	const seriesColors: Record<DashboardTrendSeries['key'], string> = {
 		total: 'var(--color-brand)',
 		business: 'var(--color-success)',
@@ -24,6 +26,8 @@
 	type SeriesKey = (typeof seriesOrder)[number];
 
 	let activeTimestamp = $state<number | null>(null);
+	let graphElement = $state<HTMLDivElement>();
+	let touchSelection = false;
 
 	const totalPoints = $derived(trend.series.find((series) => series.key === 'total')?.points ?? []);
 	const pointCount = $derived(totalPoints.length);
@@ -31,13 +35,10 @@
 		Math.max(1, ...trend.series.flatMap((series) => series.points.map((point) => point.value)))
 	);
 	const activeTrend = $derived.by(() => {
-		if (totalPoints.length === 0) return null;
+		if (totalPoints.length === 0 || activeTimestamp === null) return null;
 
-		const selectedIndex =
-			activeTimestamp === null
-				? -1
-				: totalPoints.findIndex((point) => point.startAt.getTime() === activeTimestamp);
-		const index = selectedIndex >= 0 ? selectedIndex : totalPoints.length - 1;
+		const index = totalPoints.findIndex((point) => point.startAt.getTime() === activeTimestamp);
+		if (index < 0) return null;
 		const point = totalPoints[index];
 		if (!point) return null;
 
@@ -74,6 +75,10 @@
 		return plotBottom - (value / maxValue) * (plotBottom - plotTop);
 	}
 
+	function tooltipX(x: number): number {
+		return Math.min(plotRight - tooltipWidth, Math.max(plotLeft, x - tooltipWidth / 2));
+	}
+
 	function bucketRegion(index: number): { x: number; width: number } {
 		if (pointCount <= 1) return { x: plotLeft, width: plotRight - plotLeft };
 
@@ -99,6 +104,15 @@
 	function activateBucket(index: number): void {
 		const point = totalPoints[index];
 		if (point) activeTimestamp = point.startAt.getTime();
+	}
+
+	function clearActiveTrend(): void {
+		activeTimestamp = null;
+	}
+
+	function bucketTabIndex(index: number): number {
+		if (activeTrend) return activeTrend.index === index ? 0 : -1;
+		return index === pointCount - 1 ? 0 : -1;
 	}
 
 	function bucketAccessibleLabel(label: string, startAt: Date): string {
@@ -139,9 +153,34 @@
 
 	function handleBucketPointer(event: PointerEvent, index: number): void {
 		activateBucket(index);
+		touchSelection = event.pointerType === 'touch';
 		(event.currentTarget as SVGRectElement).focus({ preventScroll: true });
 	}
+
+	function handlePointerEnter(index: number): void {
+		touchSelection = false;
+		activateBucket(index);
+	}
+
+	function handleGraphPointerLeave(): void {
+		if (!touchSelection) clearActiveTrend();
+	}
+
+	function handleGraphFocusOut(event: FocusEvent): void {
+		const nextTarget = event.relatedTarget;
+		if (!(nextTarget instanceof Node) || !graphElement?.contains(nextTarget)) clearActiveTrend();
+	}
+
+	function handleDocumentPointerDown(event: PointerEvent): void {
+		if (!touchSelection) return;
+		const target = event.target;
+		if (target instanceof Node && graphElement?.contains(target)) return;
+		touchSelection = false;
+		clearActiveTrend();
+	}
 </script>
+
+<svelte:document onpointerdown={handleDocumentPointerDown} />
 
 <div class="mb-2 flex flex-wrap gap-x-4 gap-y-2 text-xs text-text-muted">
 	{#each trend.series as series (series.key)}
@@ -155,39 +194,15 @@
 	{/each}
 </div>
 
-{#if activeTrend}
-	<section
-		id="sales-trend-details"
-		class="mb-3 rounded-md border border-border bg-bg-sunken px-3 py-2"
-		aria-label="所選銷售趨勢"
-		aria-live="polite"
-		aria-atomic="true"
-	>
-		<div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-			<p class="text-sm font-semibold text-text-heading">{activeTrend.label}</p>
-			<p class="text-xs text-text-muted">{formatDateTime(new Date(activeTrend.timestamp))}</p>
-		</div>
-		<dl class="mt-2 grid gap-2 sm:grid-cols-3">
-			{#each activeTrend.values as item (item.key)}
-				<div class="flex items-center justify-between gap-3 text-sm sm:block">
-					<dt class="inline-flex items-center gap-2 text-text-muted">
-						<span
-							class="size-2.5 shrink-0 rounded-full"
-							style={`background: ${seriesColors[item.key]}`}
-						></span>
-						{seriesLabels[item.key]}
-					</dt>
-					<dd class="font-semibold text-text-heading sm:mt-1">
-						{item.value === undefined ? '—' : formatMoney(item.value)}
-					</dd>
-				</div>
-			{/each}
-		</dl>
-	</section>
-{/if}
-
 <div class="overflow-x-auto">
-	<div class="min-w-240">
+	<div
+		class="relative min-w-240"
+		bind:this={graphElement}
+		role="group"
+		aria-label="銷售趨勢互動區"
+		onpointerleave={handleGraphPointerLeave}
+		onfocusout={handleGraphFocusOut}
+	>
 		<svg
 			viewBox={`0 0 ${chartWidth} ${chartHeight}`}
 			class="block h-80 w-full"
@@ -264,18 +279,59 @@
 					y={plotTop}
 					width={region.width}
 					height={plotBottom - plotTop}
-					tabindex={activeTrend?.index === index ? 0 : -1}
+					tabindex={bucketTabIndex(index)}
 					role="button"
 					aria-pressed={activeTrend?.index === index}
 					aria-label={bucketAccessibleLabel(point.label, point.startAt)}
-					aria-describedby="sales-trend-details"
+					aria-describedby={activeTrend?.index === index ? 'sales-trend-details' : undefined}
 					class="cursor-pointer fill-transparent focus-visible:fill-brand/5 focus-visible:stroke-brand focus-visible:stroke-2 focus-visible:outline-none"
-					onpointerenter={() => activateBucket(index)}
+					onpointerenter={() => handlePointerEnter(index)}
 					onpointerdown={(event) => handleBucketPointer(event, index)}
 					onfocus={() => activateBucket(index)}
 					onkeydown={(event) => handleBucketKeydown(event, index)}
 				></rect>
 			{/each}
+			{#if activeTrend}
+				<foreignObject
+					data-trend-card
+					x={tooltipX(activeTrend.x)}
+					y={plotTop}
+					width={tooltipWidth}
+					height={tooltipHeight}
+					class="pointer-events-none overflow-visible"
+				>
+					<section
+						id="sales-trend-details"
+						class="rounded-md border border-border bg-bg-surface/95 px-3 py-2 shadow-md backdrop-blur-sm"
+						aria-label="所選銷售趨勢"
+						aria-live="polite"
+						aria-atomic="true"
+					>
+						<div class="flex items-baseline justify-between gap-3">
+							<p class="text-sm font-semibold text-text-heading">{activeTrend.label}</p>
+							<p class="truncate text-[11px] text-text-muted">
+								{formatDateTime(new Date(activeTrend.timestamp))}
+							</p>
+						</div>
+						<dl class="mt-1.5 space-y-1">
+							{#each activeTrend.values as item (item.key)}
+								<div class="flex items-center justify-between gap-3 text-xs">
+									<dt class="inline-flex min-w-0 items-center gap-2 text-text-muted">
+										<span
+											class="size-2 shrink-0 rounded-full"
+											style={`background: ${seriesColors[item.key]}`}
+										></span>
+										<span class="truncate">{seriesLabels[item.key]}</span>
+									</dt>
+									<dd class="shrink-0 font-semibold text-text-heading">
+										{item.value === undefined ? '—' : formatMoney(item.value)}
+									</dd>
+								</div>
+							{/each}
+						</dl>
+					</section>
+				</foreignObject>
+			{/if}
 		</svg>
 	</div>
 </div>
