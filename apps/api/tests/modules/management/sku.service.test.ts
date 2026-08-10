@@ -120,3 +120,132 @@ test('restoreSku rejects active SKUs and force deletion rejects every image refe
 		(error: unknown) => error instanceof AppError && error.code === 'SKU_DELETE_CONFLICT'
 	);
 });
+
+test('listSkus includes image references only for archived inventory', async () => {
+	const options: unknown[] = [];
+	const service = createSkuService({
+		repository: repository({
+			listSkus: async (_query: unknown, input: unknown) => {
+				options.push(input);
+				return { data: [], total: 0 };
+			}
+		}) as never
+	});
+	const query = {
+		page: 1,
+		limit: 20,
+		sort: 'updatedAt' as const,
+		order: 'desc' as const
+	};
+
+	await service.listSkus(query);
+	await service.listSkus({ ...query, archived: true });
+
+	assert.deepEqual(options, [{ includeImages: false }, { includeImages: true }]);
+});
+
+test('restoreSku rejects missing destinations and conflicting SKU codes', async () => {
+	const input = {
+		productId: 'product-2',
+		skuCode: 'SKU-1',
+		price: 100,
+		stockQuantity: 2,
+		attributes: {}
+	};
+	const missingProductService = createSkuService({
+		repository: repository({ findProductById: async () => null }) as never
+	});
+	await assert.rejects(
+		() => missingProductService.restoreSku('sku-1', input),
+		(error: unknown) => error instanceof AppError && error.code === 'PRODUCT_NOT_FOUND'
+	);
+
+	const conflictingCodeService = createSkuService({
+		repository: repository({ skuCodeExists: async () => true }) as never
+	});
+	await assert.rejects(
+		() => conflictingCodeService.restoreSku('sku-1', input),
+		(error: unknown) => error instanceof AppError && error.code === 'SKU_CODE_CONFLICT'
+	);
+});
+
+test('deleteSku supports soft and eligible force deletion modes', async () => {
+	let softDeletes = 0;
+	let forceDeletes = 0;
+	const service = createSkuService({
+		repository: repository({
+			softDeleteSku: async () => {
+				softDeletes += 1;
+			},
+			forceDeleteSku: async () => {
+				forceDeletes += 1;
+			}
+		}) as never
+	});
+
+	assert.equal(await service.deleteSku('sku-1', { force: false }), 'soft');
+	assert.equal(await service.deleteSku('sku-1', { force: true }), 'force');
+	assert.equal(softDeletes, 1);
+	assert.equal(forceDeletes, 1);
+});
+
+test('getSku returns records and reports missing SKUs', async () => {
+	const service = createSkuService({ repository: repository() as never });
+	assert.equal((await service.getSku('sku-1', { includeImages: false })).id, 'sku-1');
+
+	const missingService = createSkuService({
+		repository: repository({ findSkuById: async () => null }) as never
+	});
+	await assert.rejects(
+		() => missingService.getSku('missing', { includeImages: true }),
+		(error: unknown) => error instanceof AppError && error.code === 'SKU_NOT_FOUND'
+	);
+});
+
+test('createSku covers successful, conflicting, and missing-product outcomes', async () => {
+	const input = {
+		productId: 'product-2',
+		skuCode: 'SKU-2',
+		price: 100,
+		stockQuantity: 2,
+		attributes: {}
+	};
+	const service = createSkuService({ repository: repository() as never });
+	assert.equal((await service.createSku(input)).id, 'sku-1');
+
+	const conflictingService = createSkuService({
+		repository: repository({ skuCodeExists: async () => true }) as never
+	});
+	await assert.rejects(
+		() => conflictingService.createSku(input),
+		(error: unknown) => error instanceof AppError && error.code === 'SKU_CODE_CONFLICT'
+	);
+
+	const missingProductService = createSkuService({
+		repository: repository({ findProductById: async () => null }) as never
+	});
+	await assert.rejects(
+		() => missingProductService.createSku(input),
+		(error: unknown) => error instanceof AppError && error.code === 'PRODUCT_NOT_FOUND'
+	);
+});
+
+test('updateSku checks changed codes while allowing unchanged and available codes', async () => {
+	const checkedCodes: string[] = [];
+	const service = createSkuService({
+		repository: repository({
+			skuCodeExists: async (skuCode: string) => {
+				checkedCodes.push(skuCode);
+				return skuCode === 'TAKEN';
+			}
+		}) as never
+	});
+
+	await service.updateSku('sku-1', { skuCode: 'SKU-1' });
+	await service.updateSku('sku-1', { skuCode: 'AVAILABLE' });
+	await assert.rejects(
+		() => service.updateSku('sku-1', { skuCode: 'TAKEN' }),
+		(error: unknown) => error instanceof AppError && error.code === 'SKU_CODE_CONFLICT'
+	);
+	assert.deepEqual(checkedCodes, ['AVAILABLE', 'TAKEN']);
+});
