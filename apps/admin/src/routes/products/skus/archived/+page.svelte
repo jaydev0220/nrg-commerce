@@ -7,7 +7,9 @@
 	import {
 		AdminApiError,
 		forceDeleteProductSku,
+		loadProductLookup,
 		restoreProductSku,
+		type ManagedProduct,
 		type ManagedProductSku
 	} from '$lib/api/admin-api';
 	import ArchivedSkuRestoreDrawer from '$lib/components/products/ArchivedSkuRestoreDrawer.svelte';
@@ -18,8 +20,10 @@
 
 	let { data }: { data: PageData } = $props();
 	let selected = $state<ManagedProductSku | null>(null);
+	let restoreProduct = $state<ManagedProduct | null>(null);
 	let message = $state('');
 	let busySkuId = $state<string | null>(null);
+	let openingSkuId = $state<string | null>(null);
 	const filterHandlers = createFilterHandlers('/products/skus/archived');
 	const permissions = $derived(
 		new Set(data.currentStaff?.roles.flatMap((role) => role.permissions) ?? [])
@@ -35,8 +39,34 @@
 		message = '';
 		await restoreProductSku(skuId, input);
 		selected = null;
+		restoreProduct = null;
 		message = '已還原 SKU。';
 		await invalidateAll();
+	}
+
+	async function openRestoreDrawer(sku: ManagedProductSku) {
+		if (openingSkuId) return;
+		message = '';
+		openingSkuId = sku.id;
+		try {
+			const product = await loadProductLookup(sku.productId);
+			restoreProduct = product.deletedAt ? null : product;
+			selected = sku;
+		} catch (error) {
+			if (error instanceof AdminApiError && error.status === 404) {
+				restoreProduct = null;
+				selected = sku;
+			} else {
+				message = errorMessage(error, '無法載入 SKU 原商品。');
+			}
+		} finally {
+			openingSkuId = null;
+		}
+	}
+
+	function closeRestoreDrawer() {
+		selected = null;
+		restoreProduct = null;
 	}
 
 	async function purgeSku(sku: ManagedProductSku) {
@@ -131,10 +161,11 @@
 									<div class="flex justify-end gap-2">
 										{#if canRestore}<button
 												type="button"
-												class="h-9 cursor-pointer rounded-md border border-border px-3"
-												onclick={() => (selected = sku)}
+												disabled={openingSkuId !== null}
+												class="h-9 cursor-pointer rounded-md border border-border px-3 disabled:cursor-not-allowed disabled:opacity-55"
+												onclick={() => void openRestoreDrawer(sku)}
 											>
-												還原
+												{openingSkuId === sku.id ? '載入中…' : '還原'}
 											</button>{/if}
 										{#if canDelete}<button
 												type="button"
@@ -162,7 +193,7 @@
 
 <ArchivedSkuRestoreDrawer
 	sku={selected}
-	products={data.products}
-	onclose={() => (selected = null)}
+	product={restoreProduct}
+	onclose={closeRestoreDrawer}
 	onrestore={restoreSku}
 />

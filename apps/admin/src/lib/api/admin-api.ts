@@ -408,6 +408,30 @@ export async function loadProductPageData(searchParams = new URLSearchParams()) 
 	return { categories, products: products.data, pagination: products.pagination };
 }
 
+export function loadProductLookup(productId: string) {
+	return json(
+		`/api/management/products/${productId}?includeSkus=false&includeImages=false`,
+		managedProductResponseSchema
+	);
+}
+
+export function loadProductLookups(search = '') {
+	const params = new URLSearchParams();
+	const normalizedSearch = search.trim();
+	if (normalizedSearch) params.set('search', normalizedSearch);
+	params.set('includeDeleted', 'false');
+	params.set('includeSkus', 'false');
+	params.set('includeImages', 'false');
+	params.set('sort', 'name');
+	params.set('order', 'asc');
+	params.set('page', '1');
+	params.set('limit', String(managementPageSize));
+	return json(
+		`/api/management/products?${params}`,
+		paginatedResponseSchema(managedProductResponseSchema)
+	);
+}
+
 export async function loadCategoryPageData() {
 	const categories = await collectPaginatedData(
 		'/api/management/products/categories',
@@ -597,18 +621,12 @@ export function restoreProductSku(
 export async function loadArchivedSkuPageData(searchParams = new URLSearchParams()) {
 	const skuParams = new URLSearchParams(searchParams);
 	skuParams.set('archived', 'true');
-	const productParams = new URLSearchParams({
-		includeDeleted: 'false',
-		includeSkus: 'false',
-		includeImages: 'false',
-		sort: 'name',
-		order: 'asc'
-	});
-	const [skus, products] = await Promise.all([
-		loadPaginatedData('/api/management/products/skus', managedProductSkuResponseSchema, skuParams),
-		collectPaginatedData('/api/management/products', managedProductResponseSchema, productParams)
-	]);
-	return { skus: skus.data, pagination: skus.pagination, products };
+	const skus = await loadPaginatedData(
+		'/api/management/products/skus',
+		managedProductSkuResponseSchema,
+		skuParams
+	);
+	return { skus: skus.data, pagination: skus.pagination };
 }
 
 export function createImageUploadTarget(

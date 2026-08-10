@@ -51,6 +51,8 @@ import {
 	loadLogsPageData,
 	loadProductEditorData,
 	loadArchivedSkuPageData,
+	loadProductLookup,
+	loadProductLookups,
 	loadSecuritySettingsData,
 	loadStaffPageData,
 	registerProductImage,
@@ -558,21 +560,44 @@ describe('admin API product contracts', () => {
 		);
 	});
 
-	it('loads archived SKUs with active destination products', async () => {
+	it('loads archived SKUs without collecting every active product', async () => {
 		client.requestJson.mockImplementation(async (path: string) => {
 			if (path.startsWith('/api/management/products/skus?')) {
 				return paginated([{ ...skuRecord, deletedAt: timestamp }]);
 			}
-			if (path.startsWith('/api/management/products?')) return paginated([productRecord]);
 			throw new Error(`Unexpected request: ${path}`);
 		});
 
 		const result = await loadArchivedSkuPageData(new URLSearchParams({ search: 'SKU-1' }));
 
 		expect(result.skus[0]?.deletedAt).toBeInstanceOf(Date);
-		expect(result.products[0]?.id).toBe(productRecord.id);
 		expect(client.requestJson).toHaveBeenCalledWith(
 			'/api/management/products/skus?search=SKU-1&archived=true&page=1&limit=20',
+			{},
+			{}
+		);
+		expect(client.requestJson).toHaveBeenCalledTimes(1);
+	});
+
+	it('resolves an original product and limits searchable restore destinations', async () => {
+		client.requestJson
+			.mockResolvedValueOnce(productRecord)
+			.mockResolvedValueOnce(paginated([productRecord]));
+
+		const product = await loadProductLookup(ids.product);
+		const results = await loadProductLookups('  Glass  ');
+
+		expect(product.id).toBe(ids.product);
+		expect(results.data[0]?.id).toBe(ids.product);
+		expect(client.requestJson).toHaveBeenNthCalledWith(
+			1,
+			`/api/management/products/${ids.product}?includeSkus=false&includeImages=false`,
+			{},
+			{}
+		);
+		expect(client.requestJson).toHaveBeenNthCalledWith(
+			2,
+			'/api/management/products?search=Glass&includeDeleted=false&includeSkus=false&includeImages=false&sort=name&order=asc&page=1&limit=20',
 			{},
 			{}
 		);

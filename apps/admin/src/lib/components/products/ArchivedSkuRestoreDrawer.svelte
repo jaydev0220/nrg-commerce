@@ -3,16 +3,17 @@
 
 	import { AdminApiError, type ManagedProduct, type ManagedProductSku } from '$lib/api/admin-api';
 	import Drawer from '$lib/components/shared/Drawer.svelte';
+	import ProductCombobox from './ProductCombobox.svelte';
 	import type { ArchivedSkuRestoreInput, ProductAttributeRow } from './types';
 
 	let {
 		sku,
-		products,
+		product,
 		onclose,
 		onrestore
 	}: {
 		sku: ManagedProductSku | null;
-		products: ManagedProduct[];
+		product: ManagedProduct | null;
 		onclose: () => void;
 		onrestore: (skuId: string, input: ArchivedSkuRestoreInput) => Promise<void>;
 	} = $props();
@@ -28,6 +29,7 @@
 	}
 
 	let attributeRows = $derived(initialAttributeRows(sku));
+	let selectedProduct = $derived(product);
 	let errorMessage = $state('');
 	let busy = $state(false);
 
@@ -108,23 +110,16 @@
 					{errorMessage}
 				</p>
 			{/if}
-			<label class="block text-sm font-medium">
+			<div class="block text-sm font-medium">
 				所屬商品
-				<select
-					required
-					name="productId"
-					class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3"
-				>
-					{#each products as product (product.id)}
-						<option
-							value={product.id}
-							selected={product.id === sku.productId}
-						>
-							{product.name}
-						</option>
-					{/each}
-				</select>
-			</label>
+				<div class="mt-1">
+					<ProductCombobox
+						product={selectedProduct}
+						onselect={(value) => (selectedProduct = value)}
+						disabled={busy}
+					/>
+				</div>
+			</div>
 			<label class="block text-sm font-medium">
 				SKU 代碼
 				<input
@@ -207,7 +202,7 @@
 			</fieldset>
 			<button
 				type="submit"
-				disabled={busy || products.length === 0}
+				disabled={busy || !selectedProduct}
 				class="h-10 w-full cursor-pointer rounded-md bg-brand text-sm font-semibold text-text-on-accent disabled:cursor-not-allowed disabled:opacity-55"
 			>
 				{busy ? '還原中...' : '確認還原'}
