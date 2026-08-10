@@ -77,7 +77,7 @@ test('orderCreateSchema requires consumer name and phone and validates phone for
 	const order = orderCreateSchema.parse({
 		businessId: null,
 		customerName: 'Walk-in Buyer',
-		customerPhone: '+886 (912) 345-678',
+		customerPhone: '+886 (912) 345-678#12',
 		items: [orderItem]
 	});
 

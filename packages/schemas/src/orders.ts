@@ -41,7 +41,7 @@ const orderCustomerPhoneSchema = z
 	.string()
 	.trim()
 	.max(32)
-	.regex(/^\+?[0-9()\s-]+$/, { error: 'Phone number contains unsupported characters.' })
+	.regex(/^\+?[0-9()#\s-]+$/, { error: 'Phone number contains unsupported characters.' })
 	.refine(
 		(value) => {
 			const digitCount = value.replace(/\D/g, '').length;

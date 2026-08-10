@@ -1,6 +1,6 @@
-export const customerPhonePattern = '^\\+?[0-9()\\s-]+$';
+export const customerPhonePattern = '^\\+?[0-9()#\\s-]+$';
 
-const customerPhoneRegex = /^\+?[0-9()\s-]+$/;
+const customerPhoneRegex = /^\+?[0-9()#\s-]+$/;
 const invoiceNumberRegex = /^[A-Z0-9]{1,50}$/;
 
 export function normalizeInvoiceNumber(value: string | null | undefined): string | null {

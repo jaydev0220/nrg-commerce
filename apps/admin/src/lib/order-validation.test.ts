@@ -40,12 +40,12 @@ describe('order customer validation', () => {
 		).toBeNull();
 	});
 
-	it('accepts formatted phone numbers and rejects invalid digit counts', () => {
+	it('accepts formatted phone numbers with extension markers and rejects invalid digit counts', () => {
 		expect(
 			validateOrderCustomerContact({
 				businessId: null,
 				customerName: '一般消費者',
-				customerPhone: '+886 (912) 345-678'
+				customerPhone: '+886 (912) 345-678#12'
 			})
 		).toBeNull();
 		expect(
