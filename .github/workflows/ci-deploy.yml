@@ -412,8 +412,8 @@ jobs:
           HCP_TERRAFORM_TOKEN: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
 
-  sync-secrets:
-    name: Sync runtime secrets
+  sync-backup-secret:
+    name: Sync backup database secret
     if: github.event_name != 'pull_request'
     needs: [apply-infrastructure]
     runs-on: ubuntu-24.04
@@ -430,33 +430,20 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
           client-id: ${{ vars.AZURE_CLIENT_ID }}
-      - name: Sync generated and GitHub-owned secrets
+      - name: Sync generated backup URL
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
-          TF_RUNTIME_SECRETS_JSON: ${{ secrets.TF_RUNTIME_SECRETS_JSON || '{}' }}
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
         run: |
           terraform -chdir=infra/production init -input=false -lockfile=readonly
           KEY_VAULT_NAME="$(terraform -chdir=infra/production output -raw key_vault_name)"
-          set_secret() {
-            local name="$1" value="$2"
-            az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name "$name" --value "$value" --only-show-errors --output none
-          }
-          set_secret database-url "$(terraform -chdir=infra/production output -raw neon_app_database_url)"
-          set_secret direct-url "$(terraform -chdir=infra/production output -raw neon_app_database_url)"
-          set_secret backup-database-url "$(terraform -chdir=infra/production output -raw neon_backup_database_url)"
-          printf '%s' "$TF_RUNTIME_SECRETS_JSON" | jq -r 'to_entries[] | [.key, .value] | @tsv' | while IFS=$'\t' read -r name value; do
-            test -n "$name"
-            secret_name="$(printf '%s' "${name//_/-}" | tr '[:upper:]' '[:lower:]')"
-            set_secret "$secret_name" "$value"
-          done
-          az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --query properties.provisioningState -o tsv
+          BACKUP_DATABASE_URL="$(terraform -chdir=infra/production output -raw neon_backup_database_url)"
+          az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name backup-database-url --value "$BACKUP_DATABASE_URL" --only-show-errors --output none
 
   migrate:
     name: Migrate and seed database
     if: github.event_name != 'pull_request'
-    needs: [sync-secrets]
+    needs: [sync-backup-secret]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: production

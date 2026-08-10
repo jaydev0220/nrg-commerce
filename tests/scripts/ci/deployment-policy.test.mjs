@@ -18,7 +18,7 @@ test('all production mutations are behind the aggregate validation gate', async 
 	for (const job of [
 		'plan',
 		'apply-infrastructure',
-		'sync-secrets',
+		'sync-backup-secret',
 		'migrate',
 		'deploy-api',
 		'deploy-contact',
@@ -116,7 +116,7 @@ test('release jobs have bounded timeouts and Terraform setup where required', as
 		['terraform', 30],
 		['plan', 30],
 		['apply-infrastructure', 30],
-		['sync-secrets', 15],
+		['sync-backup-secret', 15],
 		['migrate', 30],
 		['deploy-api', 15],
 		['deploy-contact', 15],
@@ -192,6 +192,31 @@ test('production Neon resources stay within Free plan limits and wait for the en
 			)
 		);
 	}
+});
+
+test('Terraform exclusively owns production application secrets', async () => {
+	const [main, workflow] = await Promise.all([
+		readFile(new URL('infra/production/main.tf', root), 'utf8'),
+		readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8')
+	]);
+	for (const resource of ['runtime', 'database_url', 'direct_url']) {
+		assert.match(main, new RegExp(`resource "azurerm_key_vault_secret" "${resource}"`, 'u'));
+	}
+	assert.doesNotMatch(main, /ignore_changes\s+=\s+\[value\]/u);
+	assert.equal((workflow.match(/az keyvault secret set/gu) ?? []).length, 1);
+	assert.match(workflow, /az keyvault secret set[^\n]*--name backup-database-url/u);
+	assert.doesNotMatch(workflow, /^  sync-secrets:/mu);
+	assert.doesNotMatch(jobBlock(workflow, 'sync-backup-secret'), /TF_RUNTIME_SECRETS_JSON/u);
+	assert.match(workflow, /migrate:[\s\S]*?needs: \[sync-backup-secret\]/u);
+});
+
+test('production provider-normalized fields are explicit', async () => {
+	const main = await readFile(new URL('infra/production/main.tf', root), 'utf8');
+	assert.match(main, /domains\s+= \["catalog\.\$\{var\.domain\}", "www\.\$\{var\.domain\}"\]/u);
+	assert.match(
+		main,
+		/resource "azurerm_container_app" "api" \{[\s\S]*?workload_profile_name\s+= "Consumption"/u
+	);
 });
 
 test('phase-two Azure resources include the certificate identity, location, and IPv4 ingress ranges', async () => {

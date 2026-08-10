@@ -279,7 +279,7 @@ resource "cloudflare_turnstile_widget" "production" {
   account_id = var.cloudflare_account_id
   name       = "${local.resource_prefix}-production"
   mode       = "managed"
-  domains    = ["www.${var.domain}", "catalog.${var.domain}"]
+  domains    = ["catalog.${var.domain}", "www.${var.domain}"]
 }
 
 resource "azurerm_resource_group" "production" {
@@ -356,7 +356,6 @@ resource "azurerm_key_vault_secret" "runtime" {
   content_type = "nrg-commerce production runtime secret"
   lifecycle {
     prevent_destroy = true
-    ignore_changes  = [value]
   }
 }
 
@@ -368,7 +367,6 @@ resource "azurerm_key_vault_secret" "database_url" {
 
   lifecycle {
     prevent_destroy = true
-    ignore_changes  = [value]
   }
 }
 
@@ -380,7 +378,6 @@ resource "azurerm_key_vault_secret" "direct_url" {
 
   lifecycle {
     prevent_destroy = true
-    ignore_changes  = [value]
   }
 }
 
@@ -421,6 +418,7 @@ resource "azurerm_container_app" "api" {
   count                        = var.bootstrap_phase == "phase-1-base" ? 0 : 1
   name                         = "ca-${local.resource_prefix}-api"
   container_app_environment_id = azurerm_container_app_environment.production.id
+  workload_profile_name        = "Consumption"
   resource_group_name          = azurerm_resource_group.production.name
   revision_mode                = "Multiple"
   max_inactive_revisions       = 5
