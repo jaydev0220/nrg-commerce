@@ -686,23 +686,15 @@ describe('admin API staff and order contracts', () => {
 		expect(result.orders[0]?.notes).toBeNull();
 	});
 
-	it('preserves legacy stored order text without applying write transforms', async () => {
+	it('rejects management order data that violates the validated storage contract', async () => {
 		client.requestJson.mockResolvedValueOnce(
-			paginated([
-				{
-					...orderRecord,
-					invoiceNumber: 'legacy-2026/01',
-					customerEmail: 'legacy mailbox',
-					customerPhone: 'extension 9'
-				}
-			])
+			paginated([{ ...orderRecord, invoiceNumber: 'legacy-2026/01' }])
 		);
 
-		const result = await loadOrderPageData();
-
-		expect(result.orders[0]?.invoiceNumber).toBe('legacy-2026/01');
-		expect(result.orders[0]?.customerEmail).toBe('legacy mailbox');
-		expect(result.orders[0]?.customerPhone).toBe('extension 9');
+		await expect(loadOrderPageData()).rejects.toMatchObject({
+			status: 502,
+			code: 'INVALID_API_RESPONSE'
+		});
 	});
 
 	it('trims SKU lookup search and sends order idempotency and status payloads', async () => {

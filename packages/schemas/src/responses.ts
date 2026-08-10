@@ -18,7 +18,7 @@ import {
 	uuidSchema
 } from './common.js';
 import { logSchema } from './logs.js';
-import { orderItemSchema, orderSchema } from './orders.js';
+import { invoiceNumberSchema, orderItemSchema, orderSchema } from './orders.js';
 import {
 	productCategorySchema,
 	productImageSchema,
@@ -194,27 +194,9 @@ export const managedBusinessResponseSchema = businessSchema.extend({
 	label: managedBusinessLabelResponseSchema.nullable()
 });
 
-export const managedOrderItemResponseSchema = orderItemSchema.extend({
-	skuCode: z.string(),
-	productName: z.string()
-});
-const managedOrderBusinessResponseSchema = managedBusinessResponseSchema.extend({
-	name: z.string(),
-	contactName: z.string().nullable(),
-	contactEmail: z.string().nullable(),
-	contactPhone: z.string().nullable(),
-	taxId: z.string().nullable(),
-	address: z.string().nullable(),
-	notes: z.string().nullable()
-});
+export const managedOrderItemResponseSchema = orderItemSchema;
 export const managedOrderResponseSchema = orderSchema.extend({
-	invoiceNumber: z.string().max(50).nullable(),
-	customerName: z.string().nullable(),
-	customerEmail: z.string().nullable(),
-	customerPhone: z.string().nullable(),
-	customerAddress: z.string().nullable(),
-	notes: z.string().nullable().default(null),
-	business: managedOrderBusinessResponseSchema.nullable(),
+	business: managedBusinessResponseSchema.nullable(),
 	items: z.array(managedOrderItemResponseSchema)
 });
 
@@ -242,13 +224,13 @@ export const managedOrderUpdatePreviewResponseSchema = z.object({
 	proposed: z.object({
 		version: z.int().min(0),
 		status: orderSchema.shape.status,
-		invoiceNumber: managedOrderResponseSchema.shape.invoiceNumber,
+		invoiceNumber: invoiceNumberSchema.nullable(),
 		businessId: uuidSchema.nullable(),
-		customerName: managedOrderResponseSchema.shape.customerName,
-		customerEmail: managedOrderResponseSchema.shape.customerEmail,
-		customerPhone: managedOrderResponseSchema.shape.customerPhone,
-		customerAddress: managedOrderResponseSchema.shape.customerAddress,
-		notes: managedOrderResponseSchema.shape.notes,
+		customerName: orderSchema.shape.customerName,
+		customerEmail: orderSchema.shape.customerEmail,
+		customerPhone: orderSchema.shape.customerPhone,
+		customerAddress: orderSchema.shape.customerAddress,
+		notes: orderSchema.shape.notes,
 		itemCount: z.int().min(0),
 		subtotalAmount: z.number().min(0),
 		discountLabelId: uuidSchema.nullable(),

@@ -1,9 +1,4 @@
-import type {
-	ManagedOrder,
-	ManagedOrderSkuLookup,
-	OrderUpdateInput,
-	OrderUpdateItemInput
-} from '$lib/api/admin-api';
+import type { ManagedOrder, ManagedOrderSkuLookup, OrderUpdateItemInput } from '$lib/api/admin-api';
 
 export type OrderItemDraft = {
 	key: string;
@@ -100,32 +95,4 @@ export function toOrderUpdateItems(items: OrderItemDraft[]): OrderUpdateItemInpu
 					attributes: item.attributes
 				}
 	);
-}
-
-export function onlyChangedOrderInput(
-	order: ManagedOrder,
-	input: OrderUpdateInput
-): OrderUpdateInput | null {
-	const changed: OrderUpdateInput = { version: input.version };
-	if (input.status !== undefined && input.status !== order.status) changed.status = input.status;
-	if (input.invoiceNumber !== undefined && input.invoiceNumber !== order.invoiceNumber)
-		changed.invoiceNumber = input.invoiceNumber;
-	if (input.businessId !== undefined && input.businessId !== order.businessId)
-		changed.businessId = input.businessId;
-	if (input.customerName !== undefined && input.customerName !== order.customerName)
-		changed.customerName = input.customerName;
-	if (input.customerEmail !== undefined && input.customerEmail !== order.customerEmail)
-		changed.customerEmail = input.customerEmail;
-	if (input.customerPhone !== undefined && input.customerPhone !== order.customerPhone)
-		changed.customerPhone = input.customerPhone;
-	if (input.customerAddress !== undefined && input.customerAddress !== order.customerAddress)
-		changed.customerAddress = input.customerAddress;
-	if (input.notes !== undefined && input.notes !== order.notes) changed.notes = input.notes;
-
-	if (input.items) {
-		const currentItems = toOrderUpdateItems(createOrderItemDrafts(order));
-		if (JSON.stringify(input.items) !== JSON.stringify(currentItems)) changed.items = input.items;
-	}
-
-	return Object.keys(changed).length > 1 ? changed : null;
 }

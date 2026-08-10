@@ -19,7 +19,6 @@
 	import OrderItemsEditor from './OrderItemsEditor.svelte';
 	import {
 		createOrderItemDrafts,
-		onlyChangedOrderInput,
 		toOrderUpdateItems,
 		validateOrderItemDrafts,
 		type OrderItemDraft
@@ -44,15 +43,18 @@
 	} = $props();
 
 	let order = $derived(currentOrder);
-	let businessId = $derived(currentOrder.businessId ?? '');
-	let selectedBusiness = $derived<ManagedBusiness | null>(currentOrder.business);
+	let businessId = $state('');
+	let selectedBusiness = $state<ManagedBusiness | null>(null);
 	let items = $derived<OrderItemDraft[]>(createOrderItemDrafts(order));
-	let invoiceNumberValue = $derived(currentOrder.invoiceNumber ?? '');
-	let customerPhoneValue = $derived(currentOrder.customerPhone ?? '');
 	let preview = $state<ManagedOrderUpdatePreview | null>(null);
 	let pendingInput = $state<OrderUpdateInput | null>(null);
 	let error = $state('');
 	let busy = $state(false);
+
+	$effect(() => {
+		businessId = currentOrder.businessId ?? '';
+		selectedBusiness = currentOrder.business;
+	});
 
 	const reviewBusinesses = $derived.by(() => {
 		const values = [order.business, selectedBusiness].filter(
@@ -71,15 +73,7 @@
 		return normalized || null;
 	}
 
-	function unchangedOrOptional(
-		value: FormDataEntryValue | null,
-		original: string | null
-	): string | null {
-		return String(value ?? '') === (original ?? '') ? original : optional(value);
-	}
-
-	function invoiceNumber(value: FormDataEntryValue | null, original: string | null): string | null {
-		if (String(value ?? '') === (original ?? '')) return original;
+	function invoiceNumber(value: FormDataEntryValue | null): string | null {
 		const normalized = normalizeInvoiceNumber(optional(value));
 		const error = validateInvoiceNumber(normalized);
 		if (error) throw new Error(error);
@@ -109,41 +103,29 @@
 			return;
 		}
 		const values = new FormData(event.currentTarget as HTMLFormElement);
-		const candidateBusinessId = businessId || null;
-		const customerName = unchangedOrOptional(values.get('customerName'), order.customerName);
-		const customerPhone = unchangedOrOptional(values.get('customerPhone'), order.customerPhone);
-		const contactError = validateOrderCustomerContact(
-			{
-				businessId: candidateBusinessId,
-				customerName,
-				customerPhone
-			},
-			{
-				validatePhoneFormat:
-					customerPhone !== order.customerPhone || candidateBusinessId !== order.businessId
-			}
-		);
+		const customerName = optional(values.get('customerName'));
+		const customerPhone = optional(values.get('customerPhone'));
+		const contactError = validateOrderCustomerContact({
+			businessId: businessId || null,
+			customerName,
+			customerPhone
+		});
 		if (contactError) {
 			error = contactError;
 			return;
 		}
-		const candidate: OrderUpdateInput = {
+		const input: OrderUpdateInput = {
 			version: order.version,
 			status: String(values.get('status')) as ManagedOrder['status'],
-			invoiceNumber: invoiceNumber(values.get('invoiceNumber'), order.invoiceNumber),
-			businessId: candidateBusinessId,
+			invoiceNumber: invoiceNumber(values.get('invoiceNumber')),
+			businessId: businessId || null,
 			customerName,
-			customerEmail: unchangedOrOptional(values.get('customerEmail'), order.customerEmail),
+			customerEmail: optional(values.get('customerEmail')),
 			customerPhone,
-			customerAddress: unchangedOrOptional(values.get('customerAddress'), order.customerAddress),
-			notes: unchangedOrOptional(values.get('notes'), order.notes),
+			customerAddress: optional(values.get('customerAddress')),
+			notes: optional(values.get('notes')),
 			items: toOrderUpdateItems(items)
 		};
-		const input = onlyChangedOrderInput(order, candidate);
-		if (!input) {
-			error = '尚未變更任何訂單資料。';
-			return;
-		}
 		busy = true;
 		try {
 			const result = await onpreview(order.id, input);
@@ -285,11 +267,9 @@
 							發票號碼（選填）
 							<input
 								name="invoiceNumber"
-								bind:value={invoiceNumberValue}
-								maxlength={invoiceNumberValue === (order.invoiceNumber ?? '') ? undefined : 50}
-								pattern={invoiceNumberValue === (order.invoiceNumber ?? '')
-									? undefined
-									: '[A-Za-z0-9]+'}
+								value={order.invoiceNumber ?? ''}
+								maxlength="50"
+								pattern="[A-Za-z0-9]+"
 								class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3 uppercase"
 								disabled={busy}
 							/>
@@ -318,12 +298,10 @@
 							電話
 							<input
 								name="customerPhone"
-								bind:value={customerPhoneValue}
+								value={order.customerPhone ?? ''}
 								required={!businessId}
-								pattern={customerPhoneValue === (order.customerPhone ?? '')
-									? undefined
-									: customerPhonePattern}
-								maxlength={customerPhoneValue === (order.customerPhone ?? '') ? undefined : 32}
+								pattern={customerPhonePattern}
+								maxlength="32"
 								inputmode="tel"
 								class="mt-1 h-10 w-full rounded-md border border-border bg-bg-surface px-3"
 								disabled={busy}
