@@ -14,9 +14,9 @@
 	import { buildInquiryQueryString, localeFromPathname } from '$lib/catalog/query.js';
 	import { localizeValue } from '$lib/catalog/ui.js';
 	import { localizeHref } from '$lib/paraglide/runtime';
-	import MarkdownContent from '$lib/components/MarkdownContent.svelte';
 	import ProductBreadcrumb from '$lib/components/ProductBreadcrumb.svelte';
 	import ProductConfigurator from '$lib/components/ProductConfigurator.svelte';
+	import ProductDescription from '$lib/components/ProductDescription.svelte';
 	import ProductImageGallery from '$lib/components/ProductImageGallery.svelte';
 
 	let { data }: PageProps = $props();
@@ -124,7 +124,7 @@
 					>
 						{m.catalog_description_title()}
 					</h2>
-					<MarkdownContent source={localizedDescription} />
+					<ProductDescription source={localizedDescription} />
 				</div>
 			</section>
 		{/if}
