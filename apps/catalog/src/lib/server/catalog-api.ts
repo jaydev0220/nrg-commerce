@@ -3,8 +3,10 @@ import { error } from '@sveltejs/kit';
 import {
 	storefrontCategoryResponseSchema,
 	storefrontCategoryTreeListResponseSchema,
+	paginatedResponseSchema,
 	storefrontProductListResponseSchema,
 	storefrontProductResponseSchema,
+	storefrontSkuResponseSchema,
 	type ZodType
 } from '@packages/schemas';
 
@@ -12,10 +14,12 @@ import type {
 	CatalogCategoryRecord,
 	CatalogCategoryNode,
 	CatalogProductRecord,
+	CatalogSkuRecord,
 	PaginatedResponse
 } from '$lib/catalog/types.js';
 
 const apiRequestTimeoutMs = 5_000;
+const storefrontSkuListResponseSchema = paginatedResponseSchema(storefrontSkuResponseSchema);
 
 export type CatalogIndexQuery = {
 	page: number;
@@ -173,6 +177,31 @@ export async function fetchCatalogSitemapProducts(fetcher: typeof fetch) {
 	}
 
 	return products;
+}
+
+export async function fetchCatalogSitemapSkus(fetcher: typeof fetch) {
+	const skus: Pick<CatalogSkuRecord, 'productSlug' | 'skuCode' | 'updatedAt'>[] = [];
+	let page = 1;
+
+	while (true) {
+		const response = await fetchJson(
+			fetcher,
+			'/api/storefront/products/skus',
+			storefrontSkuListResponseSchema,
+			new URLSearchParams({ page: String(page), limit: '100', sort: 'createdAt', order: 'desc' })
+		);
+		skus.push(
+			...response.data.map(({ productSlug, skuCode, updatedAt }) => ({
+				productSlug,
+				skuCode,
+				updatedAt
+			}))
+		);
+		if (page >= response.pagination.totalPages) break;
+		page += 1;
+	}
+
+	return skus;
 }
 
 function flattenCategoryTree(categories: CatalogCategoryNode[]): CatalogCategoryRecord[] {

@@ -6,6 +6,7 @@ import {
 	filterCatalogProducts,
 	getFirstImageForSku,
 	getProductGalleryImages,
+	getSkuAttributeSelection,
 	resolveCategorySlugScope
 } from '$lib/catalog/logic.js';
 import type { CatalogCategoryNode, CatalogProductRecord } from '$lib/catalog/types.js';
@@ -308,4 +309,21 @@ test('createProductConfigurationModel translates preview attribute labels for zh
 	expect(model.selectedAttributeEntries.find((entry) => entry.key === 'Range')?.label).toBe(
 		'量測範圍'
 	);
+});
+
+test('getSkuAttributeSelection keeps only configurable scalar values', () => {
+	const sku = createProducts()[0]!.skus[0]!;
+	sku.attributes = {
+		volume: '250 ml',
+		quantity: 2,
+		featured: true,
+		dimensions: { height: 10 },
+		nullable: null
+	};
+
+	expect(getSkuAttributeSelection(sku)).toEqual({
+		volume: '250 ml',
+		quantity: '2',
+		featured: 'true'
+	});
 });

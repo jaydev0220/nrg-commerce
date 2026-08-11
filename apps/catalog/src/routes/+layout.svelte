@@ -9,6 +9,8 @@
 	import { page } from '$app/state';
 	import type { Pathname } from '$app/types';
 	import { assetUrl, CATALOG_ASSETS, SHARED_ASSETS } from '$lib/assets';
+	import { resolveProductVariantUrlState } from '$lib/catalog/product-urls.js';
+	import type { CatalogProductRecord } from '$lib/catalog/types.js';
 	import * as m from '$lib/paraglide/messages';
 	import {
 		deLocalizeUrl,
@@ -27,7 +29,7 @@
 		type SupportedLocale
 	} from '@packages/seo';
 	import { onMount } from 'svelte';
-	import { Head, SchemaOrg, type SchemaOrgProps } from 'svead';
+	import { Head, SchemaOrg } from 'svead';
 	import './layout.css';
 
 	const THEME_COOKIE_NAME = 'theme';
@@ -40,7 +42,8 @@
 	let { children } = $props();
 	let locale = $derived((extractLocaleFromUrl(page.url) ?? 'zh-tw') as Locale);
 	let seoLocale = $derived(locale as SupportedLocale);
-	let isProductPage = $derived(Boolean(page.data['product']));
+	let product = $derived(page.data['product'] as CatalogProductRecord | undefined);
+	let isProductPage = $derived(Boolean(product));
 	let skipTarget = $derived(isProductPage ? 'product-content' : 'catalog-content');
 	let theme = $state<'light' | 'dark'>('light');
 
@@ -57,6 +60,10 @@
 		label: m.catalog_inquiry_cta()
 	});
 	const canonicalPathname = $derived(deLocalizeUrl(page.url).pathname);
+	const productVariantUrlState = $derived(
+		product ? resolveProductVariantUrlState(page.url, product) : null
+	);
+	const seoPathname = $derived(productVariantUrlState?.canonicalPathname ?? page.url.pathname);
 	const seoPage = $derived(page.data.seo ?? fallbackSeo);
 	const seoBreadcrumbItems = $derived(page.data['seoBreadcrumbItems']);
 	const organization: SeoOrganizationData = $derived({
@@ -70,7 +77,7 @@
 	const seoConfig = $derived(
 		buildSeoConfig({
 			seo: seoPage,
-			pathname: page.url.pathname,
+			pathname: seoPathname,
 			locale: seoLocale,
 			siteName: organization.name,
 			siteOrigin: page.url.origin,
@@ -79,14 +86,14 @@
 	);
 	const alternateLinks = $derived(
 		buildAlternateLinks({
-			pathname: page.url.pathname,
+			pathname: seoPathname,
 			resolveLocalizedUrl: resolveCatalogSeoUrl
 		})
 	);
 	const baseStructuredData = $derived(
 		buildStructuredData({
 			seo: seoPage,
-			pathname: page.url.pathname,
+			pathname: seoPathname,
 			locale: seoLocale,
 			siteOrigin: page.url.origin,
 			resolveLocalizedUrl: resolveCatalogSeoUrl,
@@ -105,10 +112,9 @@
 						])
 		})
 	);
-	const productStructuredData = $derived(
-		page.data['productStructuredData'] as SchemaOrgProps['schema'] | undefined
+	const robotsContent = $derived(
+		productVariantUrlState?.robots ?? (page.url.search ? 'noindex,follow' : 'index,follow')
 	);
-	const robotsContent = $derived(page.url.search ? 'noindex,follow' : 'index,follow');
 
 	function getLocalizedLandingHref(nextLocale: Locale): string {
 		if (!homeUrl) {
@@ -136,11 +142,13 @@
 	]);
 
 	function resolveCatalogSeoUrl(pathname: string, nextLocale: SupportedLocale): URL {
-		const canonicalPathname = deLocalizeUrl(new URL(pathname, page.url.origin)).pathname;
-		return new URL(
+		const sourceUrl = new URL(pathname, page.url.origin);
+		const canonicalPathname = deLocalizeUrl(sourceUrl).pathname;
+		const localizedUrl = new URL(
 			localizeHref(canonicalPathname, { locale: nextLocale }) as string,
 			page.url.origin
 		);
+		return new URL(`${localizedUrl.pathname}${sourceUrl.search}`, page.url.origin);
 	}
 
 	function getThemeFromCookie(): 'light' | 'dark' | null {
@@ -206,11 +214,10 @@
 	});
 </script>
 
-<Head seo_config={seoConfig} />
-<SchemaOrg schema={baseStructuredData} />
-{#if productStructuredData}
-	<SchemaOrg schema={productStructuredData} />
-{/if}
+{#key seoPathname}
+	<Head seo_config={seoConfig} />
+	<SchemaOrg schema={baseStructuredData} />
+{/key}
 
 <svelte:head>
 	<link

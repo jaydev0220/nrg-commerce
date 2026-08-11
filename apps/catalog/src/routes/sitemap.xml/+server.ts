@@ -1,6 +1,7 @@
 import {
 	fetchCatalogSitemapCategories,
-	fetchCatalogSitemapProducts
+	fetchCatalogSitemapProducts,
+	fetchCatalogSitemapSkus
 } from '$lib/server/catalog-api.js';
 import type { RequestHandler } from './$types';
 
@@ -26,12 +27,21 @@ function renderEntry(origin: string, pathname: string, lastModified?: string) {
 	return `<url><loc>${escapeXml(zhUrl)}</loc><xhtml:link rel="alternate" hreflang="zh-TW" href="${escapeXml(zhUrl)}"/><xhtml:link rel="alternate" hreflang="en" href="${escapeXml(enUrl)}"/><xhtml:link rel="alternate" hreflang="x-default" href="${escapeXml(zhUrl)}"/>${lastModified ? `<lastmod>${escapeXml(lastModified)}</lastmod>` : ''}</url>\n<url><loc>${escapeXml(enUrl)}</loc><xhtml:link rel="alternate" hreflang="zh-TW" href="${escapeXml(zhUrl)}"/><xhtml:link rel="alternate" hreflang="en" href="${escapeXml(enUrl)}"/><xhtml:link rel="alternate" hreflang="x-default" href="${escapeXml(zhUrl)}"/>${lastModified ? `<lastmod>${escapeXml(lastModified)}</lastmod>` : ''}</url>`;
 }
 
+function latestTimestamp(...values: Array<string | undefined>) {
+	const timestamps = values.flatMap((value) => (value ? [Date.parse(value)] : []));
+	return timestamps.length > 0 ? new Date(Math.max(...timestamps)).toISOString() : undefined;
+}
+
 export const GET: RequestHandler = async ({ fetch, url }) => {
 	try {
-		const [products, categories] = await Promise.all([
+		const [products, skus, categories] = await Promise.all([
 			fetchCatalogSitemapProducts(fetch),
+			fetchCatalogSitemapSkus(fetch),
 			fetchCatalogSitemapCategories(fetch)
 		]);
+		const productUpdatedAt = new Map(
+			products.map((product) => [product.slug, product.updatedAt] as const)
+		);
 		const entries = [
 			...staticPaths.map((pathname) => renderEntry(url.origin, pathname)),
 			...categories.map((category) =>
@@ -43,6 +53,13 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
 			),
 			...products.map((product) =>
 				renderEntry(url.origin, `/${encodeURIComponent(product.slug)}`, product.updatedAt)
+			),
+			...skus.map((sku) =>
+				renderEntry(
+					url.origin,
+					`/${encodeURIComponent(sku.productSlug)}?${new URLSearchParams({ sku: sku.skuCode })}`,
+					latestTimestamp(productUpdatedAt.get(sku.productSlug), sku.updatedAt)
+				)
 			)
 		].join('\n');
 		return new Response(

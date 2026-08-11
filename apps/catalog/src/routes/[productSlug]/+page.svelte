@@ -1,16 +1,21 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { Pathname } from '$app/types';
 	import { page } from '$app/state';
 	import { ArrowLeft } from '@lucide/svelte';
+	import { SchemaOrg } from 'svead';
 	import * as m from '$lib/paraglide/messages';
 
 	import type { PageProps } from './$types';
 	import {
 		createProductConfigurationModel,
 		getFirstImageForSku,
-		getProductGalleryImages
+		getProductGalleryImages,
+		getSkuAttributeSelection
 	} from '$lib/catalog/logic.js';
+	import { buildProductStructuredData } from '$lib/catalog/product-seo.js';
+	import { resolveProductVariantUrlState } from '$lib/catalog/product-urls.js';
 	import { buildInquiryQueryString, localeFromPathname } from '$lib/catalog/query.js';
 	import { localizeValue } from '$lib/catalog/ui.js';
 	import { localizeHref } from '$lib/paraglide/runtime';
@@ -22,8 +27,23 @@
 	let { data }: PageProps = $props();
 
 	let locale = $derived(localeFromPathname(page.url.pathname));
-	let requestedSelection = $state<Record<string, string>>({});
+	let requestedSkuCode = $state<string | null>(null);
+	let variantUrlState = $derived(resolveProductVariantUrlState(page.url, data.product));
+	let requestedSelection = $derived(
+		getSkuAttributeSelection(
+			data.product.skus.find((sku) => sku.skuCode === requestedSkuCode) ??
+				data.product.skus.find((sku) => sku.skuCode === variantUrlState.selectedSkuCode) ??
+				data.product.skus[0]
+		)
+	);
 	let model = $derived(createProductConfigurationModel(data.product, locale, requestedSelection));
+	let productStructuredData = $derived(
+		buildProductStructuredData({
+			...data.productStructuredDataInput,
+			product: data.product,
+			selectedSkuCode: variantUrlState.selectedSkuCode
+		})
+	);
 	let localizedName = $derived(localizeValue(locale, data.product.name, data.product.nameEn));
 	let localizedDescription = $derived(
 		localizeValue(locale, data.product.description, data.product.descriptionEn)
@@ -60,13 +80,25 @@
 			[key]: value
 		};
 		const nextModel = createProductConfigurationModel(data.product, locale, nextSelection);
-		requestedSelection = nextSelection;
+		requestedSkuCode = nextModel.activeSku.skuCode;
 		selectedImageId =
 			getFirstImageForSku(data.product, nextModel.activeSku.id)?.id ??
 			getProductGalleryImages(data.product)[0]?.id ??
 			null;
+
+		const nextUrl = new URL(page.url);
+		nextUrl.searchParams.set('sku', nextModel.activeSku.skuCode);
+		void goto(resolve(`${nextUrl.pathname}${nextUrl.search}` as Pathname), {
+			keepFocus: true,
+			noScroll: true,
+			replaceState: true
+		});
 	}
 </script>
+
+{#key variantUrlState.canonicalPathname}
+	<SchemaOrg schema={productStructuredData} />
+{/key}
 
 <main id="product-content">
 	<ProductBreadcrumb

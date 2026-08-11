@@ -13,13 +13,9 @@ export const load: PageLoad = ({ data, url }) => {
 		localizeValue(locale, data.product.description, data.product.descriptionEn) ??
 		m.product_meta_description({ productName: localizedName });
 	const openGraphImage =
-		data.product.thumbnail?.imageUrl ?? assetUrl(CATALOG_ASSETS.galleryOpenGraph);
-	const productUrl = `${url.origin}${url.pathname}`;
-	const productGroupId = `${productUrl}#product-${data.product.id}`;
-	const productImages = [
-		...(data.product.thumbnail ? [data.product.thumbnail.imageUrl] : []),
-		...data.product.images.map((image) => image.imageUrl)
-	].filter((imageUrl, index, images) => images.indexOf(imageUrl) === index);
+		data.product.skus.find((sku) => sku.skuCode === data.selectedSkuCode)?.images[0]?.imageUrl ??
+		data.product.thumbnail?.imageUrl ??
+		assetUrl(CATALOG_ASSETS.galleryOpenGraph);
 
 	return {
 		...data,
@@ -41,41 +37,15 @@ export const load: PageLoad = ({ data, url }) => {
 			openGraphImage,
 			openGraphImageAlt: localizedName
 		}),
-		productStructuredData: {
-			'@type': 'ProductGroup',
-			'@id': productGroupId,
-			productGroupID: data.product.id,
-			name: localizedName,
+		productStructuredDataInput: {
+			brandName: m.company_name(),
+			categoryName: data.category
+				? localizeValue(locale, data.category.name, data.category.nameEn)
+				: null,
 			description: localizedDescription,
-			url: productUrl,
-			brand: {
-				'@type': 'Brand',
-				name: m.company_name()
-			},
-			...(data.category
-				? {
-						category: localizeValue(locale, data.category.name, data.category.nameEn)
-					}
-				: {}),
-			...(productImages.length > 0 ? { image: productImages } : {}),
-			hasVariant: data.product.skus.map((sku) => ({
-				'@type': 'Product',
-				'@id': `${productUrl}#sku-${sku.id}`,
-				sku: sku.skuCode,
-				identifier: sku.skuCode,
-				name: `${localizedName} - ${sku.skuCode}`,
-				isVariantOf: { '@id': productGroupId },
-				offers: {
-					'@type': 'Offer',
-					priceCurrency: 'TWD',
-					price: sku.price,
-					availability:
-						sku.availability === 'in_stock'
-							? 'https://schema.org/InStock'
-							: 'https://schema.org/OutOfStock',
-					url: `${productUrl}#sku-${sku.id}`
-				}
-			}))
+			locale,
+			productName: localizedName,
+			productUrl: `${url.origin}${url.pathname}`
 		}
 	};
 };

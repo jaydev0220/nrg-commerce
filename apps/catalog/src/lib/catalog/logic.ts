@@ -237,6 +237,19 @@ function resolveDefaultSku(product: CatalogProductRecord): CatalogSkuRecord {
 	return sku;
 }
 
+export function getSkuAttributeSelection(
+	sku: CatalogSkuRecord | undefined
+): Record<string, string> {
+	if (!sku) return {};
+
+	return Object.fromEntries(
+		Object.entries(sku.attributes).flatMap(([key, value]) => {
+			const attributeText = asAttributeText(value);
+			return attributeText === null ? [] : [[key, attributeText]];
+		})
+	);
+}
+
 function resolveExactSku(
 	product: CatalogProductRecord,
 	selection: Record<string, string>

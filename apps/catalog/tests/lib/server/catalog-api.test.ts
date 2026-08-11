@@ -11,7 +11,8 @@ import {
 	fetchCatalogIndexData,
 	fetchCatalogProductBySlug,
 	fetchCatalogSitemapCategories,
-	fetchCatalogSitemapProducts
+	fetchCatalogSitemapProducts,
+	fetchCatalogSitemapSkus
 } from '$lib/server/catalog-api.js';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -43,6 +44,30 @@ function productRecord(overrides: Record<string, unknown> = {}) {
 		thumbnail: null,
 		images: [],
 		skus: [],
+		...overrides
+	};
+}
+
+function skuRecord(overrides: Record<string, unknown> = {}) {
+	return {
+		id: '00000000-0000-4000-8000-000000000101',
+		productId,
+		productSlug: 'glassware',
+		skuCode: 'GLASS-100',
+		name: 'Glassware 100',
+		nameEn: null,
+		description: null,
+		descriptionEn: null,
+		categoryId: null,
+		categorySlug: null,
+		price: 100,
+		availability: 'in_stock',
+		published: true,
+		attributes: { volume: '100 ml' },
+		deletedAt: null,
+		createdAt: timestamp,
+		updatedAt: timestamp,
+		images: [],
 		...overrides
 	};
 }
@@ -154,6 +179,26 @@ describe('catalog API client', () => {
 		]);
 		expect(fetcher).toHaveBeenCalledTimes(2);
 		expect(new URL(String(fetcher.mock.calls[0]?.[0])).searchParams.get('limit')).toBe('100');
+	});
+
+	it('loads every storefront SKU page for variant sitemap generation', async () => {
+		const fetcher = vi.fn<typeof fetch>(async (input) => {
+			const page = Number(new URL(String(input)).searchParams.get('page'));
+			const updatedAt = `2026-07-${String(page).padStart(2, '0')}T00:00:00.000Z`;
+			return jsonResponse({
+				data: [skuRecord({ productSlug: `product-${page}`, skuCode: `SKU-${page}`, updatedAt })],
+				pagination: { page, limit: 100, total: 2, totalPages: 2 }
+			});
+		});
+
+		await expect(fetchCatalogSitemapSkus(fetcher)).resolves.toEqual([
+			{ productSlug: 'product-1', skuCode: 'SKU-1', updatedAt: '2026-07-01T00:00:00.000Z' },
+			{ productSlug: 'product-2', skuCode: 'SKU-2', updatedAt: '2026-07-02T00:00:00.000Z' }
+		]);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(new URL(String(fetcher.mock.calls[0]?.[0])).pathname).toBe(
+			'/api/storefront/products/skus'
+		);
 	});
 
 	it('flattens the category tree and excludes empty categories from sitemap data', async () => {

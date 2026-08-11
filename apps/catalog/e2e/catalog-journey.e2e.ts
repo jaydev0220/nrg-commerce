@@ -1,5 +1,23 @@
 import { expect, test } from '@playwright/test';
 
+function findStructuredType(value: unknown, type: string): Record<string, unknown> | undefined {
+	if (Array.isArray(value)) {
+		return value.map((entry) => findStructuredType(entry, type)).find(Boolean);
+	}
+	if (!value || typeof value !== 'object') return undefined;
+
+	const record = value as Record<string, unknown>;
+	if (record['@type'] === type) return record;
+	return Object.values(record)
+		.map((entry) => findStructuredType(entry, type))
+		.find(Boolean);
+}
+
+async function structuredType(page: import('@playwright/test').Page, type: string) {
+	const scripts = await page.locator('script[type="application/ld+json"]').allTextContents();
+	return scripts.map((script) => findStructuredType(JSON.parse(script), type)).find(Boolean);
+}
+
 test('browses, searches, configures a product, and carries its SKU to inquiry', async ({
 	page
 }) => {
@@ -21,13 +39,64 @@ test('browses, searches, configures a product, and carries its SKU to inquiry', 
 	await page.getByRole('heading', { name: 'Laboratory Beaker' }).getByRole('link').click();
 	await expect(page).toHaveURL(/\/en\/laboratory-beaker$/);
 	await expect(page.getByRole('heading', { level: 1, name: 'Laboratory Beaker' })).toBeVisible();
+	await expect
+		.poll(async () => structuredType(page, 'ProductGroup'))
+		.toMatchObject({
+			variesBy: ['https://schema.org/size']
+		});
 
 	await page.getByRole('radio', { name: '250 ml' }).click();
+	await expect(page).toHaveURL((url) => url.searchParams.get('sku') === 'BEAKER-250');
 	await expect(page.getByText('BEAKER-250', { exact: true })).toBeVisible();
+	await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+		'href',
+		'http://127.0.0.1:4175/en/laboratory-beaker?sku=BEAKER-250'
+	);
+	await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'index,follow');
+	await expect(page.locator('link[rel="alternate"][hreflang="zh-TW"]')).toHaveAttribute(
+		'href',
+		'http://127.0.0.1:4175/laboratory-beaker?sku=BEAKER-250'
+	);
+	await expect
+		.poll(async () => structuredType(page, 'Product'))
+		.toMatchObject({
+			sku: 'BEAKER-250',
+			url: 'http://127.0.0.1:4175/en/laboratory-beaker?sku=BEAKER-250'
+		});
 	await page.locator('#product-content a[href*="/inquiry?sku="]').click();
 
 	await expect(page).toHaveURL((url) => {
 		return url.pathname === '/en/inquiry' && url.searchParams.get('sku') === 'BEAKER-250';
 	});
 	await expect(page.locator('#inquiry-sku')).toHaveValue('BEAKER-250');
+});
+
+test('server-renders SKU deep links and normalizes noncanonical queries', async ({
+	browser,
+	page
+}) => {
+	const noJavaScriptContext = await browser.newContext({ javaScriptEnabled: false });
+	try {
+		const noJavaScriptPage = await noJavaScriptContext.newPage();
+		await noJavaScriptPage.goto('/en/laboratory-beaker?sku=BEAKER-250');
+		await expect(noJavaScriptPage.getByText('BEAKER-250', { exact: true })).toBeVisible();
+		expect(await structuredType(noJavaScriptPage, 'Product')).toMatchObject({
+			sku: 'BEAKER-250',
+			url: 'http://127.0.0.1:4175/en/laboratory-beaker?sku=BEAKER-250'
+		});
+	} finally {
+		await noJavaScriptContext.close();
+	}
+
+	await page.goto('/en/laboratory-beaker?sku=BEAKER-250&utm_source=e2e');
+	await expect(page.getByText('BEAKER-250', { exact: true })).toBeVisible();
+	await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex,follow');
+	await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+		'href',
+		'http://127.0.0.1:4175/en/laboratory-beaker?sku=BEAKER-250'
+	);
+
+	await page.goto('/en/laboratory-beaker?sku=UNKNOWN');
+	await expect(page).toHaveURL('http://127.0.0.1:4175/en/laboratory-beaker');
+	await expect(page.getByText('BEAKER-100', { exact: true })).toBeVisible();
 });
