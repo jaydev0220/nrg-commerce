@@ -80,16 +80,14 @@
 		return !errors.name && !errors.email && !errors.message;
 	}
 
-	function focusFirstInvalidField() {
+	function focusFirstInvalidField(formElement: HTMLFormElement) {
 		const invalidFieldOrder: Array<'name' | 'email' | 'message'> = ['name', 'email', 'message'];
 		const firstInvalidFieldName = invalidFieldOrder.find((fieldName) => Boolean(errors[fieldName]));
 		if (!firstInvalidFieldName) return;
 
-		const matchingInputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-			`[name="${firstInvalidFieldName}"]`
-		);
-		const visibleInput = Array.from(matchingInputs).find((input) => input.offsetParent !== null);
-		visibleInput?.focus();
+		formElement
+			.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${firstInvalidFieldName}"]`)
+			?.focus();
 	}
 
 	const hasUnsavedChanges = $derived(
@@ -111,6 +109,7 @@
 
 	async function handleSubmit(event: Event) {
 		event.preventDefault();
+		const formElement = event.currentTarget as HTMLFormElement;
 
 		statusMessage = '';
 		statusTone = '';
@@ -118,7 +117,7 @@
 		if (!validateForm()) {
 			statusTone = 'error';
 			statusMessage = m.form_status_fix_errors();
-			focusFirstInvalidField();
+			focusFirstInvalidField(formElement);
 			return;
 		}
 		if (!turnstileToken) {
@@ -183,8 +182,7 @@
 		class="space-y-6"
 		novalidate
 	>
-		<!-- Desktop/Tablet: Two column layout -->
-		<div class="hidden gap-4 md:grid md:grid-cols-2">
+		<div class="grid gap-4 md:grid-cols-2">
 			<!-- Full Name -->
 			<div>
 				<label
@@ -240,8 +238,7 @@
 			</div>
 		</div>
 
-		<!-- Email and Phone -->
-		<div class="hidden gap-4 md:grid md:grid-cols-2">
+		<div class="grid gap-4 md:grid-cols-2">
 			<!-- Email -->
 			<div>
 				<label
@@ -287,120 +284,6 @@
 				</label>
 				<input
 					id="phone"
-					name="phone"
-					type="tel"
-					bind:value={form.phone}
-					autocomplete="tel"
-					inputmode="tel"
-					class="
-						w-full rounded-md border border-border bg-bg-sunken px-3 py-2 text-sm
-						focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none
-					"
-				/>
-			</div>
-		</div>
-
-		<!-- Mobile: Single column layout -->
-		<div class="space-y-4 md:hidden">
-			<!-- Full Name -->
-			<div>
-				<label
-					for="name-mobile"
-					class="mb-2 block text-sm font-medium text-text-body"
-				>
-					{m.form_name_required()}
-				</label>
-				<input
-					id="name-mobile"
-					name="name"
-					type="text"
-					bind:value={form.name}
-					autocomplete="name"
-					required
-					aria-invalid={Boolean(errors.name)}
-					aria-describedby={errors.name ? 'name-error-mobile' : undefined}
-					class="
-						w-full rounded-md border border-border bg-bg-sunken px-3 py-2 text-sm
-						focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none
-						{errors.name ? 'border-red-500' : ''}
-					"
-				/>
-				{#if errors.name}
-					<p
-						id="name-error-mobile"
-						class="mt-1 text-xs text-red-600"
-					>
-						{errors.name}
-					</p>
-				{/if}
-			</div>
-
-			<!-- Company Name -->
-			<div>
-				<label
-					for="company-mobile"
-					class="mb-2 block text-sm font-medium text-text-body"
-				>
-					{m.form_company()}
-				</label>
-				<input
-					id="company-mobile"
-					name="company"
-					type="text"
-					bind:value={form.company}
-					autocomplete="organization"
-					class="
-						w-full rounded-md border border-border bg-bg-sunken px-3 py-2 text-sm
-						focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none
-					"
-				/>
-			</div>
-
-			<!-- Email -->
-			<div>
-				<label
-					for="email-mobile"
-					class="mb-2 block text-sm font-medium text-text-body"
-				>
-					{m.form_email_required()}
-				</label>
-				<input
-					id="email-mobile"
-					name="email"
-					type="email"
-					bind:value={form.email}
-					inputmode="email"
-					autocomplete="off"
-					spellcheck={false}
-					required
-					aria-invalid={Boolean(errors.email)}
-					aria-describedby={errors.email ? 'email-error-mobile' : undefined}
-					class="
-						w-full rounded-md border border-border bg-bg-sunken px-3 py-2 text-sm
-						focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none
-						{errors.email ? 'border-red-500' : ''}
-					"
-				/>
-				{#if errors.email}
-					<p
-						id="email-error-mobile"
-						class="mt-1 text-xs text-red-600"
-					>
-						{errors.email}
-					</p>
-				{/if}
-			</div>
-
-			<!-- Phone -->
-			<div>
-				<label
-					for="phone-mobile"
-					class="mb-2 block text-sm font-medium text-text-body"
-				>
-					{m.form_phone()}
-				</label>
-				<input
-					id="phone-mobile"
 					name="phone"
 					type="tel"
 					bind:value={form.phone}
@@ -538,7 +421,7 @@
 		{/if}
 
 		<!-- Required Fields Note -->
-		<p class="text-xs text-text-muted">
+		<p class="text-xs text-text-body">
 			{m.form_required_note()}
 		</p>
 	</form>

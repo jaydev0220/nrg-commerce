@@ -64,8 +64,15 @@ test('submits a verified contact request once and clears the form', async () => 
 
 	await vi.waitFor(() => expect(turnstile.renderWidget).toHaveBeenCalledOnce());
 	input(screen.container, '#name', 'Ada Lovelace');
+	input(screen.container, '#company', 'Analytical Engines Ltd.');
 	input(screen.container, '#email', 'ada@example.com');
+	input(screen.container, '#phone', '+886 2 1234 5678');
+	input(screen.container, '#product-interest', 'Precision components');
 	input(screen.container, '#message', 'Please send specifications.');
+	const inquiryType = screen.container.querySelector<HTMLSelectElement>('#inquiry-type');
+	if (!inquiryType) throw new Error('Missing inquiry type field.');
+	inquiryType.value = inquiryType.options[1]?.value ?? '';
+	inquiryType.dispatchEvent(new Event('change', { bubbles: true }));
 	turnstile.verify();
 	submit(screen.container);
 
@@ -75,7 +82,10 @@ test('submits a verified contact request once and clears the form', async () => 
 		expect.objectContaining({
 			turnstileToken: 'verified-token',
 			name: 'Ada Lovelace',
+			company: 'Analytical Engines Ltd.',
 			email: 'ada@example.com',
+			phone: '+886 2 1234 5678',
+			productInterest: 'Precision components',
 			message: 'Please send specifications.'
 		})
 	);
@@ -83,6 +93,37 @@ test('submits a verified contact request once and clears the form', async () => 
 		expect(screen.container.querySelector<HTMLInputElement>('#name')?.value).toBe('')
 	);
 	expect(turnstile.renderWidget).toHaveBeenCalledTimes(2);
+});
+
+test('renders one uniquely labelled control for every field', async () => {
+	const turnstile = installTurnstile();
+	const screen = await render(ContactForm, {
+		workerUrl: 'https://contact.example.com',
+		turnstileSiteKey: 'site-key',
+		submitRequest: vi.fn(async () => undefined)
+	});
+
+	await vi.waitFor(() => expect(turnstile.renderWidget).toHaveBeenCalledOnce());
+	expect(screen.container.querySelectorAll('form')).toHaveLength(1);
+	const ids = Array.from(screen.container.querySelectorAll<HTMLElement>('[id]')).map(
+		(element) => element.id
+	);
+	expect(new Set(ids).size).toBe(ids.length);
+	for (const fieldId of [
+		'name',
+		'company',
+		'email',
+		'phone',
+		'inquiry-type',
+		'product-interest',
+		'message'
+	]) {
+		expect(screen.container.querySelectorAll(`#${fieldId}`)).toHaveLength(1);
+		expect(screen.container.querySelector(`label[for="${fieldId}"]`)).not.toBeNull();
+	}
+
+	submit(screen.container);
+	await vi.waitFor(() => expect(document.activeElement?.id).toBe('name'));
 });
 
 test('preserves contact values and allows retry after delivery failure', async () => {
@@ -114,6 +155,44 @@ test('preserves contact values and allows retry after delivery failure', async (
 	);
 });
 
+test('only blocks page exit while an edited form is idle', async () => {
+	const turnstile = installTurnstile();
+	let finishRequest = () => {};
+	const submitRequest = vi.fn(
+		() =>
+			new Promise<void>((resolve) => {
+				finishRequest = resolve;
+			})
+	);
+	const screen = await render(ContactForm, {
+		workerUrl: 'https://contact.example.com',
+		turnstileSiteKey: 'site-key',
+		submitRequest
+	});
+
+	await vi.waitFor(() => expect(turnstile.renderWidget).toHaveBeenCalledOnce());
+	const pristineUnload = new Event('beforeunload', { cancelable: true });
+	window.dispatchEvent(pristineUnload);
+	expect(pristineUnload.defaultPrevented).toBe(false);
+
+	input(screen.container, '#name', 'Ada Lovelace');
+	input(screen.container, '#email', 'ada@example.com');
+	input(screen.container, '#message', 'Please send specifications.');
+	const editedUnload = new Event('beforeunload', { cancelable: true });
+	window.dispatchEvent(editedUnload);
+	expect(editedUnload.defaultPrevented).toBe(true);
+
+	turnstile.verify();
+	submit(screen.container);
+	await vi.waitFor(() => expect(submitRequest).toHaveBeenCalledOnce());
+	const submittingUnload = new Event('beforeunload', { cancelable: true });
+	window.dispatchEvent(submittingUnload);
+	expect(submittingUnload.defaultPrevented).toBe(false);
+
+	finishRequest();
+	await vi.waitFor(() => expect(turnstile.renderWidget).toHaveBeenCalledTimes(2));
+});
+
 test('requires valid fields and a current Turnstile verification', async () => {
 	const turnstile = installTurnstile();
 	const submitRequest = vi.fn(async () => undefined);
@@ -131,8 +210,13 @@ test('requires valid fields and a current Turnstile verification', async () => {
 	);
 
 	input(screen.container, '#name', 'Ada Lovelace');
-	input(screen.container, '#email', 'ada@example.com');
+	input(screen.container, '#email', 'invalid-address');
 	input(screen.container, '#message', 'Please send specifications.');
+	submit(screen.container);
+	await vi.waitFor(() => expect(document.activeElement?.id).toBe('email'));
+	expect(submitRequest).not.toHaveBeenCalled();
+
+	input(screen.container, '#email', 'ada@example.com');
 	turnstile.verify();
 	turnstile.expire();
 	submit(screen.container);

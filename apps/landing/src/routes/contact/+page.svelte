@@ -12,23 +12,14 @@
 
 <section class="bg-bg-page py-16 lg:py-20">
 	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-		<!-- Desktop Layout: Two Column -->
-		<div class="hidden gap-16 lg:grid lg:grid-cols-5">
-			<!-- Left Column: Contact Info (40%) -->
+		<div class="grid gap-12 lg:grid-cols-5 lg:gap-16">
 			<div class="lg:col-span-2">
 				<ContactInfo />
 			</div>
 
-			<!-- Right Column: Contact Form (60%) -->
 			<div class="lg:col-span-3">
 				<ContactForm />
 			</div>
-		</div>
-
-		<!-- Tablet/Mobile Layout: Stacked -->
-		<div class="space-y-12 lg:hidden">
-			<ContactInfo />
-			<ContactForm />
 		</div>
 	</div>
 </section>
