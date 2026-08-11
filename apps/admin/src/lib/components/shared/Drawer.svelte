@@ -1,3 +1,27 @@
+<script
+	module
+	lang="ts"
+>
+	let bodyScrollLockCount = 0;
+	let bodyOverflowBeforeLock = '';
+
+	function lockBodyScroll() {
+		if (bodyScrollLockCount === 0) {
+			bodyOverflowBeforeLock = document.body.style.overflow;
+			document.body.style.overflow = 'hidden';
+		}
+		bodyScrollLockCount += 1;
+	}
+
+	function unlockBodyScroll() {
+		bodyScrollLockCount = Math.max(0, bodyScrollLockCount - 1);
+		if (bodyScrollLockCount === 0) {
+			document.body.style.overflow = bodyOverflowBeforeLock;
+			bodyOverflowBeforeLock = '';
+		}
+	}
+</script>
+
 <script lang="ts">
 	import { X } from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
@@ -18,28 +42,23 @@
 
 	let drawerElement = $state<HTMLElement>();
 	let closeButton = $state<HTMLButtonElement>();
-	let previouslyFocused = $state<HTMLElement | null>(null);
-	let wasOpen = false;
 
 	const focusableSelector =
 		'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 	$effect(() => {
-		if (open && !wasOpen) {
-			wasOpen = true;
-			previouslyFocused =
-				document.activeElement instanceof HTMLElement ? document.activeElement : null;
-			document.body.style.overflow = 'hidden';
-			requestAnimationFrame(() => closeButton?.focus());
-			return;
-		}
+		if (!open) return;
 
-		if (!open && wasOpen) {
-			wasOpen = false;
-			document.body.style.overflow = '';
+		const previouslyFocused =
+			document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		lockBodyScroll();
+		const focusFrame = requestAnimationFrame(() => closeButton?.focus());
+
+		return () => {
+			cancelAnimationFrame(focusFrame);
+			unlockBodyScroll();
 			requestAnimationFrame(() => previouslyFocused?.focus());
-			previouslyFocused = null;
-		}
+		};
 	});
 
 	function handleKeydown(event: KeyboardEvent) {

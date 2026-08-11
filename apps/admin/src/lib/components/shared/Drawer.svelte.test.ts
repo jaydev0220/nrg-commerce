@@ -6,6 +6,31 @@ import Drawer from './Drawer.svelte';
 import '../../../routes/layout.css';
 
 describe('editor drawer', () => {
+	it('restores body scrolling when an open drawer is unmounted', async () => {
+		document.body.style.overflow = 'scroll';
+		const first = await render(Drawer, {
+			open: true,
+			title: '第一個抽屜',
+			onclose: vi.fn(),
+			children: (() => undefined) as unknown as Snippet
+		});
+		const second = await render(Drawer, {
+			open: true,
+			title: '第二個抽屜',
+			onclose: vi.fn(),
+			children: (() => undefined) as unknown as Snippet
+		});
+
+		await expect.poll(() => document.body.style.overflow).toBe('hidden');
+
+		await first.unmount();
+		expect(document.body.style.overflow).toBe('hidden');
+
+		await second.unmount();
+		expect(document.body.style.overflow).toBe('scroll');
+		document.body.style.overflow = '';
+	});
+
 	it('positions the open dialog at the right viewport edge', async () => {
 		const screen = await render(Drawer, {
 			open: true,
