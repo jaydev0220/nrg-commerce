@@ -31,6 +31,7 @@
 
 	const siteOrigin = new URL('/', PUBLIC_SITE_URL || 'https://example.com').href;
 	const currentYear = new Date().getFullYear();
+	const isErrorPage = $derived(page.status >= 400);
 
 	const fallbackSeo = createSeoPageData({
 		title: m.home_meta_title(),
@@ -44,6 +45,7 @@
 		href: getShopUrl(locale),
 		label: m.cta_visit_shop()
 	});
+	const homeHref = $derived(resolve(localizeHref('/', { locale }) as Pathname));
 
 	const seoPage = $derived(page.data.seo ?? fallbackSeo);
 	const organization: SeoOrganizationData = $derived({
@@ -71,6 +73,7 @@
 			pathname: page.url.pathname,
 			locale,
 			siteOrigin,
+			organizationUrl: siteOrigin,
 			resolveLocalizedUrl: resolveLandingSeoUrl,
 			trailingSlash: 'always',
 			logoUrl: assetUrl(SHARED_ASSETS.logoLight),
@@ -126,8 +129,10 @@
 	}
 </script>
 
-<Head seo_config={seoConfig} />
-<SchemaOrg schema={structuredData} />
+{#if !isErrorPage}
+	<Head seo_config={seoConfig} />
+	<SchemaOrg schema={structuredData} />
+{/if}
 
 <svelte:head>
 	<link
@@ -149,13 +154,20 @@
 		media="(prefers-color-scheme: dark)"
 		content="#131110"
 	/>
-	{#each alternateLinks as alternate (alternate.hreflang)}
-		<link
-			rel="alternate"
-			hreflang={alternate.hreflang}
-			href={alternate.href}
+	{#if isErrorPage}
+		<meta
+			name="robots"
+			content="noindex,follow"
 		/>
-	{/each}
+	{:else}
+		{#each alternateLinks as alternate (alternate.hreflang)}
+			<link
+				rel="alternate"
+				hreflang={alternate.hreflang}
+				href={alternate.href}
+			/>
+		{/each}
+	{/if}
 </svelte:head>
 
 <div class="flex min-h-screen flex-col">
@@ -170,6 +182,7 @@
 	</a>
 	<Navbar
 		cta={ctaConfig}
+		{homeHref}
 		navLinks={navigationLinks}
 		onSelectLanguage={selectLocale}
 		onToggleTheme={toggleTheme}
@@ -184,6 +197,7 @@
 	<Footer
 		description={m.company_description()}
 		copyrightText={`© ${currentYear} ${m.company_name()} ${m.footer_copyright()}`}
+		{homeHref}
 		onToggleLanguage={toggleFooterLocale}
 	/>
 </div>

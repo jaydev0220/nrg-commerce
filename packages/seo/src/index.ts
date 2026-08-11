@@ -144,6 +144,7 @@ export function buildStructuredData({
 	pathname,
 	locale,
 	siteOrigin,
+	organizationUrl = siteOrigin,
 	resolveLocalizedUrl,
 	logoUrl,
 	organization,
@@ -156,6 +157,7 @@ export function buildStructuredData({
 	pathname: string;
 	locale: SupportedLocale;
 	siteOrigin: string;
+	organizationUrl?: string;
 	resolveLocalizedUrl: ResolveLocalizedUrl;
 	logoUrl: string;
 	organization: SeoOrganizationData;
@@ -165,8 +167,9 @@ export function buildStructuredData({
 	trailingSlash?: SeoTrailingSlash;
 }): SchemaOrgProps['schema'] {
 	const siteUrl = normalizeSiteOrigin(siteOrigin);
+	const organizationSiteUrl = normalizeSiteOrigin(organizationUrl);
 	const canonicalUrl = resolveUrl(resolveLocalizedUrl, pathname, locale, trailingSlash);
-	const organizationId = `${siteUrl}#organization`;
+	const organizationId = `${organizationSiteUrl}#organization`;
 	const websiteId = `${siteUrl}#website`;
 	const inLanguage = SCHEMA_LANGUAGES[locale];
 
@@ -175,7 +178,7 @@ export function buildStructuredData({
 		'@id': organizationId,
 		name: organization.name,
 		description: organization.description,
-		url: siteUrl,
+		url: organizationSiteUrl,
 		logo: {
 			'@type': 'ImageObject',
 			url: logoUrl

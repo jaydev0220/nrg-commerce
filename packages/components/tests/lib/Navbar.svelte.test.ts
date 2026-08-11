@@ -14,6 +14,7 @@ test('marks the active route and closes the mobile menu after language selection
 	const onToggleTheme = vi.fn();
 	const screen = await render(Navbar, {
 		cta: { label: 'Contact sales', href: 'https://sales.example.com/contact' },
+		homeHref: '/en/',
 		navLinks: [
 			{ id: 'home', href: '/', label: 'Home' },
 			{ id: 'products', href: '/products', label: 'Products' }
@@ -22,6 +23,10 @@ test('marks the active route and closes the mobile menu after language selection
 		onToggleTheme
 	});
 	const menu = screen.getByRole('button', { name: 'Toggle mobile menu' });
+	expect(screen.container.querySelector('a[aria-label="NRG Labware"]')).toHaveAttribute(
+		'href',
+		'/en/'
+	);
 
 	expect(screen.container.querySelectorAll('a[aria-current="page"]')).toHaveLength(1);
 	await menu.click();

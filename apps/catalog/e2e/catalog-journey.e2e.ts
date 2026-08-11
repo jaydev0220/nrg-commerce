@@ -100,3 +100,40 @@ test('server-renders SKU deep links and normalizes noncanonical queries', async 
 	await expect(page).toHaveURL('http://127.0.0.1:4175/en/laboratory-beaker');
 	await expect(page.getByText('BEAKER-100', { exact: true })).toBeVisible();
 });
+
+test('keeps catalog SEO identities and brand links localized', async ({ page }) => {
+	await page.goto('/en/');
+
+	await expect(page.locator('a[aria-label="NRG Labware"]')).toHaveAttribute(
+		'href',
+		'https://www.nrglabware.com/en/'
+	);
+	await expect(page.locator('a[aria-label="NRG"]')).toHaveCount(2);
+	await expect(page.locator('a[aria-label="NRG"]').first()).toHaveAttribute(
+		'href',
+		'https://www.nrglabware.com/en/'
+	);
+	await expect
+		.poll(async () => structuredType(page, 'Organization'))
+		.toMatchObject({
+			'@id': 'https://www.nrglabware.com/#organization',
+			url: 'https://www.nrglabware.com/'
+		});
+	await expect
+		.poll(async () => structuredType(page, 'WebSite'))
+		.toMatchObject({
+			'@id': 'http://127.0.0.1:4175/#website',
+			publisher: { '@id': 'https://www.nrglabware.com/#organization' }
+		});
+});
+
+test('returns a non-indexable catalog 404 without misleading page metadata', async ({ page }) => {
+	const response = await page.goto('/en/does-not-exist');
+	expect(response?.status()).toBe(404);
+	await expect(page.getByRole('heading', { name: /not found/i })).toBeVisible();
+	await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex,follow');
+	await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+	await expect(page.locator('link[rel="alternate"]')).toHaveCount(0);
+	await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
+	await expect(page.locator('#error-content a').first()).toBeVisible();
+});

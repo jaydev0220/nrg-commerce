@@ -3,9 +3,8 @@ import {
 	fetchCatalogSitemapProducts,
 	fetchCatalogSitemapSkus
 } from '$lib/server/catalog-api.js';
+import { staticPagePaths } from '$lib/seo/static-routes';
 import type { RequestHandler } from './$types';
-
-const staticPaths = ['/', '/inquiry'];
 
 function escapeXml(value: string) {
 	return value
@@ -43,7 +42,7 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
 			products.map((product) => [product.slug, product.updatedAt] as const)
 		);
 		const entries = [
-			...staticPaths.map((pathname) => renderEntry(url.origin, pathname)),
+			...staticPagePaths.map((pathname) => renderEntry(url.origin, pathname)),
 			...categories.map((category) =>
 				renderEntry(
 					url.origin,

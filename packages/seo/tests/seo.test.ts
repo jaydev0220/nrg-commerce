@@ -76,6 +76,7 @@ test('buildStructuredData emits organization, website, page, and breadcrumb node
 		pathname: '/products/precision-beakers',
 		locale: 'zh-tw',
 		siteOrigin: 'https://catalog.example.com',
+		organizationUrl: 'https://www.nrglabware.com',
 		resolveLocalizedUrl,
 		logoUrl: 'https://cdn.example.com/logo-light.svg',
 		organization: {
@@ -106,14 +107,23 @@ test('buildStructuredData emits organization, website, page, and breadcrumb node
 	assert.ok(breadcrumbNode);
 
 	assert.equal(organizationNode['@type'], 'Organization');
+	assert.equal(organizationNode['@id'], 'https://www.nrglabware.com/#organization');
+	assert.equal(organizationNode['url'], 'https://www.nrglabware.com/');
 	assert.deepEqual(organizationNode['sameAs'], [
 		'https://www.facebook.com/example',
 		'https://line.me/ti/p/example'
 	]);
 	assert.equal(websiteNode['@type'], 'WebSite');
+	assert.equal(websiteNode['@id'], 'https://catalog.example.com/#website');
+	assert.deepEqual(websiteNode['publisher'], {
+		'@id': 'https://www.nrglabware.com/#organization'
+	});
 	assert.equal(pageNode['@type'], 'CollectionPage');
+	assert.deepEqual(pageNode['about'], {
+		'@id': 'https://www.nrglabware.com/#organization'
+	});
 	assert.deepEqual(pageNode['mainEntity'], {
-		'@id': 'https://catalog.example.com/#organization'
+		'@id': 'https://www.nrglabware.com/#organization'
 	});
 	assert.equal(breadcrumbNode['@type'], 'BreadcrumbList');
 });

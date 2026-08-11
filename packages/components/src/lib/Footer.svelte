@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
 	import { PUBLIC_CDN_BASE_URL, PUBLIC_FACEBOOK_URL, PUBLIC_LINE_URL } from '$env/static/public';
 	import { siFacebook, siLine } from 'simple-icons';
 	import Logo from './Logo.svelte';
@@ -8,10 +7,11 @@
 	type Props = {
 		description: string;
 		copyrightText: string;
+		homeHref: string;
 		onToggleLanguage: () => void;
 	};
 
-	let { description, copyrightText, onToggleLanguage }: Props = $props();
+	let { description, copyrightText, homeHref, onToggleLanguage }: Props = $props();
 
 	const cdnBaseUrl = PUBLIC_CDN_BASE_URL.trim();
 	const facebookUrl = PUBLIC_FACEBOOK_URL.trim();
@@ -27,7 +27,7 @@
 				<div class="flex flex-col space-y-3">
 					<div class="flex items-center">
 						<a
-							href={resolve('/')}
+							href={homeHref}
 							class="flex items-center"
 							aria-label="NRG"
 						>
@@ -104,7 +104,7 @@
 			<div class="space-y-3">
 				<div class="flex items-center">
 					<a
-						href={resolve('/')}
+						href={homeHref}
 						class="flex items-center"
 						aria-label="NRG"
 					>

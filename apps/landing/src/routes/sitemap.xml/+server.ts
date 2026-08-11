@@ -1,9 +1,8 @@
 import { PUBLIC_SITE_URL } from '$env/static/public';
+import { staticPagePaths } from '$lib/seo/static-routes';
 import type { RequestHandler } from './$types';
 
 export const prerender = true;
-
-const pagePaths = ['/', '/about/', '/contact/'];
 
 function escapeXml(value: string): string {
 	return value
@@ -29,7 +28,7 @@ function renderEntry(origin: string, pathname: string): string {
 
 export const GET: RequestHandler = ({ url }) => {
 	const siteOrigin = PUBLIC_SITE_URL.trim() || url.origin;
-	const entries = pagePaths.map((pathname) => renderEntry(siteOrigin, pathname)).join('\n');
+	const entries = staticPagePaths.map((pathname) => renderEntry(siteOrigin, pathname)).join('\n');
 
 	return new Response(
 		`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${entries}\n</urlset>`,

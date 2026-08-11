@@ -82,3 +82,57 @@ for (const pathname of ['/contact/', '/en/contact/']) {
 		});
 	}
 }
+
+function findStructuredType(value: unknown, type: string): Record<string, unknown> | undefined {
+	if (Array.isArray(value)) {
+		return value.map((entry) => findStructuredType(entry, type)).find(Boolean);
+	}
+	if (!value || typeof value !== 'object') return undefined;
+
+	const record = value as Record<string, unknown>;
+	if (record['@type'] === type) return record;
+	return Object.values(record)
+		.map((entry) => findStructuredType(entry, type))
+		.find(Boolean);
+}
+
+async function structuredType(page: import('@playwright/test').Page, type: string) {
+	const scripts = await page.locator('script[type="application/ld+json"]').allTextContents();
+	return scripts.map((script) => findStructuredType(JSON.parse(script), type)).find(Boolean);
+}
+
+test('localized pages expose canonical SEO and custom-manufacturing content', async ({ page }) => {
+	for (const pathname of ['/', '/en/', '/about/', '/en/about/', '/contact/', '/en/contact/']) {
+		const response = await page.goto(pathname);
+		expect(response?.status()).toBe(200);
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			'href',
+			`http://127.0.0.1:4178${pathname}`
+		);
+		await expect(page.locator('link[rel="alternate"]')).toHaveCount(3);
+		await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
+		await expect
+			.poll(async () => structuredType(page, 'Organization'))
+			.toMatchObject({
+				'@id': 'http://127.0.0.1:4178/#organization'
+			});
+	}
+
+	await page.goto('/en/');
+	await expect(page.getByText('Tailored', { exact: true })).toBeVisible();
+	await expect(page.getByText('Custom Manufacturing Available', { exact: true })).toBeVisible();
+	await expect(page.locator('a[aria-label="NRG Labware"]')).toHaveAttribute('href', '/en/');
+	await expect(page.locator('a[aria-label="NRG"]')).toHaveCount(2);
+	await expect(page.locator('a[aria-label="NRG"]').first()).toHaveAttribute('href', '/en/');
+});
+
+test('unknown localized pages return a useful non-indexable 404', async ({ page }) => {
+	const response = await page.goto('/en/does-not-exist/');
+	expect(response?.status()).toBe(404);
+	await expect(page.getByRole('heading', { name: /Page not found/ })).toBeVisible();
+	await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex,follow');
+	await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+	await expect(page.locator('link[rel="alternate"]')).toHaveCount(0);
+	await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
+	await expect(page.getByRole('link', { name: /English home/ })).toHaveAttribute('href', '/en/');
+});

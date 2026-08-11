@@ -13,6 +13,11 @@ test('llms.txt gives crawlers concise factual site discovery links', async () =>
 	expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
 	expect(response.headers.get('cache-control')).toContain('max-age=3600');
 	expect(body).toContain('# NRG Glass');
+	expect(body).toContain('https://www.example.test/');
 	expect(body).toContain('https://www.example.test/about/');
+	expect(body).toContain('https://www.example.test/en/about/');
+	expect(body).toContain('https://www.example.test/contact/');
+	expect(body).toContain('https://www.example.test/en/contact/');
+	expect(body).toContain('The sitemap is authoritative');
 	expect(body).toContain('https://www.example.test/sitemap.xml');
 });

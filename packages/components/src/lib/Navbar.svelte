@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { resolve } from '$app/paths';
 	import { PUBLIC_CDN_BASE_URL } from '$env/static/public';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
@@ -12,12 +11,13 @@
 
 	type Props = {
 		cta: CtaConfig;
+		homeHref: string;
 		navLinks: NavLinkItem[];
 		onSelectLanguage: (locale: string) => void;
 		onToggleTheme: () => void;
 	};
 
-	let { cta, navLinks, onSelectLanguage, onToggleTheme }: Props = $props();
+	let { cta, homeHref, navLinks, onSelectLanguage, onToggleTheme }: Props = $props();
 
 	const mobileMenuLabel = 'Toggle mobile menu';
 	const cdnBaseUrl = PUBLIC_CDN_BASE_URL.trim();
@@ -91,7 +91,7 @@
 		<div class="flex h-18 items-center justify-between">
 			<div class="shrink-0">
 				<a
-					href={resolve('/')}
+					href={homeHref}
 					class="flex items-center"
 					aria-label="NRG Labware"
 					onclick={closeMobileMenu}

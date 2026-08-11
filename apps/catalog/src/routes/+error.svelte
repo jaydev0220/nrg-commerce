@@ -11,23 +11,47 @@
 	let isNotFound = $derived(page.status === 404);
 </script>
 
-<main
+<svelte:head>
+	<title>
+		{isNotFound ? m.catalog_error_not_found_title() : m.catalog_error_unavailable_title()} | {m.company_name()}
+	</title>
+	<meta
+		name="description"
+		content={isNotFound ? m.catalog_error_not_found_body() : m.catalog_error_unavailable_body()}
+	/>
+</svelte:head>
+
+<section
+	id="error-content"
+	aria-labelledby="error-title"
 	class="mx-auto flex min-h-[60vh] max-w-2xl flex-col items-center justify-center px-6 py-20 text-center"
 >
 	<p class="font-mono text-sm tracking-[0.16em] text-text-muted">{page.status}</p>
-	<h1 class="mt-4 text-3xl text-text-heading sm:text-4xl">
+	<h1
+		id="error-title"
+		class="mt-4 text-3xl text-text-heading sm:text-4xl"
+	>
 		{isNotFound ? m.catalog_error_not_found_title() : m.catalog_error_unavailable_title()}
 	</h1>
 	<p class="mt-4 max-w-lg text-text-muted">
 		{isNotFound ? m.catalog_error_not_found_body() : m.catalog_error_unavailable_body()}
 	</p>
 	<div class="mt-8 flex flex-wrap justify-center gap-3">
-		<a
-			class="hover:bg-brand-strong rounded-md bg-brand px-5 py-3 text-sm font-semibold text-text-on-accent transition-colors"
-			href={resolve(`${page.url.pathname}${page.url.search}` as Pathname)}
-		>
-			{m.catalog_error_retry()}
-		</a>
+		{#if isNotFound}
+			<a
+				class="hover:bg-brand-strong rounded-md bg-brand px-5 py-3 text-sm font-semibold text-text-on-accent transition-colors"
+				href={resolve(localizeHref('/', { locale }) as Pathname)}
+			>
+				{m.catalog_title()}
+			</a>
+		{:else}
+			<a
+				class="hover:bg-brand-strong rounded-md bg-brand px-5 py-3 text-sm font-semibold text-text-on-accent transition-colors"
+				href={resolve(`${page.url.pathname}${page.url.search}` as Pathname)}
+			>
+				{m.catalog_error_retry()}
+			</a>
+		{/if}
 		<a
 			class="rounded-md border border-border bg-bg-surface px-5 py-3 text-sm font-semibold text-text-body transition-colors hover:border-border-accent hover:bg-bg-accent"
 			href={resolve(localizeHref('/', { locale }) as Pathname)}
@@ -35,4 +59,4 @@
 			{m.nav_home()}
 		</a>
 	</div>
-</main>
+</section>

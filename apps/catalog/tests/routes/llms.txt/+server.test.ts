@@ -10,6 +10,10 @@ test('catalog llms.txt identifies the catalog and discovery URLs', async () => {
 	expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
 	expect(response.headers.get('cache-control')).toContain('max-age=300');
 	expect(body).toContain('# NRG Glass Product Catalog');
+	expect(body).toContain('https://catalog.example.com/');
+	expect(body).toContain('https://catalog.example.com/en/');
 	expect(body).toContain('https://catalog.example.com/inquiry');
+	expect(body).toContain('https://catalog.example.com/en/inquiry');
+	expect(body).toContain('The sitemap is authoritative');
 	expect(body).toContain('https://catalog.example.com/sitemap.xml');
 });

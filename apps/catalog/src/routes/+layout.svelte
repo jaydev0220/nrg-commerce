@@ -38,12 +38,22 @@
 	const facebookUrl = PUBLIC_FACEBOOK_URL.trim();
 	const homeUrl = PUBLIC_HOME_URL.trim();
 	const lineUrl = PUBLIC_LINE_URL.trim();
+	const organizationOrigin = $derived.by(() => {
+		if (!homeUrl) return page.url.origin;
+
+		try {
+			return new URL('/', homeUrl).href;
+		} catch {
+			return page.url.origin;
+		}
+	});
 
 	let { children } = $props();
 	let locale = $derived((extractLocaleFromUrl(page.url) ?? 'zh-tw') as Locale);
 	let seoLocale = $derived(locale as SupportedLocale);
 	let product = $derived(page.data['product'] as CatalogProductRecord | undefined);
 	let isProductPage = $derived(Boolean(product));
+	let isErrorPage = $derived(page.status >= 400);
 	let skipTarget = $derived(isProductPage ? 'product-content' : 'catalog-content');
 	let theme = $state<'light' | 'dark'>('light');
 
@@ -96,6 +106,7 @@
 			pathname: seoPathname,
 			locale: seoLocale,
 			siteOrigin: page.url.origin,
+			organizationUrl: organizationOrigin,
 			resolveLocalizedUrl: resolveCatalogSeoUrl,
 			logoUrl: assetUrl(SHARED_ASSETS.logoLight),
 			organization,
@@ -113,7 +124,9 @@
 		})
 	);
 	const robotsContent = $derived(
-		productVariantUrlState?.robots ?? (page.url.search ? 'noindex,follow' : 'index,follow')
+		isErrorPage
+			? 'noindex,follow'
+			: (productVariantUrlState?.robots ?? (page.url.search ? 'noindex,follow' : 'index,follow'))
 	);
 
 	function getLocalizedLandingHref(nextLocale: Locale): string {
@@ -122,12 +135,13 @@
 		}
 
 		try {
-			return new URL(nextLocale === 'en' ? '/en' : '/', homeUrl).toString();
+			return new URL(nextLocale === 'en' ? '/en/' : '/', homeUrl).toString();
 		} catch {
 			return resolve(localizeHref('/', { locale: nextLocale }) as Pathname);
 		}
 	}
 
+	const homeHref = $derived(getLocalizedLandingHref(locale));
 	const navigationLinks = $derived.by<NavLinkItem[]>(() => [
 		{
 			href: getLocalizedLandingHref(locale),
@@ -214,10 +228,12 @@
 	});
 </script>
 
-{#key seoPathname}
-	<Head seo_config={seoConfig} />
-	<SchemaOrg schema={baseStructuredData} />
-{/key}
+{#if !isErrorPage}
+	{#key seoPathname}
+		<Head seo_config={seoConfig} />
+		<SchemaOrg schema={baseStructuredData} />
+	{/key}
+{/if}
 
 <svelte:head>
 	<link
@@ -243,13 +259,15 @@
 		name="robots"
 		content={robotsContent}
 	/>
-	{#each alternateLinks as alternate (alternate.hreflang)}
-		<link
-			rel="alternate"
-			hreflang={alternate.hreflang}
-			href={alternate.href}
-		/>
-	{/each}
+	{#if !isErrorPage}
+		{#each alternateLinks as alternate (alternate.hreflang)}
+			<link
+				rel="alternate"
+				hreflang={alternate.hreflang}
+				href={alternate.href}
+			/>
+		{/each}
+	{/if}
 </svelte:head>
 
 <div class="flex min-h-screen flex-col">
@@ -262,6 +280,7 @@
 
 	<Navbar
 		cta={ctaConfig}
+		{homeHref}
 		navLinks={navigationLinks}
 		onSelectLanguage={selectLocale}
 		onToggleTheme={toggleTheme}
@@ -274,6 +293,7 @@
 	<Footer
 		description={m.company_description()}
 		copyrightText={`© ${currentYear} ${m.company_name()} ${m.footer_copyright()}`}
+		{homeHref}
 		onToggleLanguage={toggleFooterLocale}
 	/>
 </div>

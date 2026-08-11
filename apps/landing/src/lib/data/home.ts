@@ -28,9 +28,9 @@ export const stats = [
 		description: () => m.stats_skus_desc()
 	},
 	{
-		id: 'iso',
-		number: () => m.stats_iso(),
-		description: () => m.stats_iso_desc()
+		id: 'custom',
+		number: () => m.stats_custom(),
+		description: () => m.stats_custom_desc()
 	}
 ] as const;
 
