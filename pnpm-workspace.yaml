@@ -76,6 +76,7 @@ catalogs:
     vite: ^8.1.5
     wrangler: ^4.119.0
   test:
+    '@axe-core/playwright': 4.12.1
     '@cloudflare/vitest-pool-workers': ^0.18.7
     '@playwright/test': ^1.61.1
     '@vitest/coverage-istanbul': 4.1.10

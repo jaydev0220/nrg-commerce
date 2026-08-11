@@ -14,9 +14,11 @@
 		"format": "prettier --ignore-path ../../.prettierignore --write .",
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
+		"test:e2e": "playwright test",
 		"test:watch": "vitest"
 	},
 	"devDependencies": {
+		"@axe-core/playwright": "catalog:test",
 		"@eslint/js": "catalog:lint",
 		"@inlang/paraglide-js": "catalog:svelte",
 		"@lucide/svelte": "catalog:svelte",
