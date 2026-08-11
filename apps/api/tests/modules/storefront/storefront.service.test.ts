@@ -20,6 +20,24 @@ function createCategory(id: string, parentId: string | null = null) {
 	};
 }
 
+function createCategoryRepository(
+	categories: ReturnType<typeof createCategory>[],
+	productCounts: Record<string, number>
+) {
+	return {
+		listCategories: async () => ({ data: categories, total: categories.length }),
+		listProducts: async () => ({ data: [], total: 0 }),
+		listSkus: async () => ({ data: [], total: 0 }),
+		findProductById: async () => null,
+		findProductBySlug: async () => null,
+		findSkuByCode: async () => null,
+		findCategoryBySlug: async () => null,
+		countProductsForCategoryIds: async () => productCounts,
+		listChildCategories: async (parentId: string) =>
+			categories.filter((category) => category.parentId === parentId)
+	};
+}
+
 test('listSkus only returns published catalog items in storefront flows', async () => {
 	const storefrontService = createStorefrontCatalogService({
 		repository: {
@@ -385,6 +403,83 @@ test('listCategories aggregates visible product counts through category descenda
 	assert.equal(root?.children[0]?.productCount, 5);
 });
 
+test('listCategories prunes empty branches while keeping populated ancestors without exposing counts', async () => {
+	const categories = [
+		createCategory('root'),
+		createCategory('populated', 'root'),
+		createCategory('empty-child', 'root'),
+		createCategory('empty-root')
+	];
+	const storefrontService = createStorefrontCatalogService({
+		repository: createCategoryRepository(categories, {
+			root: 0,
+			populated: 2,
+			'empty-child': 0,
+			'empty-root': 0
+		})
+	});
+
+	const tree = await storefrontService.listCategories({
+		includeTree: true,
+		includeProductCount: false
+	});
+	const root = tree[0] as {
+		id: string;
+		productCount?: number;
+		children: Array<{ id: string; productCount?: number }>;
+	};
+
+	assert.equal(tree.length, 1);
+	assert.equal(root.id, 'root');
+	assert.equal(root.productCount, undefined);
+	assert.deepEqual(
+		root.children.map((category) => category.id),
+		['populated']
+	);
+	assert.equal(root.children[0]?.productCount, undefined);
+
+	const children = await storefrontService.listCategories({
+		parentSlug: 'root',
+		includeTree: false,
+		includeProductCount: false
+	});
+	assert.deepEqual(
+		children.map((category) => category.id),
+		['populated']
+	);
+	assert.equal('productCount' in (children[0] ?? {}), false);
+});
+
+test('getCategoryBySlug hides empty categories and prunes empty children', async () => {
+	const categories = [
+		createCategory('root'),
+		createCategory('populated', 'root'),
+		createCategory('empty', 'root')
+	];
+	const storefrontService = createStorefrontCatalogService({
+		repository: createCategoryRepository(categories, { root: 0, populated: 1, empty: 0 })
+	});
+
+	const root = await storefrontService.getCategoryBySlug('root', {
+		includeChildren: true,
+		includeProductCount: true
+	});
+	assert.equal(root.productCount, 1);
+	assert.deepEqual(
+		root.children?.map((category) => category.id),
+		['populated']
+	);
+
+	await assert.rejects(
+		storefrontService.getCategoryBySlug('empty', {
+			includeChildren: true,
+			includeProductCount: false
+		}),
+		(error: { code?: string; statusCode?: number }) =>
+			error.code === 'CATEGORY_NOT_FOUND' && error.statusCode === 404
+	);
+});
+
 test('listCategories fails closed instead of recursively aggregating a category cycle', async () => {
 	const storefrontService = createStorefrontCatalogService({
 		repository: {
@@ -404,7 +499,7 @@ test('listCategories fails closed instead of recursively aggregating a category 
 	});
 
 	await assert.rejects(
-		storefrontService.listCategories({ includeTree: true, includeProductCount: true }),
+		storefrontService.listCategories({ includeTree: true, includeProductCount: false }),
 		(error: { code?: string }) => error.code === 'CATEGORY_HIERARCHY_INVALID'
 	);
 });

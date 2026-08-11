@@ -181,6 +181,23 @@ function ensureCategory(category: CatalogCategoryRecord | null): CatalogCategory
 }
 
 export function createStorefrontCatalogService(dependencies: StorefrontServiceDependencies) {
+	async function getCategoryVisibility() {
+		const allCategories = await dependencies.repository.listCategories(
+			{ sort: 'position', order: 'asc' },
+			{ paginate: false }
+		);
+		const directProductCounts = await dependencies.repository.countProductsForCategoryIds(
+			allCategories.data.map((category) => category.id),
+			true
+		);
+		const productCounts = aggregateCategoryCounts(allCategories.data, directProductCounts);
+		const visibleCategories = allCategories.data.filter(
+			(category) => (productCounts[category.id] ?? 0) > 0
+		);
+
+		return { allCategories, productCounts, visibleCategories };
+	}
+
 	return {
 		async listProducts(query: StorefrontProductListQuery): Promise<{
 			data: CatalogProductRecord[];
@@ -283,48 +300,23 @@ export function createStorefrontCatalogService(dependencies: StorefrontServiceDe
 			includeTree: boolean;
 			includeProductCount: boolean;
 		}): Promise<Array<CatalogCategoryRecord | CatalogCategoryTreeRecord>> {
-			let parentId: string | undefined;
+			const { productCounts, visibleCategories } = await getCategoryVisibility();
+			let result = visibleCategories;
 
 			if (query.parentSlug) {
 				const parent = ensureCategory(
-					await dependencies.repository.findCategoryBySlug(query.parentSlug)
+					visibleCategories.find((category) => category.slug === query.parentSlug) ?? null
 				);
-				parentId = parent.id;
+				result = visibleCategories.filter((category) => category.parentId === parent.id);
 			}
-
-			const allCategories = await dependencies.repository.listCategories(
-				{
-					sort: 'position',
-					order: 'asc'
-				},
-				{
-					paginate: false
-				}
-			);
-			const result = parentId
-				? {
-						...allCategories,
-						data: allCategories.data.filter((category) => category.parentId === parentId)
-					}
-				: allCategories;
-
-			const directProductCounts = query.includeProductCount
-				? await dependencies.repository.countProductsForCategoryIds(
-						allCategories.data.map((category) => category.id),
-						true
-					)
-				: undefined;
-			const productCounts = directProductCounts
-				? aggregateCategoryCounts(allCategories.data, directProductCounts)
-				: undefined;
 
 			if (query.includeTree) {
-				return buildCategoryTree(result.data, productCounts);
+				return buildCategoryTree(result, query.includeProductCount ? productCounts : undefined);
 			}
 
-			return result.data.map((category) => ({
+			return result.map((category) => ({
 				...category,
-				...(productCounts ? { productCount: productCounts[category.id] } : {})
+				...(query.includeProductCount ? { productCount: productCounts[category.id] } : {})
 			}));
 		},
 
@@ -335,29 +327,23 @@ export function createStorefrontCatalogService(dependencies: StorefrontServiceDe
 				includeProductCount: boolean;
 			}
 		): Promise<CatalogCategoryDetailRecord> {
+			const { allCategories, productCounts, visibleCategories } = await getCategoryVisibility();
 			const category = ensureCategory(
-				await dependencies.repository.findCategoryBySlug(categorySlug)
+				allCategories.data.find(
+					(entry) => entry.slug === categorySlug && (productCounts[entry.id] ?? 0) > 0
+				) ?? null
 			);
 			const detail: CatalogCategoryDetailRecord = { ...category };
 
 			if (query.includeChildren) {
-				detail.children = await dependencies.repository.listChildCategories(category.id);
+				const visibleCategoryIds = new Set(visibleCategories.map((entry) => entry.id));
+				detail.children = (await dependencies.repository.listChildCategories(category.id)).filter(
+					(entry) => visibleCategoryIds.has(entry.id)
+				);
 			}
 
 			if (query.includeProductCount) {
-				const categories = await dependencies.repository.listCategories(
-					{ sort: 'position', order: 'asc' },
-					{ paginate: false }
-				);
-				const categoryIds = getCategoryDescendantIds(categories.data, category.id);
-				const directProductCounts = await dependencies.repository.countProductsForCategoryIds(
-					categoryIds,
-					true
-				);
-				detail.productCount = categoryIds.reduce(
-					(total, categoryId) => total + (directProductCounts[categoryId] ?? 0),
-					0
-				);
+				detail.productCount = productCounts[category.id];
 			}
 
 			return detail;
