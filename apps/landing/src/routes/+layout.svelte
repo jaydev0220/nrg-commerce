@@ -49,7 +49,9 @@
 
 	const seoPage = $derived(page.data.seo ?? fallbackSeo);
 	const organization: SeoOrganizationData = $derived({
-		name: m.company_name(),
+		name: 'NEW GLATEC Co., Ltd.',
+		legalName: '巧新有限公司',
+		brandName: 'NRG Glass',
 		description: m.company_description(),
 		address: m.contact_address_value(),
 		telephone: m.contact_phone_value(),
@@ -61,7 +63,7 @@
 			seo: seoPage,
 			pathname: page.url.pathname,
 			locale,
-			siteName: organization.name,
+			siteName: 'NRG Glass',
 			siteOrigin,
 			resolveLocalizedUrl: resolveLandingSeoUrl,
 			trailingSlash: 'always'
@@ -88,7 +90,10 @@
 								pathname: '/'
 							}
 						],
-			mainEntityOrganization: seoPage.pageType === 'AboutPage' || seoPage.pageType === 'ContactPage'
+			mainEntityOrganization:
+				seoPage.pageType === 'AboutPage' ||
+				seoPage.pageType === 'ContactPage' ||
+				deLocalizeUrl(page.url).pathname.replace(/\/+$/u, '') === '/capabilities'
 		})
 	);
 	const alternateLinks = $derived(
@@ -107,6 +112,12 @@
 			};
 		})
 	);
+	const legalLinks = $derived([
+		{
+			href: resolve(localizeHref('/privacy', { locale }) as Pathname),
+			label: m.footer_privacy()
+		}
+	]);
 
 	function resolveLandingSeoUrl(pathname: string, nextLocale: SupportedLocale): URL {
 		return localizeUrl(deLocalizeUrl(new URL(pathname, siteOrigin)), { locale: nextLocale });
@@ -198,6 +209,7 @@
 		description={m.company_description()}
 		copyrightText={`© ${currentYear} ${m.company_name()} ${m.footer_copyright()}`}
 		{homeHref}
+		{legalLinks}
 		onToggleLanguage={toggleFooterLocale}
 	/>
 </div>

@@ -1,1 +1,7 @@
-export const staticPagePaths = ['/', '/about/', '/contact/'] as const;
+export const staticPagePaths = [
+	'/',
+	'/about/',
+	'/capabilities/',
+	'/contact/',
+	'/privacy/'
+] as const;

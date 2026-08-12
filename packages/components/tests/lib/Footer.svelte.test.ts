@@ -14,6 +14,7 @@ test('uses the supplied localized home target for every footer logo', async () =
 		description: 'Laboratory glassware manufacturer',
 		copyrightText: '© 2026 NRG Labware',
 		homeHref: 'https://www.nrglabware.com/en/',
+		legalLinks: [{ href: 'https://www.nrglabware.com/en/privacy/', label: 'Privacy' }],
 		onToggleLanguage: vi.fn()
 	});
 
@@ -22,4 +23,12 @@ test('uses the supplied localized home target for every footer logo', async () =
 			(link) => (link as HTMLAnchorElement).href
 		)
 	).toEqual(['https://www.nrglabware.com/en/', 'https://www.nrglabware.com/en/']);
+	expect(
+		screen.container.querySelectorAll('a[href="https://www.nrglabware.com/en/privacy/"]')
+	).toHaveLength(2);
+	for (const socialLink of screen.container.querySelectorAll<HTMLAnchorElement>(
+		'a[target="_blank"]'
+	)) {
+		expect(socialLink).toHaveClass('h-11');
+	}
 });

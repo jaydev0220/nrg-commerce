@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { stats } from '$lib/data';
+	import * as m from '$lib/paraglide/messages';
 </script>
 
 <section class="bg-accent-700 py-10 md:py-12">
 	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+		<h2 class="mb-6 text-2xl font-bold text-text-on-accent">{m.proof_heading()}</h2>
 		<div class="@container">
 			<div class="grid grid-cols-1 gap-4 @lg:grid-cols-3 @lg:gap-5">
 				{#each stats as stat (stat.id)}

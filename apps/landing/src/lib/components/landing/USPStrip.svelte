@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { usps } from '$lib/data';
+	import * as m from '$lib/paraglide/messages';
 </script>
 
 <section class="border-y border-border bg-bg-page py-10">
 	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+		<h2 class="mb-6 text-2xl font-bold text-text-heading">{m.procurement_heading()}</h2>
 		<div class="@container">
 			<div class="grid grid-cols-1 gap-4 @md:grid-cols-2">
 				{#each usps as usp (usp.id)}

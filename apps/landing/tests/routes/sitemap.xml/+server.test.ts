@@ -14,8 +14,12 @@ test('sitemap.xml emits all localized landing pages and reciprocal alternates', 
 
 	expect(response.headers.get('content-type')).toBe('application/xml; charset=utf-8');
 	expect(response.headers.get('cache-control')).toContain('max-age=3600');
-	expect((xml.match(/<loc>/g) ?? []).length).toBe(6);
+	expect((xml.match(/<loc>/g) ?? []).length).toBe(10);
 	expect(xml).toContain('<loc>https://www.example.test/</loc>');
+	expect(xml).toContain('<loc>https://www.example.test/capabilities/</loc>');
+	expect(xml).toContain('<loc>https://www.example.test/en/capabilities/</loc>');
 	expect(xml).toContain('<loc>https://www.example.test/en/contact/</loc>');
+	expect(xml).toContain('<loc>https://www.example.test/privacy/</loc>');
+	expect(xml).toContain('<loc>https://www.example.test/en/privacy/</loc>');
 	expect(xml).toContain('hreflang="x-default"');
 });

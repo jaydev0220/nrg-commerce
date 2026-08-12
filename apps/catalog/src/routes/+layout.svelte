@@ -77,7 +77,9 @@
 	const seoPage = $derived(page.data.seo ?? fallbackSeo);
 	const seoBreadcrumbItems = $derived(page.data['seoBreadcrumbItems']);
 	const organization: SeoOrganizationData = $derived({
-		name: m.company_name(),
+		name: 'NEW GLATEC Co., Ltd.',
+		legalName: '巧新有限公司',
+		brandName: 'NRG Glass',
 		description: m.company_description(),
 		address: m.contact_address_value(),
 		telephone: m.contact_phone_value(),
@@ -89,7 +91,7 @@
 			seo: seoPage,
 			pathname: seoPathname,
 			locale: seoLocale,
-			siteName: organization.name,
+			siteName: 'NRG Glass',
 			siteOrigin: page.url.origin,
 			resolveLocalizedUrl: resolveCatalogSeoUrl
 		})
@@ -141,6 +143,19 @@
 		}
 	}
 
+	function getLocalizedLandingPageHref(nextLocale: Locale, pathname: string): string {
+		if (!homeUrl) {
+			return resolve(localizeHref(pathname, { locale: nextLocale }) as Pathname);
+		}
+
+		const localizedPathname = nextLocale === 'en' ? `/en${pathname}` : pathname;
+		try {
+			return new URL(localizedPathname, homeUrl).toString();
+		} catch {
+			return resolve(localizeHref(pathname, { locale: nextLocale }) as Pathname);
+		}
+	}
+
 	const homeHref = $derived(getLocalizedLandingHref(locale));
 	const navigationLinks = $derived.by<NavLinkItem[]>(() => [
 		{
@@ -149,9 +164,20 @@
 			label: m.nav_home()
 		},
 		{
+			href: getLocalizedLandingPageHref(locale, '/capabilities/'),
+			id: 'capabilities',
+			label: locale === 'en' ? 'Capabilities' : '服務能力'
+		},
+		{
 			href: resolve(localizeHref('/', { locale }) as Pathname),
 			id: 'products',
 			label: m.catalog_title()
+		}
+	]);
+	const legalLinks = $derived([
+		{
+			href: getLocalizedLandingPageHref(locale, '/privacy/'),
+			label: locale === 'en' ? 'Privacy' : '隱私權'
 		}
 	]);
 
@@ -294,6 +320,7 @@
 		description={m.company_description()}
 		copyrightText={`© ${currentYear} ${m.company_name()} ${m.footer_copyright()}`}
 		{homeHref}
+		{legalLinks}
 		onToggleLanguage={toggleFooterLocale}
 	/>
 </div>

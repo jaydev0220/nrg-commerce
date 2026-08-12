@@ -41,7 +41,7 @@ for (const pathname of ['/contact/', '/en/contact/']) {
 			await page.route('https://www.google.com/**', (route) =>
 				route.fulfill({
 					contentType: 'text/html',
-					body: '<!doctype html><html lang="en"><title>Map</title><main><h1>Map</h1></main></html>'
+					body: '<!doctype html><html lang="en"><title>Map</title><main aria-label="Map"><h1>Map</h1></main></html>'
 				})
 			);
 
@@ -102,9 +102,43 @@ async function structuredType(page: import('@playwright/test').Page, type: strin
 }
 
 test('localized pages expose canonical SEO and custom-manufacturing content', async ({ page }) => {
-	for (const pathname of ['/', '/en/', '/about/', '/en/about/', '/contact/', '/en/contact/']) {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.addInitScript(() => {
+		const testWindow = window as Window & {
+			turnstile: {
+				render(container: HTMLElement, options: { callback(token: string): void }): string;
+				remove(widgetId: string): void;
+			};
+		};
+		testWindow.turnstile = {
+			render(_container, options) {
+				queueMicrotask(() => options.callback('e2e-token'));
+				return 'e2e-widget';
+			},
+			remove() {}
+		};
+	});
+	await page.route('https://www.google.com/**', (route) =>
+		route.fulfill({
+			contentType: 'text/html',
+			body: '<!doctype html><html lang="en"><title>Map</title><main aria-label="Map"><h1>Map</h1></main></html>'
+		})
+	);
+	for (const pathname of [
+		'/',
+		'/en/',
+		'/about/',
+		'/en/about/',
+		'/capabilities/',
+		'/en/capabilities/',
+		'/contact/',
+		'/en/contact/',
+		'/privacy/',
+		'/en/privacy/'
+	]) {
 		const response = await page.goto(pathname);
 		expect(response?.status()).toBe(200);
+		await expect(page.locator('h1')).toHaveCount(1);
 		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
 			'href',
 			`http://127.0.0.1:4178${pathname}`
@@ -114,8 +148,23 @@ test('localized pages expose canonical SEO and custom-manufacturing content', as
 		await expect
 			.poll(async () => structuredType(page, 'Organization'))
 			.toMatchObject({
-				'@id': 'http://127.0.0.1:4178/#organization'
+				'@id': 'http://127.0.0.1:4178/#organization',
+				name: 'NEW GLATEC Co., Ltd.',
+				legalName: '巧新有限公司',
+				brand: { '@type': 'Brand', name: 'NRG Glass' }
 			});
+		if (pathname !== '/' && pathname !== '/en/') {
+			await expect
+				.poll(async () => structuredType(page, 'BreadcrumbList'))
+				.toMatchObject({
+					'@type': 'BreadcrumbList'
+				});
+		}
+		expect(
+			await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+		).toBe(true);
+		const accessibility = await new AxeBuilder({ page }).include('main').analyze();
+		expect(accessibility.violations).toEqual([]);
 	}
 
 	await page.goto('/en/');
@@ -124,6 +173,19 @@ test('localized pages expose canonical SEO and custom-manufacturing content', as
 	await expect(page.locator('a[aria-label="NRG Labware"]')).toHaveAttribute('href', '/en/');
 	await expect(page.locator('a[aria-label="NRG"]')).toHaveCount(2);
 	await expect(page.locator('a[aria-label="NRG"]').first()).toHaveAttribute('href', '/en/');
+});
+
+test('B2B contact links preselect enterprise guidance and expose the privacy notice', async ({
+	page
+}) => {
+	await page.goto('/en/contact/?type=b2b');
+	await expect(page.locator('#inquiry-type')).toHaveValue('Enterprise (B2B)');
+	await expect(page.getByText('We aim to respond within two business days.')).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Read the privacy notice' })).toHaveAttribute(
+		'href',
+		'/en/privacy'
+	);
+	await expect(page.getByText(/dimensions or specification, quantity, destination/)).toBeVisible();
 });
 
 test('unknown localized pages return a useful non-indexable 404', async ({ page }) => {

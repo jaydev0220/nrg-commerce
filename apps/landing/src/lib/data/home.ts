@@ -40,7 +40,7 @@ export const partnerships = [
 		title: () => m.partnership_b2b_title(),
 		description: () => m.partnership_b2b_description(),
 		cta: () => m.cta_learn_more(),
-		href: '/contact',
+		href: '/contact/',
 		type: 'b2b',
 		primary: true
 	}

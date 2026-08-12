@@ -23,6 +23,17 @@ test('marks the active route and closes the mobile menu after language selection
 		onToggleTheme
 	});
 	const menu = screen.getByRole('button', { name: 'Toggle mobile menu' });
+	expect(screen.container.querySelector('button[aria-label="Toggle mobile menu"]')).toHaveClass(
+		'h-11',
+		'w-11'
+	);
+	expect(screen.container.querySelector('button[aria-label="Toggle theme"]')).toHaveClass(
+		'h-11',
+		'w-11'
+	);
+	expect(screen.container.querySelector('button[aria-label="Switch language"]')).toHaveClass(
+		'h-11'
+	);
 	expect(screen.container.querySelector('a[aria-label="NRG Labware"]')).toHaveAttribute(
 		'href',
 		'/en/'

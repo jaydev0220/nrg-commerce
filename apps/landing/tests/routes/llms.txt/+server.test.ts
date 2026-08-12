@@ -16,8 +16,15 @@ test('llms.txt gives crawlers concise factual site discovery links', async () =>
 	expect(body).toContain('https://www.example.test/');
 	expect(body).toContain('https://www.example.test/about/');
 	expect(body).toContain('https://www.example.test/en/about/');
+	expect(body).toContain('https://www.example.test/capabilities/');
+	expect(body).toContain('https://www.example.test/en/capabilities/');
 	expect(body).toContain('https://www.example.test/contact/');
 	expect(body).toContain('https://www.example.test/en/contact/');
+	expect(body).toContain('https://www.example.test/privacy/');
+	expect(body).toContain('https://www.example.test/en/privacy/');
+	expect(body).toContain('NEW GLATEC Co., Ltd.');
+	expect(body).toContain('legal name: 巧新有限公司');
+	expect(body).toContain('300+ SKUs');
 	expect(body).toContain('The sitemap is authoritative');
 	expect(body).toContain('https://www.example.test/sitemap.xml');
 });

@@ -1,7 +1,17 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import type { Pathname } from '$app/types';
 	import * as m from '$lib/paraglide/messages';
 	import { partnerships } from '$lib/data';
+	import { extractLocaleFromUrl, localizeHref } from '$lib/paraglide/runtime';
+	import type { SupportedLocale } from '@packages/seo';
+
+	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
+
+	function getPartnershipHref(pathname: string, type: string): Pathname {
+		return localizeHref(`${pathname}?type=${encodeURIComponent(type)}`, { locale }) as Pathname;
+	}
 </script>
 
 <section class="bg-bg-accent py-16 lg:py-20">
@@ -27,7 +37,7 @@
 					</div>
 					<div>
 						<a
-							href={resolve(partnership.href)}
+							href={resolve(getPartnershipHref(partnership.href, partnership.type))}
 							class="
 								inline-flex h-9 w-37 items-center justify-center rounded px-6 py-2 text-sm
 								font-medium transition-colors duration-200 hover:-translate-y-0.5
@@ -58,7 +68,7 @@
 					</div>
 					<div>
 						<a
-							href={resolve(partnership.href)}
+							href={resolve(getPartnershipHref(partnership.href, partnership.type))}
 							class="
 								inline-flex h-9 w-37 items-center justify-center rounded px-6 py-2 text-sm
 								font-medium transition-colors duration-200 hover:-translate-y-0.5
@@ -89,7 +99,7 @@
 					</div>
 					<div>
 						<a
-							href={resolve(partnership.href)}
+							href={resolve(getPartnershipHref(partnership.href, partnership.type))}
 							class="
 								block w-full rounded px-6 py-3 text-center text-sm
 								font-medium transition-colors duration-200 hover:-translate-y-0.5

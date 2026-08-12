@@ -1,216 +1,77 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages';
+	import { page } from '$app/state';
 	import { productCategories } from '$lib/data';
+	import * as m from '$lib/paraglide/messages';
+	import { extractLocaleFromUrl } from '$lib/paraglide/runtime';
+	import type { SupportedLocale } from '@packages/seo';
+
+	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
 </script>
 
 <section class="bg-bg-page py-16 lg:py-20">
 	<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-		<!-- Section Heading -->
 		<div class="mb-8 lg:mb-16">
-			<h2 class="mb-2 text-3xl font-bold text-text-heading md:text-3xl lg:text-4xl">
+			<h2 class="mb-2 text-3xl font-bold text-text-heading lg:text-4xl">
 				{m.product_series_heading()}
 			</h2>
 		</div>
 
-		<!-- Desktop Bento Grid -->
-		<div
-			class="hidden h-93 gap-4 lg:grid"
-			style="grid-template-areas: 'beakers pipettes tubes' 'beakers funnels custom'; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr;"
-		>
-			<!-- Large cell: Beakers & Flasks -->
-			<div
-				class="relative flex items-end overflow-hidden rounded-2xl bg-border transition-colors duration-200 hover:bg-border-strong"
-				style="grid-area: beakers;"
-			>
-				<img
-					src={productCategories[0].image}
-					alt={productCategories[0].name()}
-					class="absolute inset-0 h-full w-full object-cover"
-					loading="lazy"
-				/>
-				<div class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-6">
-					<h3 class="text-sm font-bold text-white">
-						{productCategories[0].name()}
-					</h3>
-				</div>
-			</div>
-
-			<!-- Small cells -->
-			<div
-				class="relative flex items-end overflow-hidden rounded-2xl bg-border transition-colors duration-200 hover:bg-border-strong"
-				style="grid-area: pipettes;"
-			>
-				<img
-					src={productCategories[1].image}
-					alt={productCategories[1].name()}
-					class="absolute inset-0 h-full w-full object-cover"
-					loading="lazy"
-				/>
-				<div class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-4">
-					<h3 class="text-xs font-bold text-white">
-						{productCategories[1].name()}
-					</h3>
-				</div>
-			</div>
-
-			<div
-				class="relative flex items-end overflow-hidden rounded-2xl bg-border transition-colors duration-200 hover:bg-border-strong"
-				style="grid-area: tubes;"
-			>
-				<img
-					src={productCategories[2].image}
-					alt={productCategories[2].name()}
-					class="absolute inset-0 h-full w-full object-cover"
-					loading="lazy"
-				/>
-				<div class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-4">
-					<h3 class="text-xs font-bold text-white">
-						{productCategories[2].name()}
-					</h3>
-				</div>
-			</div>
-
-			<div
-				class="relative flex items-end overflow-hidden rounded-2xl bg-border transition-colors duration-200 hover:bg-border-strong"
-				style="grid-area: funnels;"
-			>
-				<img
-					src={productCategories[3].image}
-					alt={productCategories[3].name()}
-					class="absolute inset-0 h-full w-full object-cover"
-					loading="lazy"
-				/>
-				<div class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-4">
-					<h3 class="text-xs font-bold text-white">
-						{productCategories[3].name()}
-					</h3>
-				</div>
-			</div>
-
-			<div
-				class="relative flex items-end overflow-hidden rounded-2xl bg-border transition-colors duration-200 hover:bg-border-strong"
-				style="grid-area: custom;"
-			>
-				<img
-					src={productCategories[4].image}
-					alt={productCategories[4].name()}
-					class="absolute inset-0 h-full w-full object-cover"
-					loading="lazy"
-				/>
-				<div class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-4">
-					<h3 class="text-xs font-bold text-white">
-						{productCategories[4].name()}
-					</h3>
-				</div>
-			</div>
-		</div>
-
-		<!-- Tablet Grid -->
-		<div class="hidden h-auto grid-cols-2 gap-4 md:grid lg:hidden">
-			<!-- Row 1: Beakers & Flasks | Pipettes -->
-			<div
-				class="relative flex h-45 items-end overflow-hidden rounded-xl bg-border transition-colors duration-200 hover:bg-border-strong"
-			>
-				<img
-					src={productCategories[0].image}
-					alt={productCategories[0].name()}
-					class="absolute inset-0 h-full w-full object-cover"
-					loading="lazy"
-				/>
-				<div class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-6">
-					<h3 class="text-sm font-bold text-white">
-						{productCategories[0].name()}
-					</h3>
-				</div>
-			</div>
-			<div
-				class="relative flex h-45 items-end overflow-hidden rounded-xl bg-border transition-colors duration-200 hover:bg-border-strong"
-			>
-				<img
-					src={productCategories[1].image}
-					alt={productCategories[1].name()}
-					class="absolute inset-0 h-full w-full object-cover"
-					loading="lazy"
-				/>
-				<div class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-4">
-					<h3 class="text-xs font-bold text-white">
-						{productCategories[1].name()}
-					</h3>
-				</div>
-			</div>
-
-			<!-- Row 2: Test Tubes | Funnels -->
-			<div
-				class="relative flex h-45 items-end overflow-hidden rounded-xl bg-border transition-colors duration-200 hover:bg-border-strong"
-			>
-				<img
-					src={productCategories[2].image}
-					alt={productCategories[2].name()}
-					class="absolute inset-0 h-full w-full object-cover"
-					loading="lazy"
-				/>
-				<div class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-4">
-					<h3 class="text-xs font-bold text-white">
-						{productCategories[2].name()}
-					</h3>
-				</div>
-			</div>
-			<div
-				class="relative flex h-45 items-end overflow-hidden rounded-xl bg-border transition-colors duration-200 hover:bg-border-strong"
-			>
-				<img
-					src={productCategories[3].image}
-					alt={productCategories[3].name()}
-					class="absolute inset-0 h-full w-full object-cover"
-					loading="lazy"
-				/>
-				<div class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-4">
-					<h3 class="text-xs font-bold text-white">
-						{productCategories[3].name()}
-					</h3>
-				</div>
-			</div>
-
-			<!-- Row 3: Custom (full width) -->
-			<div
-				class="relative col-span-2 flex h-45 items-end overflow-hidden rounded-xl bg-border transition-colors duration-200 hover:bg-border-strong"
-			>
-				<img
-					src={productCategories[4].image}
-					alt={productCategories[4].name()}
-					class="absolute inset-0 h-full w-full object-cover"
-					loading="lazy"
-				/>
-				<div class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-4">
-					<h3 class="text-xs font-bold text-white">
-						{productCategories[4].name()}
-					</h3>
-				</div>
-			</div>
-		</div>
-
-		<!-- Mobile Stack -->
-		<div class="space-y-3 md:hidden">
-			{#each productCategories as category, index (category.id)}
-				<div
-					class="
-						relative flex items-end overflow-hidden rounded-xl bg-border transition-colors duration-200 hover:bg-border-strong
-						{index === 0 ? 'h-32' : 'h-29'}
-					"
+		<div class="product-grid grid gap-4">
+			{#each productCategories as category (category.id)}
+				<a
+					href={category.href(locale)}
+					target="_blank"
+					rel="external noopener noreferrer"
+					class="product-card relative flex min-h-36 items-end overflow-hidden rounded-xl bg-border transition-colors duration-200 hover:bg-border-strong focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none"
+					style:--grid-area={category.gridArea}
 				>
 					<img
 						src={category.image}
-						alt={category.name()}
+						alt={category.alt()}
+						width={category.width}
+						height={category.height}
 						class="absolute inset-0 h-full w-full object-cover"
 						loading="lazy"
+						decoding="async"
 					/>
-					<div class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-4">
-						<h3 class="text-xs font-bold text-white">
-							{category.name()}
-						</h3>
+					<div
+						class="relative z-10 w-full bg-linear-to-t from-neutral-900/70 to-transparent p-4 md:p-6"
+					>
+						<h3 class="text-sm font-bold text-white">{category.name()}</h3>
 					</div>
-				</div>
+				</a>
 			{/each}
 		</div>
 	</div>
 </section>
+
+<style>
+	.product-card {
+		grid-area: var(--grid-area);
+	}
+
+	@media (min-width: 48rem) {
+		.product-grid {
+			grid-template-areas:
+				'beakers tubes'
+				'funnels condensers'
+				'hydrometers hydrometers';
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.product-card {
+			min-height: 11.25rem;
+		}
+	}
+
+	@media (min-width: 64rem) {
+		.product-grid {
+			grid-template-areas:
+				'beakers tubes condensers'
+				'beakers funnels hydrometers';
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			grid-template-rows: repeat(2, minmax(0, 1fr));
+			min-height: 23.25rem;
+		}
+	}
+</style>

@@ -3,15 +3,17 @@
 	import { siFacebook, siLine } from 'simple-icons';
 	import Logo from './Logo.svelte';
 	import SocialIcon from './SocialIcon.svelte';
+	import type { FooterLinkItem } from './types';
 
 	type Props = {
 		description: string;
 		copyrightText: string;
 		homeHref: string;
+		legalLinks: FooterLinkItem[];
 		onToggleLanguage: () => void;
 	};
 
-	let { description, copyrightText, homeHref, onToggleLanguage }: Props = $props();
+	let { description, copyrightText, homeHref, legalLinks, onToggleLanguage }: Props = $props();
 
 	const cdnBaseUrl = PUBLIC_CDN_BASE_URL.trim();
 	const facebookUrl = PUBLIC_FACEBOOK_URL.trim();
@@ -22,13 +24,13 @@
 
 <footer class="bg-accent-700 text-text-on-accent">
 	<div class="hidden md:block">
-		<div class="mx-auto h-60 max-w-7xl px-4 sm:px-6 lg:px-8">
+		<div class="mx-auto min-h-60 max-w-7xl px-4 sm:px-6 lg:px-8">
 			<div class="flex items-start justify-between pt-12">
 				<div class="flex flex-col space-y-3">
 					<div class="flex items-center">
 						<a
 							href={homeHref}
-							class="flex items-center"
+							class="flex min-h-11 items-center"
 							aria-label="NRG"
 						>
 							<Logo
@@ -52,7 +54,7 @@
 						target="_blank"
 						rel="external noopener noreferrer"
 						class="
-							inline-flex h-8 w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
+							inline-flex h-11 min-w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
 							text-xs font-medium text-text-on-accent transition-colors duration-200 hover:-translate-y-0.5 hover:bg-accent-500
 							focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:outline-none
 						"
@@ -68,7 +70,7 @@
 						target="_blank"
 						rel="external noopener noreferrer"
 						class="
-							inline-flex h-8 w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
+							inline-flex h-11 min-w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
 							text-xs font-medium text-text-on-accent transition-colors duration-200 hover:-translate-y-0.5 hover:bg-accent-500
 							focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:outline-none
 						"
@@ -85,11 +87,21 @@
 			<div class="mt-12 border-t border-accent-600"></div>
 
 			<div class="flex items-center justify-between pt-6">
-				<p class="text-sm text-accent-200">{copyrightText}</p>
+				<div class="flex items-center gap-4 text-sm text-accent-200">
+					<p>{copyrightText}</p>
+					{#each legalLinks as link (link.href)}
+						<a
+							class="inline-flex min-h-11 items-center hover:text-text-on-accent"
+							href={link.href}
+						>
+							{link.label}
+						</a>
+					{/each}
+				</div>
 				<button
 					onclick={onToggleLanguage}
 					class="
-						text-sm text-accent-200 transition-colors duration-200 hover:-translate-y-0.5 hover:text-text-on-accent
+						min-h-11 px-2 text-sm text-accent-200 transition-colors duration-200 hover:-translate-y-0.5 hover:text-text-on-accent
 						focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:outline-none
 					"
 				>
@@ -105,7 +117,7 @@
 				<div class="flex items-center">
 					<a
 						href={homeHref}
-						class="flex items-center"
+						class="flex min-h-11 items-center"
 						aria-label="NRG"
 					>
 						<Logo
@@ -129,7 +141,7 @@
 					target="_blank"
 					rel="external noopener noreferrer"
 					class="
-						inline-flex h-8 w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
+							inline-flex h-11 min-w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
 						text-xs font-medium text-text-on-accent transition-colors duration-200 hover:-translate-y-0.5 hover:bg-accent-500
 						focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:outline-none
 					"
@@ -145,7 +157,7 @@
 					target="_blank"
 					rel="external noopener noreferrer"
 					class="
-						inline-flex h-8 w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
+							inline-flex h-11 min-w-24 items-center justify-center gap-1 rounded bg-accent-600 px-3 py-1.5
 						text-xs font-medium text-text-on-accent transition-colors duration-200 hover:-translate-y-0.5 hover:bg-accent-500
 						focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:outline-none
 					"
@@ -162,10 +174,20 @@
 
 			<div class="space-y-2">
 				<p class="text-sm text-accent-200">{copyrightText}</p>
+				<div class="flex flex-wrap gap-4">
+					{#each legalLinks as link (link.href)}
+						<a
+							class="inline-flex min-h-11 items-center text-sm text-accent-200 hover:text-text-on-accent"
+							href={link.href}
+						>
+							{link.label}
+						</a>
+					{/each}
+				</div>
 				<button
 					onclick={onToggleLanguage}
 					class="
-						text-sm text-accent-200 transition-colors duration-200 hover:-translate-y-0.5 hover:text-text-on-accent
+						min-h-11 px-2 text-sm text-accent-200 transition-colors duration-200 hover:-translate-y-0.5 hover:text-text-on-accent
 						focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:ring-offset-2 focus-visible:outline-none
 					"
 				>

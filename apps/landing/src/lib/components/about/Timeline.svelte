@@ -32,7 +32,7 @@
 							<h3 class="text-lg font-bold text-text-heading">
 								{milestone.year()}
 							</h3>
-							<p class="leading-relaxed text-text-muted">
+							<p class="leading-relaxed text-text-body">
 								{#each splitLineBreakTags(milestone.description()) as segment, index (index)}
 									{#if segment.type === 'text'}
 										{segment.value}

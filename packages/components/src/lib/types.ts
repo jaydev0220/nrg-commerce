@@ -21,6 +21,11 @@ export type NavLinkItem = {
 	label: string;
 };
 
+export type FooterLinkItem = {
+	href: string;
+	label: string;
+};
+
 export type LanguageOption = {
 	label: string;
 	shortLabel: string;

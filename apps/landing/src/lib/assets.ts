@@ -4,9 +4,11 @@ import { createAssetUrlResolver, SHARED_ASSETS } from '@packages/assets';
 export { SHARED_ASSETS };
 
 export const LANDING_ASSETS = {
-	brandingOpenGraph: '/og/branding.webp',
+	brandingOpenGraph: '/og/landing/branding.webp',
 	aboutOpenGraph: '/og/landing/about.webp',
 	contactOpenGraph: '/og/landing/contact.webp',
+	capabilitiesOpenGraph: '/og/landing/branding.webp',
+	privacyOpenGraph: '/og/landing/branding.webp',
 	productBeakers: '/landing/products-beakers.webp',
 	productCondensers: '/landing/products-condensers.webp',
 	productTubes: '/landing/products-tubes.webp',

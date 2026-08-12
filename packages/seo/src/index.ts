@@ -18,6 +18,9 @@ export type SeoPageData = {
 
 export type SeoOrganizationData = {
 	name: string;
+	legalName?: string;
+	alternateName?: string;
+	brandName?: string;
 	description: string;
 	address: string;
 	telephone: string;
@@ -202,6 +205,19 @@ export function buildStructuredData({
 			}
 		]
 	};
+
+	if (organization.legalName) {
+		organizationSchema['legalName'] = organization.legalName;
+	}
+	if (organization.alternateName) {
+		organizationSchema['alternateName'] = organization.alternateName;
+	}
+	if (organization.brandName) {
+		organizationSchema['brand'] = {
+			'@type': 'Brand',
+			name: organization.brandName
+		};
+	}
 
 	if (sameAs.length > 0) {
 		organizationSchema['sameAs'] = sameAs;

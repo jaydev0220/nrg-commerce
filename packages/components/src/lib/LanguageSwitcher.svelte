@@ -39,7 +39,7 @@
 <div class="language-switcher relative">
 	<button
 		class="
-			flex h-8 w-18 items-center justify-center gap-1 rounded border border-border bg-bg-sunken px-3 py-1.5
+			flex h-11 min-w-18 items-center justify-center gap-1 rounded border border-border bg-bg-sunken px-3 py-1.5
 			text-sm font-medium transition-[color,background-color,border-color,transform]
 			duration-200 hover:-translate-y-0.5 hover:border-border-accent hover:bg-bg-accent focus-visible:ring-2 focus-visible:ring-brand
 			focus-visible:ring-offset-2 focus-visible:outline-none
@@ -66,7 +66,7 @@
 			{#each options as option (option.value)}
 				<button
 					class={`
-						w-full px-3 py-2 text-left text-sm text-text-body transition-colors duration-200 hover:bg-bg-accent focus-visible:ring-2
+						min-h-11 w-full px-3 py-2 text-left text-sm text-text-body transition-colors duration-200 hover:bg-bg-accent focus-visible:ring-2
 						focus-visible:ring-brand focus-visible:outline-none
 						${currentLocale === option.value ? 'bg-bg-accent' : ''}
 					`}

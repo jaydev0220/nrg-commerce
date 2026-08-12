@@ -92,7 +92,7 @@
 			<div class="shrink-0">
 				<a
 					href={homeHref}
-					class="flex items-center"
+					class="flex min-h-11 items-center"
 					aria-label="NRG Labware"
 					onclick={closeMobileMenu}
 				>
@@ -113,7 +113,7 @@
 						href={link.href}
 						aria-current={isActive(link.href) ? 'page' : undefined}
 						class={`
-							text-sm font-medium transition-colors duration-200 hover:-translate-y-0.5
+							inline-flex min-h-11 items-center text-sm font-medium transition-colors duration-200 hover:-translate-y-0.5
 							focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none
 							${isActive(link.href) ? 'text-brand' : 'text-text-body hover:text-brand'}
 						`}
@@ -142,7 +142,7 @@
 					target={ctaExternal ? '_blank' : undefined}
 					rel={ctaExternal ? 'external noopener noreferrer' : undefined}
 					class="
-						inline-flex h-10 w-37 items-center justify-center rounded-md bg-brand px-4 py-2
+						inline-flex h-11 w-37 items-center justify-center rounded-md bg-brand px-4 py-2
 						text-sm font-medium text-text-on-accent transition-colors duration-200 hover:-translate-y-0.5 hover:bg-brand-hover
 						focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none
 					"
@@ -162,7 +162,7 @@
 				<button
 					onclick={toggleMobileMenu}
 					class="
-						rounded-md p-2 text-text-body transition-colors duration-200 hover:bg-bg-accent hover:text-brand focus-visible:ring-2
+						h-11 w-11 rounded-md p-2 text-text-body transition-colors duration-200 hover:bg-bg-accent hover:text-brand focus-visible:ring-2
 						focus-visible:ring-brand focus-visible:outline-none
 					"
 					aria-expanded={mobileMenuOpen}
@@ -187,7 +187,7 @@
 							aria-current={isActive(link.href) ? 'page' : undefined}
 							onclick={closeMobileMenu}
 							class={`
-								block rounded-md px-3 py-2 text-base font-medium transition-colors duration-200
+								flex min-h-11 items-center rounded-md px-3 py-2 text-base font-medium transition-colors duration-200
 								focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none
 								${isActive(link.href) ? 'bg-bg-accent text-brand' : 'text-text-body hover:bg-bg-accent hover:text-brand'}
 							`}

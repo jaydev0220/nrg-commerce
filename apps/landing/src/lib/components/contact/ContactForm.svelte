@@ -1,10 +1,14 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { resolve } from '$app/paths';
+	import type { Pathname } from '$app/types';
 	import * as m from '$lib/paraglide/messages';
 	import { page } from '$app/state';
 	import * as publicEnv from '$env/static/public';
 	import { TurnstileWidget } from '@packages/components';
 	import { submitContactRequest, type ContactRequestPayload } from '$lib/contact-request.js';
+	import { extractLocaleFromUrl, localizeHref } from '$lib/paraglide/runtime';
+	import type { SupportedLocale } from '@packages/seo';
 
 	const publicEnvironment = publicEnv as Record<string, string | undefined>;
 
@@ -32,6 +36,7 @@
 	}
 
 	const initialInquiryType = browser ? page.url.searchParams.get('type') : null;
+	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
 
 	let form = $state({
 		name: '',
@@ -335,11 +340,18 @@
 				type="text"
 				bind:value={form.productInterest}
 				autocomplete="off"
+				aria-describedby="product-interest-guidance"
 				class="
 					w-full rounded-md border border-border bg-bg-sunken px-3 py-2 text-sm
 					focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none
 				"
 			/>
+			<p
+				id="product-interest-guidance"
+				class="mt-2 text-xs text-text-body"
+			>
+				{m.form_product_interest_guidance()}
+			</p>
 		</div>
 
 		<!-- Message (Full Width) -->
@@ -358,7 +370,7 @@
 				rows="6"
 				autocomplete="off"
 				aria-invalid={Boolean(errors.message)}
-				aria-describedby={errors.message ? 'message-error' : undefined}
+				aria-describedby={errors.message ? 'message-error message-guidance' : 'message-guidance'}
 				class="
 					w-full resize-none rounded-md border border-border bg-bg-sunken px-3 py-2 text-sm
 					focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none
@@ -372,6 +384,12 @@
 					{errors.message}
 				</p>
 			{/if}
+			<p
+				id="message-guidance"
+				class="mt-2 text-xs text-text-body"
+			>
+				{m.form_project_guidance()}
+			</p>
 		</div>
 
 		{#key turnstileGeneration}
@@ -406,6 +424,16 @@
 			>
 				{isSubmitting ? m.form_submitting() : m.form_submit()}
 			</button>
+			<p class="mt-3 text-sm text-text-body">{m.form_response_expectation()}</p>
+			<p class="mt-2 text-xs leading-relaxed text-text-body">
+				{m.form_privacy_notice()}
+				<a
+					class="ml-1 underline hover:text-text-body"
+					href={resolve(localizeHref('/privacy/', { locale }) as Pathname)}
+				>
+					{m.form_privacy_link()}
+				</a>
+			</p>
 		</div>
 
 		{#if statusMessage}

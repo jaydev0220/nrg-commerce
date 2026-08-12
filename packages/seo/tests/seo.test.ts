@@ -80,7 +80,10 @@ test('buildStructuredData emits organization, website, page, and breadcrumb node
 		resolveLocalizedUrl,
 		logoUrl: 'https://cdn.example.com/logo-light.svg',
 		organization: {
-			name: 'NRG Instruments',
+			name: 'NEW GLATEC Co., Ltd.',
+			legalName: '巧新有限公司',
+			alternateName: 'New Glatec',
+			brandName: 'NRG Glass',
 			description: 'Laboratory glassware manufacturer in Taiwan.',
 			address: 'No. 1, Industrial Road, Hsinchu',
 			telephone: '+886-3-123-4567',
@@ -108,6 +111,10 @@ test('buildStructuredData emits organization, website, page, and breadcrumb node
 
 	assert.equal(organizationNode['@type'], 'Organization');
 	assert.equal(organizationNode['@id'], 'https://www.nrglabware.com/#organization');
+	assert.equal(organizationNode['name'], 'NEW GLATEC Co., Ltd.');
+	assert.equal(organizationNode['legalName'], '巧新有限公司');
+	assert.equal(organizationNode['alternateName'], 'New Glatec');
+	assert.deepEqual(organizationNode['brand'], { '@type': 'Brand', name: 'NRG Glass' });
 	assert.equal(organizationNode['url'], 'https://www.nrglabware.com/');
 	assert.deepEqual(organizationNode['sameAs'], [
 		'https://www.facebook.com/example',
