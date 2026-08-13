@@ -35,7 +35,12 @@ test('production releases wait for the bootstrap completion marker', async () =>
 	assert.match(status, /needs: \[gate, fresh-main\]/u);
 	assert.match(status, /environment: production-plan/u);
 	assert.match(status, /terraform -chdir=infra\/production output -raw bootstrap_complete/u);
-	assert.doesNotMatch(status, /az keyvault|key_vault/u);
+	assert.match(status, /terraform -chdir=infra\/production output -raw key_vault_name/u);
+	assert.match(
+		status,
+		/az keyvault secret show --vault-name "\$key_vault_name" --name bootstrap-complete/u
+	);
+	assert.match(status, /Using the legacy Key Vault bootstrap marker for this migration release/u);
 	assert.match(status, /complete: \$\{\{ steps\.check\.outputs\.complete \}\}/u);
 
 	for (const job of ['publish-api-image', 'plan']) {
@@ -43,6 +48,24 @@ test('production releases wait for the bootstrap completion marker', async () =>
 		assert.match(block, /needs\.bootstrap-status\.outputs\.complete == 'true'/u);
 		assert.match(block, /needs: \[[^\]]*bootstrap-status[^\]]*\]/u);
 	}
+});
+
+test('bootstrap reruns honor the Terraform output and legacy completion marker', async () => {
+	const workflow = await readFile(
+		new URL('.github/workflows/bootstrap-production.yml', root),
+		'utf8'
+	);
+	const plan = jobBlock(workflow, 'plan');
+	assert.match(plan, /terraform -chdir=infra\/production output -raw bootstrap_complete/u);
+	assert.match(plan, /terraform -chdir=infra\/production output -raw key_vault_name/u);
+	assert.match(
+		plan,
+		/az keyvault secret show --vault-name "\$key_vault_name" --name bootstrap-complete/u
+	);
+	assert.match(
+		plan,
+		/if \[ "\$complete" = 'true' \]; then\s+echo 'Production bootstrap is already complete\.'/u
+	);
 });
 
 test('the release uses protected plan/apply environments and exact encrypted plan hashes', async () => {
@@ -206,7 +229,12 @@ test('Terraform injects production application secrets directly into Container A
 		/dynamic "secret"[\s\S]*?value\s+= contains\(local\.generated_database_secret_keys/u
 	);
 	assert.doesNotMatch(main, /azurerm_key_vault|key_vault_secret_id|azapi_resource/u);
-	assert.doesNotMatch(workflow, /az keyvault|sync-backup-secret/u);
+	const releaseWithoutBootstrapStatus = workflow.replace(
+		jobBlock(workflow, 'bootstrap-status'),
+		''
+	);
+	assert.doesNotMatch(releaseWithoutBootstrapStatus, /az keyvault/u);
+	assert.doesNotMatch(workflow, /sync-backup-secret/u);
 	assert.match(workflow, /migrate:[\s\S]*?needs: \[apply-infrastructure\]/u);
 	assert.match(
 		workflow,

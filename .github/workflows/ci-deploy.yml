@@ -248,6 +248,11 @@ jobs:
           complete=false
           if [ "$(terraform -chdir=infra/production output -raw bootstrap_complete 2>/dev/null || true)" = 'true' ]; then
             complete=true
+          # Remove this fallback after the first production apply persists bootstrap_complete in HCP state.
+          elif key_vault_name="$(terraform -chdir=infra/production output -raw key_vault_name 2>/dev/null)" &&
+            az keyvault secret show --vault-name "$key_vault_name" --name bootstrap-complete --query id --output tsv --only-show-errors >/dev/null 2>&1; then
+            complete=true
+            echo '::notice::Using the legacy Key Vault bootstrap marker for this migration release.'
           else
             echo '::notice::Production bootstrap is incomplete; release jobs will be skipped.'
           fi

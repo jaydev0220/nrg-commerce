@@ -41,7 +41,16 @@ jobs:
           TF_CLOUD_PROJECT: nrg-commerce
       - name: Refuse rerun after bootstrap completion
         run: |
+          complete=false
           if [ "$(terraform -chdir=infra/production output -raw bootstrap_complete 2>/dev/null || true)" = 'true' ]; then
+            complete=true
+          # Remove this fallback after the first production apply persists bootstrap_complete in HCP state.
+          elif key_vault_name="$(terraform -chdir=infra/production output -raw key_vault_name 2>/dev/null)" &&
+            az keyvault secret show --vault-name "$key_vault_name" --name bootstrap-complete --query id --output tsv --only-show-errors >/dev/null 2>&1; then
+            complete=true
+          fi
+
+          if [ "$complete" = 'true' ]; then
             echo 'Production bootstrap is already complete.' >&2
             exit 1
           fi
