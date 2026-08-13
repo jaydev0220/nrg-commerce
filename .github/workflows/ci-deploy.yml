@@ -271,7 +271,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image-digest: ${{ steps.publish.outputs.digest }}
+      image-digest: ${{ steps.resolve.outputs.digest }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # actions/checkout v6
         with: { persist-credentials: false }
@@ -290,10 +290,22 @@ jobs:
           tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           provenance: true
           sbom: true
+      - id: resolve
+        name: Resolve the Linux amd64 image manifest
+        env:
+          IMAGE_INDEX: ${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          image_digest="$(docker buildx imagetools inspect "$IMAGE_INDEX" --format '{{range .Manifest.Manifests}}{{if and (eq .Platform.OS "linux") (eq .Platform.Architecture "amd64")}}{{.Digest}}{{end}}{{end}}')"
+          if [[ ! "$image_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Could not resolve a Linux amd64 image manifest from $IMAGE_INDEX: $image_digest" >&2
+            exit 1
+          fi
+          echo "digest=$image_digest" >> "$GITHUB_OUTPUT"
       - uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # anchore/scan-action v7
         with:
           {
-            image: '${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}',
+            image: '${{ env.IMAGE_NAME }}@${{ steps.resolve.outputs.digest }}',
             fail-build: true,
             severity-cutoff: high
           }

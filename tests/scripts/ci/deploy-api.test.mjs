@@ -11,6 +11,15 @@ test('API release uses immutable images and control-plane-only revision promotio
 		workflow,
 		/API_IMAGE: \$\{\{ env\.IMAGE_NAME \}\}@\$\{\{ needs\.publish-api-image\.outputs\.image-digest \}\}/u
 	);
+	assert.match(workflow, /image-digest: \$\{\{ steps\.resolve\.outputs\.digest \}\}/u);
+	assert.match(workflow, /docker buildx imagetools inspect "\$IMAGE_INDEX"/u);
+	assert.match(
+		workflow,
+		/\.Manifest\.Manifests\}\}\{\{if and \(eq \.Platform\.OS "linux"\) \(eq \.Platform\.Architecture "amd64"\)\}\}/u
+	);
+	assert.match(workflow, /\^sha256:\[a-f0-9\]\{64\}\$/u);
+	assert.match(workflow, /provenance: true/u);
+	assert.match(workflow, /sbom: true/u);
 	assert.match(workflow, /revision_suffix="api-\$\{GITHUB_SHA::12\}"/u);
 	assert.match(workflow, /revision_name="\$\{AZURE_CONTAINER_APP_NAME\}--\$\{revision_suffix\}"/u);
 	assert.match(workflow, /properties\.runningState/u);
