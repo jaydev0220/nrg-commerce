@@ -20,7 +20,7 @@ test('renders one optimized image and localized catalog link per product categor
 	expect(links).toHaveLength(5);
 	expect(Array.from(links, (link) => link.href)).toEqual([
 		'https://catalog.example.test/en/categories/beakers',
-		'https://catalog.example.test/en/categories/tubes',
+		'https://catalog.example.test/en/categories/test-tubes',
 		'https://catalog.example.test/en/categories/funnels',
 		'https://catalog.example.test/en/categories/condensers',
 		'https://catalog.example.test/en/categories/hydrometers'

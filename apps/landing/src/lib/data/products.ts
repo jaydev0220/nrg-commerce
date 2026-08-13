@@ -25,7 +25,7 @@ export const productCategories = [
 		image: assetUrl(LANDING_ASSETS.productTubes),
 		width: PRODUCT_IMAGE_WIDTH,
 		height: PRODUCT_IMAGE_HEIGHT,
-		href: (locale: SupportedLocale) => getCatalogCategoryUrl(locale, 'tubes')
+		href: (locale: SupportedLocale) => getCatalogCategoryUrl(locale, 'test-tubes')
 	},
 	{
 		id: 'funnels',
