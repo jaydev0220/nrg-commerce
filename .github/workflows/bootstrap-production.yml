@@ -41,11 +41,9 @@ jobs:
           TF_CLOUD_PROJECT: nrg-commerce
       - name: Refuse rerun after bootstrap completion
         run: |
-          if KEY_VAULT_NAME="$(terraform -chdir=infra/production output -raw key_vault_name 2>/dev/null)"; then
-            if az keyvault show --name "$KEY_VAULT_NAME" --only-show-errors >/dev/null 2>&1 && az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name bootstrap-complete --only-show-errors >/dev/null 2>&1; then
-              echo 'Production bootstrap is already complete.' >&2
-              exit 1
-            fi
+          if [ "$(terraform -chdir=infra/production output -raw bootstrap_complete 2>/dev/null || true)" = 'true' ]; then
+            echo 'Production bootstrap is already complete.' >&2
+            exit 1
           fi
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
@@ -55,12 +53,12 @@ jobs:
         if: inputs.phase != 'phase-1-base'
         run: |
           case "$PHASE" in
-            phase-2-api) marker=bootstrap-phase-1 ;;
-            phase-3-proxy) marker=bootstrap-phase-2 ;;
+            phase-2-api) expected=phase-1-base ;;
+            phase-3-proxy) expected=phase-2-api ;;
             *) exit 1 ;;
           esac
-          KEY_VAULT_NAME="$(terraform -chdir=infra/production output -raw key_vault_name)"
-          az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "$marker" --only-show-errors >/dev/null
+          actual="$(terraform -chdir=infra/production output -raw bootstrap_phase)"
+          test "$actual" = "$expected"
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
@@ -95,6 +93,8 @@ jobs:
           TF_VAR_api_image: ${{ vars.BOOTSTRAP_API_IMAGE }}
           TF_VAR_bootstrap_phase: ${{ inputs.phase }}
           TF_VAR_origin_certificate_enabled: ${{ inputs.phase == 'phase-1-base' && 'false' || 'true' }}
+          TF_VAR_origin_certificate_pfx_base64: ${{ secrets.API_ORIGIN_PFX_BASE64 || '' }}
+          TF_VAR_origin_certificate_password: ${{ secrets.API_ORIGIN_PFX_PASSWORD || '' }}
           TF_VAR_enable_cloudflare_proxy: ${{ inputs.phase == 'phase-3-proxy' && 'true' || 'false' }}
           TF_VAR_runtime_secrets: ${{ secrets.TF_RUNTIME_SECRETS_JSON || '{}' }}
       - run: sudo apt-get update && sudo apt-get install --yes age
@@ -138,43 +138,17 @@ jobs:
           age --decrypt --identity identity.txt --output infra/production/bootstrap.tfplan bootstrap.tfplan.age
           test "$(sha256sum bootstrap.tfplan.age | cut -d' ' -f1)" = "${{ needs.plan.outputs.plan-sha }}"
           rm -f identity.txt bootstrap.tfplan.age
-      - name: Import BYOC certificate for phase two or three
-        if: inputs.phase != 'phase-1-base'
-        run: |
-          set -euo pipefail
-          terraform -chdir=infra/production init -input=false -lockfile=readonly
-          KEY_VAULT_NAME="$(terraform -chdir=infra/production output -raw key_vault_name)"
-          tmp=$(mktemp -d)
-          trap 'rm -rf "$tmp"' EXIT
-          printf '%s' "$API_ORIGIN_CERTIFICATE_PEM" > "$tmp/cert.pem"
-          printf '%s' "$API_ORIGIN_PRIVATE_KEY_PEM" > "$tmp/key.pem"
-          openssl pkcs12 -export -out "$tmp/origin.pfx" -inkey "$tmp/key.pem" -in "$tmp/cert.pem" -passout pass:"$PFX_PASSWORD"
-          az keyvault certificate import --vault-name "$KEY_VAULT_NAME" --name api-origin-production --file "$tmp/origin.pfx" --password "$PFX_PASSWORD" --output none
-        env:
-          API_ORIGIN_CERTIFICATE_PEM: ${{ secrets.API_ORIGIN_CERTIFICATE_PEM }}
-          API_ORIGIN_PRIVATE_KEY_PEM: ${{ secrets.API_ORIGIN_PRIVATE_KEY_PEM }}
-          PFX_PASSWORD: ${{ secrets.API_ORIGIN_PFX_PASSWORD }}
-          TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
-          TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
-          TF_CLOUD_PROJECT: nrg-commerce
       - name: Initialize Terraform for apply
         run: terraform -chdir=infra/production init -input=false -lockfile=readonly
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}
           TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
           TF_CLOUD_PROJECT: nrg-commerce
-      - name: Apply bootstrap plan and mark phase
+      - name: Apply bootstrap plan and verify phase
         run: |
           terraform -chdir=infra/production apply -input=false -lock-timeout=5m bootstrap.tfplan
           rm -f infra/production/bootstrap.tfplan bootstrap.tfplan
-          KEY_VAULT_NAME="$(terraform -chdir=infra/production output -raw key_vault_name)"
-          case "$PHASE" in
-            phase-1-base) marker=bootstrap-phase-1 ;;
-            phase-2-api) marker=bootstrap-phase-2 ;;
-            phase-3-proxy) marker=bootstrap-complete ;;
-            *) exit 1 ;;
-          esac
-          az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name "$marker" --value "${GITHUB_SHA}" --only-show-errors --output none
+          test "$(terraform -chdir=infra/production output -raw bootstrap_phase)" = "$PHASE"
         env:
           TF_PLAN_AGE_IDENTITY: ${{ secrets.TF_PLAN_AGE_IDENTITY }}
           TF_TOKEN_app_terraform_io: ${{ secrets.HCP_TERRAFORM_TOKEN }}

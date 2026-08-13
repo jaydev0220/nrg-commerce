@@ -126,12 +126,34 @@ variable "api_image" {
 variable "origin_certificate_enabled" {
   type        = bool
   default     = true
-  description = "Enable the phase-two Key Vault-backed ACA certificate binding."
+  description = "Enable the phase-two Container Apps certificate binding."
 }
 
 variable "origin_certificate_name" {
   type    = string
-  default = "api-origin-production"
+  default = "api-origin-production-direct"
+}
+
+variable "origin_certificate_pfx_base64" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "Base64-encoded PFX certificate for the Container Apps environment."
+  validation {
+    condition     = !var.origin_certificate_enabled || var.bootstrap_phase == "phase-1-base" || length(trimspace(var.origin_certificate_pfx_base64)) > 0
+    error_message = "origin_certificate_pfx_base64 is required when the origin certificate is enabled."
+  }
+}
+
+variable "origin_certificate_password" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "Password for the origin certificate PFX."
+  validation {
+    condition     = !var.origin_certificate_enabled || var.bootstrap_phase == "phase-1-base" || length(var.origin_certificate_password) > 0
+    error_message = "origin_certificate_password is required when the origin certificate is enabled."
+  }
 }
 
 variable "trusted_proxy_cidrs" {

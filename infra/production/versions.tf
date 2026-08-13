@@ -8,10 +8,6 @@ terraform {
   required_version = "= 1.15.5"
 
   required_providers {
-    azapi = {
-      source  = "azure/azapi"
-      version = "~> 2.10"
-    }
     azurerm = {
       source  = "hashicorp/azurerm"
       version = "~> 4.81"
@@ -32,10 +28,6 @@ terraform {
       source  = "cyrilgdn/postgresql"
       version = "~> 1.26"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.7"
-    }
   }
 }
 
@@ -44,8 +36,6 @@ provider "azurerm" {
   subscription_id = var.azure_subscription_id
   tenant_id       = var.azure_tenant_id
 }
-
-provider "azapi" {}
 
 provider "cloudflare" {
   api_token = var.cloudflare_terraform_api_token

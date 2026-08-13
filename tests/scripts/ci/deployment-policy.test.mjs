@@ -18,7 +18,6 @@ test('all production mutations are behind the aggregate validation gate', async 
 	for (const job of [
 		'plan',
 		'apply-infrastructure',
-		'sync-backup-secret',
 		'migrate',
 		'deploy-api',
 		'deploy-contact',
@@ -35,7 +34,8 @@ test('production releases wait for the bootstrap completion marker', async () =>
 	const status = jobBlock(workflow, 'bootstrap-status');
 	assert.match(status, /needs: \[gate, fresh-main\]/u);
 	assert.match(status, /environment: production-plan/u);
-	assert.match(status, /az keyvault secret show[\s\S]*?--name bootstrap-complete/u);
+	assert.match(status, /terraform -chdir=infra\/production output -raw bootstrap_complete/u);
+	assert.doesNotMatch(status, /az keyvault|key_vault/u);
 	assert.match(status, /complete: \$\{\{ steps\.check\.outputs\.complete \}\}/u);
 
 	for (const job of ['publish-api-image', 'plan']) {
@@ -116,7 +116,6 @@ test('release jobs have bounded timeouts and Terraform setup where required', as
 		['terraform', 30],
 		['plan', 30],
 		['apply-infrastructure', 30],
-		['sync-backup-secret', 15],
 		['migrate', 30],
 		['deploy-api', 15],
 		['deploy-contact', 15],
@@ -172,7 +171,7 @@ test('production Terraform imports the existing redirect entry point with provid
 	}
 	const [bootstrap] = workflows;
 	assert.match(bootstrap, /- name: Initialize Terraform for apply/u);
-	assert.match(bootstrap, /- name: Apply bootstrap plan and mark phase/u);
+	assert.match(bootstrap, /- name: Apply bootstrap plan and verify phase/u);
 });
 
 test('production Neon resources stay within Free plan limits and wait for the endpoint', async () => {
@@ -194,20 +193,25 @@ test('production Neon resources stay within Free plan limits and wait for the en
 	}
 });
 
-test('Terraform exclusively owns production application secrets', async () => {
+test('Terraform injects production application secrets directly into Container Apps', async () => {
 	const [main, workflow] = await Promise.all([
 		readFile(new URL('infra/production/main.tf', root), 'utf8'),
 		readFile(new URL('.github/workflows/ci-deploy.yml', root), 'utf8')
 	]);
-	for (const resource of ['runtime', 'database_url', 'direct_url']) {
-		assert.match(main, new RegExp(`resource "azurerm_key_vault_secret" "${resource}"`, 'u'));
-	}
-	assert.doesNotMatch(main, /ignore_changes\s+=\s+\[value\]/u);
-	assert.equal((workflow.match(/az keyvault secret set/gu) ?? []).length, 1);
-	assert.match(workflow, /az keyvault secret set[^\n]*--name backup-database-url/u);
-	assert.doesNotMatch(workflow, /^  sync-secrets:/mu);
-	assert.doesNotMatch(jobBlock(workflow, 'sync-backup-secret'), /TF_RUNTIME_SECRETS_JSON/u);
-	assert.match(workflow, /migrate:[\s\S]*?needs: \[sync-backup-secret\]/u);
+	assert.match(main, /resource "azurerm_container_app_environment_certificate" "origin"/u);
+	assert.match(main, /certificate_blob_base64\s+= var\.origin_certificate_pfx_base64/u);
+	assert.match(main, /certificate_password\s+= var\.origin_certificate_password/u);
+	assert.match(
+		main,
+		/dynamic "secret"[\s\S]*?value\s+= contains\(local\.generated_database_secret_keys/u
+	);
+	assert.doesNotMatch(main, /azurerm_key_vault|key_vault_secret_id|azapi_resource/u);
+	assert.doesNotMatch(workflow, /az keyvault|sync-backup-secret/u);
+	assert.match(workflow, /migrate:[\s\S]*?needs: \[apply-infrastructure\]/u);
+	assert.match(
+		workflow,
+		/TF_VAR_origin_certificate_pfx_base64: \$\{\{ secrets\.API_ORIGIN_PFX_BASE64/u
+	);
 });
 
 test('production provider-normalized fields are explicit', async () => {
@@ -219,16 +223,13 @@ test('production provider-normalized fields are explicit', async () => {
 	);
 });
 
-test('phase-two Azure resources include the certificate identity, location, and IPv4 ingress ranges', async () => {
+test('phase-two Azure resources include the direct certificate and IPv4 ingress ranges', async () => {
 	const main = await readFile(new URL('infra/production/main.tf', root), 'utf8');
 	assert.match(
 		main,
-		/resource "azurerm_container_app_environment" "production" \{[\s\S]*?identity \{\s+type\s+= "UserAssigned"\s+identity_ids\s+= \[azurerm_user_assigned_identity\.certificate_reader\.id\][\s\S]*?\}/u
+		/resource "azurerm_container_app_environment_certificate" "origin" \{[\s\S]*?container_app_environment_id\s+= azurerm_container_app_environment\.production\.id/u
 	);
-	assert.match(
-		main,
-		/resource "azapi_resource" "origin_certificate" \{[\s\S]*?location\s+= azurerm_container_app_environment\.production\.location[\s\S]*?body = \{/u
-	);
+	assert.doesNotMatch(main, /log_analytics_workspace_id|azurerm_log_analytics_workspace/u);
 	assert.match(
 		main,
 		/dynamic "ip_security_restriction" \{\s+for_each = toset\(data\.cloudflare_ip_ranges\.current\.ipv4_cidrs\)/u

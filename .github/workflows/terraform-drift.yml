@@ -43,6 +43,8 @@ jobs:
           TF_VAR_azure_budget_amount: ${{ vars.AZURE_BUDGET_AMOUNT }}
           TF_VAR_api_image: ${{ vars.PRODUCTION_API_IMAGE }}
           TF_VAR_origin_certificate_enabled: ${{ vars.ORIGIN_CERTIFICATE_ENABLED || 'true' }}
+          TF_VAR_origin_certificate_pfx_base64: ${{ secrets.API_ORIGIN_PFX_BASE64 || '' }}
+          TF_VAR_origin_certificate_password: ${{ secrets.API_ORIGIN_PFX_PASSWORD || '' }}
           TF_VAR_enable_cloudflare_proxy: ${{ vars.ENABLE_CLOUDFLARE_PROXY || 'true' }}
           TF_VAR_runtime_secrets: ${{ secrets.TF_RUNTIME_SECRETS_JSON || '{}' }}
       - name: Load owner URL for grants
@@ -80,5 +82,7 @@ jobs:
           TF_VAR_azure_budget_amount: ${{ vars.AZURE_BUDGET_AMOUNT }}
           TF_VAR_api_image: ${{ vars.PRODUCTION_API_IMAGE }}
           TF_VAR_origin_certificate_enabled: ${{ vars.ORIGIN_CERTIFICATE_ENABLED || 'true' }}
+          TF_VAR_origin_certificate_pfx_base64: ${{ secrets.API_ORIGIN_PFX_BASE64 || '' }}
+          TF_VAR_origin_certificate_password: ${{ secrets.API_ORIGIN_PFX_PASSWORD || '' }}
           TF_VAR_enable_cloudflare_proxy: ${{ vars.ENABLE_CLOUDFLARE_PROXY || 'true' }}
           TF_VAR_runtime_secrets: ${{ secrets.TF_RUNTIME_SECRETS_JSON || '{}' }}

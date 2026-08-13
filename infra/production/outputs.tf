@@ -11,28 +11,24 @@ output "turnstile_secret_key" {
   sensitive = true
 }
 
-output "key_vault_id" {
-  value = azurerm_key_vault.production.id
-}
-
-output "key_vault_uri" {
-  value = azurerm_key_vault.production.vault_uri
-}
-
-output "key_vault_name" {
-  value = azurerm_key_vault.production.name
-}
-
 output "resource_group_name" {
   value = azurerm_resource_group.production.name
 }
 
-output "runtime_identity_client_id" {
-  value = azurerm_user_assigned_identity.runtime_reader.client_id
-}
-
 output "api_fqdn" {
   value = try(azurerm_container_app.api[0].ingress[0].fqdn, "")
+}
+
+output "origin_certificate_expiration_date" {
+  value = try(azurerm_container_app_environment_certificate.origin[0].expiration_date, "")
+}
+
+output "bootstrap_phase" {
+  value = var.bootstrap_phase
+}
+
+output "bootstrap_complete" {
+  value = var.bootstrap_phase == "production" || var.bootstrap_phase == "phase-3-proxy"
 }
 
 output "neon_project_id" {

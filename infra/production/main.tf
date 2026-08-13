@@ -288,130 +288,23 @@ resource "azurerm_resource_group" "production" {
   tags     = local.tags
 }
 
-resource "azurerm_log_analytics_workspace" "production" {
-  name                = "log-${local.resource_prefix}"
-  location            = azurerm_resource_group.production.location
-  resource_group_name = azurerm_resource_group.production.name
-  sku                 = "PerGB2018"
-  retention_in_days   = 30
-  tags                = local.tags
-}
-
-resource "azurerm_user_assigned_identity" "certificate_reader" {
-  name                = "id-${local.resource_prefix}-certificate"
-  location            = azurerm_resource_group.production.location
-  resource_group_name = azurerm_resource_group.production.name
-  tags                = local.tags
-}
-
-resource "azurerm_user_assigned_identity" "runtime_reader" {
-  name                = "id-${local.resource_prefix}-runtime"
-  location            = azurerm_resource_group.production.location
-  resource_group_name = azurerm_resource_group.production.name
-  tags                = local.tags
-}
-
-# trivy:ignore:AZU-0013 GitHub-hosted release runners require public Key Vault access; OIDC and RBAC still gate every operation.
-resource "azurerm_key_vault" "production" {
-  name                          = "kv-${local.resource_prefix}-${random_string.key_vault.result}"
-  location                      = azurerm_resource_group.production.location
-  resource_group_name           = azurerm_resource_group.production.name
-  tenant_id                     = var.azure_tenant_id
-  sku_name                      = "standard"
-  purge_protection_enabled      = true
-  soft_delete_retention_days    = 90
-  rbac_authorization_enabled    = true
-  public_network_access_enabled = true
-  tags                          = local.tags
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "random_string" "key_vault" {
-  length  = 6
-  lower   = true
-  numeric = true
-  special = false
-}
-
-resource "azurerm_role_assignment" "certificate_reader" {
-  scope                = azurerm_key_vault.production.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_user_assigned_identity.certificate_reader.principal_id
-}
-
-resource "azurerm_role_assignment" "runtime_reader" {
-  scope                = azurerm_key_vault.production.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_user_assigned_identity.runtime_reader.principal_id
-}
-
-resource "azurerm_key_vault_secret" "runtime" {
-  for_each     = local.runtime_secret_keys
-  name         = lower(replace(each.key, "_", "-"))
-  value        = var.runtime_secrets[each.key]
-  key_vault_id = azurerm_key_vault.production.id
-  content_type = "nrg-commerce production runtime secret"
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "azurerm_key_vault_secret" "database_url" {
-  name         = "database-url"
-  value        = local.neon_app_database_url
-  key_vault_id = azurerm_key_vault.production.id
-  content_type = "nrg-commerce production generated database URL"
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "azurerm_key_vault_secret" "direct_url" {
-  name         = "direct-url"
-  value        = local.neon_app_database_url
-  key_vault_id = azurerm_key_vault.production.id
-  content_type = "nrg-commerce production generated direct database URL"
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
 resource "azurerm_container_app_environment" "production" {
   name                       = "cae-${local.resource_prefix}"
   location                   = azurerm_resource_group.production.location
   resource_group_name        = azurerm_resource_group.production.name
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.production.id
   workload_profile {
     name                  = "Consumption"
     workload_profile_type = "Consumption"
   }
-  identity {
-    type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.certificate_reader.id]
-  }
   tags = local.tags
 }
 
-resource "azapi_resource" "origin_certificate" {
-  count     = var.origin_certificate_enabled && var.bootstrap_phase != "phase-1-base" ? 1 : 0
-  type      = "Microsoft.App/managedEnvironments/certificates@2025-07-01"
-  name      = var.origin_certificate_name
-  parent_id = azurerm_container_app_environment.production.id
-  location  = azurerm_container_app_environment.production.location
-  body = {
-    properties = {
-      certificateKeyVaultProperties = {
-        identity    = azurerm_user_assigned_identity.certificate_reader.id
-        keyVaultUrl = "${trimsuffix(azurerm_key_vault.production.vault_uri, "/")}/secrets/${var.origin_certificate_name}"
-      }
-    }
-  }
-  depends_on = [azurerm_role_assignment.certificate_reader]
+resource "azurerm_container_app_environment_certificate" "origin" {
+  count                        = var.origin_certificate_enabled && var.bootstrap_phase != "phase-1-base" ? 1 : 0
+  name                         = var.origin_certificate_name
+  container_app_environment_id = azurerm_container_app_environment.production.id
+  certificate_blob_base64      = var.origin_certificate_pfx_base64
+  certificate_password         = var.origin_certificate_password
 }
 
 resource "azurerm_container_app" "api" {
@@ -422,11 +315,6 @@ resource "azurerm_container_app" "api" {
   resource_group_name          = azurerm_resource_group.production.name
   revision_mode                = "Multiple"
   max_inactive_revisions       = 5
-
-  identity {
-    type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.runtime_reader.id]
-  }
 
   ingress {
     external_enabled = true
@@ -573,16 +461,14 @@ resource "azurerm_container_app" "api" {
   dynamic "secret" {
     for_each = setunion(local.runtime_secret_keys, local.generated_database_secret_keys)
     content {
-      name                = lower(replace(secret.key, "_", "-"))
-      key_vault_secret_id = contains(local.generated_database_secret_keys, secret.key) ? (secret.key == "DATABASE_URL" ? azurerm_key_vault_secret.database_url.versionless_id : azurerm_key_vault_secret.direct_url.versionless_id) : azurerm_key_vault_secret.runtime[secret.key].versionless_id
-      identity            = azurerm_user_assigned_identity.runtime_reader.id
+      name  = lower(replace(secret.key, "_", "-"))
+      value = contains(local.generated_database_secret_keys, secret.key) ? local.neon_app_database_url : var.runtime_secrets[secret.key]
     }
   }
 
   lifecycle {
     ignore_changes = [template[0].container[0].image, ingress[0].traffic_weight]
   }
-  depends_on = [azurerm_role_assignment.runtime_reader]
   tags       = local.tags
 }
 
@@ -590,7 +476,7 @@ resource "azurerm_container_app_custom_domain" "api" {
   count                                    = var.origin_certificate_enabled && var.bootstrap_phase != "phase-1-base" ? 1 : 0
   name                                     = "api.${var.domain}"
   container_app_id                         = azurerm_container_app.api[0].id
-  container_app_environment_certificate_id = azapi_resource.origin_certificate[0].id
+  container_app_environment_certificate_id = azurerm_container_app_environment_certificate.origin[0].id
   certificate_binding_type                 = "SniEnabled"
   depends_on                               = [cloudflare_dns_record.api_verification]
 }
