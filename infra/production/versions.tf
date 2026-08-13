@@ -8,6 +8,12 @@ terraform {
   required_version = "= 1.15.5"
 
   required_providers {
+    # Keep transition providers declared while release jobs may observe state
+    # from either side of the legacy Azure resource removal apply.
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.10"
+    }
     azurerm = {
       source  = "hashicorp/azurerm"
       version = "~> 4.81"
@@ -27,6 +33,10 @@ terraform {
     postgresql = {
       source  = "cyrilgdn/postgresql"
       version = "~> 1.26"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.7"
     }
   }
 }

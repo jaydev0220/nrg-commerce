@@ -242,6 +242,25 @@ test('Terraform injects production application secrets directly into Container A
 	);
 });
 
+test('production Terraform retains providers required across the Azure state transition', async () => {
+	const [main, versions, lock] = await Promise.all([
+		readFile(new URL('infra/production/main.tf', root), 'utf8'),
+		readFile(new URL('infra/production/versions.tf', root), 'utf8'),
+		readFile(new URL('infra/production/.terraform.lock.hcl', root), 'utf8')
+	]);
+	for (const [name, source] of [
+		['azapi', 'azure/azapi'],
+		['random', 'hashicorp/random']
+	]) {
+		assert.match(
+			versions,
+			new RegExp(`${name} = \\{[\\s\\S]*?source\\s+= "${source}"[\\s\\S]*?\\}`, 'u')
+		);
+		assert.match(lock, new RegExp(`provider "registry\\.terraform\\.io/${source}"`, 'u'));
+	}
+	assert.doesNotMatch(main, /azapi_resource|random_string/u);
+});
+
 test('production provider-normalized fields are explicit', async () => {
 	const main = await readFile(new URL('infra/production/main.tf', root), 'utf8');
 	assert.match(main, /domains\s+= \["catalog\.\$\{var\.domain\}", "www\.\$\{var\.domain\}"\]/u);
