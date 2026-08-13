@@ -198,3 +198,39 @@ test('unknown localized pages return a useful non-indexable 404', async ({ page 
 	await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
 	await expect(page.getByRole('link', { name: /English home/ })).toHaveAttribute('href', '/en/');
 });
+
+test('restores exact scroll positions across locale switches, reloads, and history', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.addInitScript(() => {
+		const style = document.createElement('style');
+		style.textContent = 'html, body { min-height: 3200px !important; }';
+		document.documentElement.append(style);
+	});
+
+	await page.goto('/');
+	await page.evaluate(() => window.scrollTo(0, 720));
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(720);
+
+	await page.getByRole('button', { name: 'Switch language' }).first().click();
+	await page.getByRole('option', { name: 'English', exact: true }).click();
+	await expect(page).toHaveURL(/\/en\/$/u);
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(720);
+
+	await page.reload();
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(720);
+
+	await page.getByRole('link', { name: 'Capabilities' }).first().click();
+	await expect(page).toHaveURL(/\/en\/capabilities\/$/u);
+	await page.evaluate(() => window.scrollTo(0, 360));
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(360);
+
+	await page.goBack();
+	await expect(page).toHaveURL(/\/en\/$/u);
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(720);
+
+	await page.goForward();
+	await expect(page).toHaveURL(/\/en\/capabilities\/$/u);
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(360);
+});

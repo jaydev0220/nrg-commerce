@@ -1,10 +1,17 @@
 <script lang="ts">
+	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { Pathname } from '$app/types';
 	import { PUBLIC_SITE_URL } from '$env/static/public';
 	import { assetUrl, LANDING_ASSETS, SHARED_ASSETS } from '$lib/assets';
-	import { Footer, Navbar, type CtaConfig, type NavLinkItem } from '@packages/components';
+	import {
+		createScrollRestoration,
+		Footer,
+		Navbar,
+		type CtaConfig,
+		type NavLinkItem
+	} from '@packages/components';
 	import {
 		buildAlternateLinks,
 		buildSeoConfig,
@@ -25,6 +32,7 @@
 	} from '$lib/paraglide/runtime';
 	import { theme } from '$lib/state/theme.svelte';
 	import { Head, SchemaOrg } from 'svead';
+	import { onMount } from 'svelte';
 	import './layout.css';
 
 	let { children } = $props();
@@ -41,6 +49,13 @@
 		openGraphImageAlt: m.home_meta_title()
 	}).seo;
 	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
+	const scrollRestoration = createScrollRestoration({
+		storageKey: 'nrg-commerce:landing-scroll:v1',
+		getRouteKey: (url) => {
+			const unlocalizedUrl = deLocalizeUrl(url);
+			return `${unlocalizedUrl.pathname}${unlocalizedUrl.search}${unlocalizedUrl.hash}`;
+		}
+	});
 	const ctaConfig: CtaConfig = $derived({
 		href: getShopUrl(locale),
 		label: m.cta_visit_shop()
@@ -138,6 +153,34 @@
 	function toggleFooterLocale() {
 		void selectLocale(locale === 'zh-tw' ? 'en' : 'zh-tw');
 	}
+
+	function scheduleScrollRestore(url: URL) {
+		if (typeof window === 'undefined') return;
+
+		window.requestAnimationFrame(() => {
+			window.requestAnimationFrame(() => scrollRestoration.restore(url));
+		});
+	}
+
+	beforeNavigate(({ from }) => {
+		if (from?.url) {
+			scrollRestoration.capture(from.url);
+		} else if (typeof window !== 'undefined') {
+			scrollRestoration.capture(new URL(window.location.href));
+		}
+	});
+
+	afterNavigate(({ to, type }) => {
+		if (type !== 'enter' && to?.url) scheduleScrollRestore(to.url);
+	});
+
+	onMount(() => {
+		const captureOnPageHide = () => scrollRestoration.capture(new URL(window.location.href));
+		window.addEventListener('pagehide', captureOnPageHide);
+		scheduleScrollRestore(new URL(window.location.href));
+
+		return () => window.removeEventListener('pagehide', captureOnPageHide);
+	});
 </script>
 
 {#if !isErrorPage}

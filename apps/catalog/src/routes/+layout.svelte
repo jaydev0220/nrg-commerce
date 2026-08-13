@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
 		PUBLIC_COOKIE_DOMAIN,
@@ -19,7 +20,13 @@
 		setLocale,
 		type Locale
 	} from '$lib/paraglide/runtime';
-	import { Footer, Navbar, type CtaConfig, type NavLinkItem } from '@packages/components';
+	import {
+		createScrollRestoration,
+		Footer,
+		Navbar,
+		type CtaConfig,
+		type NavLinkItem
+	} from '@packages/components';
 	import {
 		buildAlternateLinks,
 		buildSeoConfig,
@@ -56,6 +63,13 @@
 	let isErrorPage = $derived(page.status >= 400);
 	let skipTarget = $derived(isProductPage ? 'product-content' : 'catalog-content');
 	let theme = $state<'light' | 'dark'>('light');
+	const scrollRestoration = createScrollRestoration({
+		storageKey: 'nrg-commerce:catalog-scroll:v1',
+		getRouteKey: (url) => {
+			const unlocalizedUrl = deLocalizeUrl(url);
+			return `${unlocalizedUrl.pathname}${unlocalizedUrl.search}${unlocalizedUrl.hash}`;
+		}
+	});
 
 	const currentYear = new Date().getFullYear();
 	const fallbackSeo = createSeoPageData({
@@ -247,10 +261,35 @@
 		void selectLocale(locale === 'zh-tw' ? 'en' : 'zh-tw');
 	}
 
+	function scheduleScrollRestore(url: URL) {
+		if (typeof window === 'undefined') return;
+
+		window.requestAnimationFrame(() => {
+			window.requestAnimationFrame(() => scrollRestoration.restore(url));
+		});
+	}
+
+	beforeNavigate(({ from }) => {
+		if (from?.url) {
+			scrollRestoration.capture(from.url);
+		} else if (typeof window !== 'undefined') {
+			scrollRestoration.capture(new URL(window.location.href));
+		}
+	});
+
+	afterNavigate(({ to, type }) => {
+		if (type !== 'enter' && to?.url) scheduleScrollRestore(to.url);
+	});
+
 	onMount(() => {
 		const root = document.documentElement;
 		theme = getThemeFromCookie() ?? (root.classList.contains('dark') ? 'dark' : 'light');
 		applyTheme(theme);
+		const captureOnPageHide = () => scrollRestoration.capture(new URL(window.location.href));
+		window.addEventListener('pagehide', captureOnPageHide);
+		scheduleScrollRestore(new URL(window.location.href));
+
+		return () => window.removeEventListener('pagehide', captureOnPageHide);
 	});
 </script>
 

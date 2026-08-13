@@ -137,3 +137,39 @@ test('returns a non-indexable catalog 404 without misleading page metadata', asy
 	await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
 	await expect(page.locator('#error-content a').first()).toBeVisible();
 });
+
+test('restores exact scroll positions across locale switches, reloads, and history', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.addInitScript(() => {
+		const style = document.createElement('style');
+		style.textContent = 'html, body { min-height: 3200px !important; }';
+		document.documentElement.append(style);
+	});
+
+	await page.goto('/en/?q=beaker');
+	await page.evaluate(() => window.scrollTo(0, 400));
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(400);
+
+	await page.getByRole('button', { name: 'Switch language' }).first().click();
+	await page.getByRole('option', { name: '繁體中文', exact: true }).click();
+	await expect(page).toHaveURL(/\/\?q=beaker$/u);
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(400);
+
+	await page.reload();
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(400);
+
+	await page.getByRole('heading', { name: '實驗室燒杯' }).getByRole('link').click();
+	await expect(page).toHaveURL(/\/laboratory-beaker$/u);
+	await page.evaluate(() => window.scrollTo(0, 360));
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(360);
+
+	await page.goBack();
+	await expect(page).toHaveURL(/\/\?q=beaker$/u);
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(400);
+
+	await page.goForward();
+	await expect(page).toHaveURL(/\/laboratory-beaker$/u);
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(360);
+});

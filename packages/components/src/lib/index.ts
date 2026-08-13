@@ -5,5 +5,7 @@ export { default as Navbar } from './Navbar.svelte';
 export { default as ThemeSwitcher } from './ThemeSwitcher.svelte';
 export { default as SocialIcon } from './SocialIcon.svelte';
 export { default as TurnstileWidget } from './TurnstileWidget.svelte';
+export { createScrollRestoration } from './scroll-restoration';
 
 export type * from './types';
+export type * from './scroll-restoration';
