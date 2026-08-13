@@ -289,9 +289,9 @@ resource "azurerm_resource_group" "production" {
 }
 
 resource "azurerm_container_app_environment" "production" {
-  name                       = "cae-${local.resource_prefix}"
-  location                   = azurerm_resource_group.production.location
-  resource_group_name        = azurerm_resource_group.production.name
+  name                = "cae-${local.resource_prefix}"
+  location            = azurerm_resource_group.production.location
+  resource_group_name = azurerm_resource_group.production.name
   workload_profile {
     name                  = "Consumption"
     workload_profile_type = "Consumption"
@@ -469,7 +469,7 @@ resource "azurerm_container_app" "api" {
   lifecycle {
     ignore_changes = [template[0].container[0].image, ingress[0].traffic_weight]
   }
-  tags       = local.tags
+  tags = local.tags
 }
 
 resource "azurerm_container_app_custom_domain" "api" {
