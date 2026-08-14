@@ -17,7 +17,10 @@ const attributeKeyLabels: Record<string, Record<CatalogLocale, string>> = {
 	resolution: { en: 'Resolution', 'zh-tw': '解析度' },
 	sterility: { en: 'Sterility', 'zh-tw': '滅菌狀態' },
 	surface: { en: 'Surface', 'zh-tw': '表面特性' },
-	volume: { en: 'Volume', 'zh-tw': '容量' }
+	volume: { en: 'Volume', 'zh-tw': '容量' },
+	graduation: { en: 'Graduation', 'zh-tw': '刻度' },
+	'temperature-range': { en: 'Temperature Range', 'zh-tw': '溫度範圍' },
+	length: { en: 'Length', 'zh-tw': '長度' }
 };
 
 const attributeValueLabels: Record<string, Record<CatalogLocale, string>> = {
@@ -33,7 +36,8 @@ const attributeValueLabels: Record<string, Record<CatalogLocale, string>> = {
 	rack: { en: 'Rack', 'zh-tw': '盒裝' },
 	standard: { en: 'Standard', 'zh-tw': '標準型' },
 	sterile: { en: 'Sterile', 'zh-tw': '無菌' },
-	yes: { en: 'Yes', 'zh-tw': '有' }
+	yes: { en: 'Yes', 'zh-tw': '有' },
+	no: { en: 'No', 'zh-tw': '無' }
 };
 
 function normalizeAttributeToken(value: string): string {
