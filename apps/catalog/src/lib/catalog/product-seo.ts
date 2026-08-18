@@ -1,11 +1,7 @@
 import type { SchemaOrgProps } from 'svead';
+import type { StructuredDataFragment } from '@packages/product-structured-data';
 
-import type {
-	CatalogJsonValue,
-	CatalogLocale,
-	CatalogProductRecord,
-	CatalogSkuRecord
-} from './types.js';
+import type { CatalogLocale, CatalogProductRecord, CatalogSkuRecord } from './types.js';
 
 type ProductStructuredData = SchemaOrgProps['schema'];
 
@@ -23,57 +19,39 @@ type ProductSchemaInput = {
 type NormalizedDimensions = {
 	color?: string;
 	size?: string;
+	material?: string;
+	pattern?: string;
 	suggestedAge?: string;
 	suggestedGender?: string;
 };
 
-const sizeAttributeKeys = ['size', 'volume', 'capacity', 'diameter', 'length', 'width', 'height'];
-const supportedAttributeKeys = new Set([
-	...sizeAttributeKeys,
-	'color',
-	'suggestedage',
-	'suggestedgender'
-]);
 const structuredDimensionUrls = {
 	color: 'https://schema.org/color',
 	size: 'https://schema.org/size',
+	material: 'https://schema.org/material',
+	pattern: 'https://schema.org/pattern',
 	suggestedAge: 'https://schema.org/suggestedAge',
 	suggestedGender: 'https://schema.org/suggestedGender'
 } as const;
 
-function scalarText(value: CatalogJsonValue | undefined): string | null {
-	if (typeof value === 'string') return value.trim() || null;
-	if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-	return null;
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function normalizedAttributeMap(attributes: CatalogSkuRecord['attributes']) {
-	return new Map(
-		Object.entries(attributes).map(([key, value]) => [key.trim().toLowerCase(), value] as const)
-	);
+function fragmentForSku(sku: CatalogSkuRecord): StructuredDataFragment {
+	return sku.structuredData ?? {};
 }
 
-function normalizeDimensions(attributes: CatalogSkuRecord['attributes']): NormalizedDimensions {
-	const normalized = normalizedAttributeMap(attributes);
-	const sizeParts = sizeAttributeKeys.flatMap((key) => {
-		const value = scalarText(normalized.get(key));
-		return value ? [{ key, value }] : [];
-	});
-	const size =
-		sizeParts.length === 1
-			? sizeParts[0]?.value
-			: sizeParts.map(({ key, value }) => `${key}: ${value}`).join('; ') || undefined;
-
+function normalizeDimensions(sku: CatalogSkuRecord): NormalizedDimensions {
+	const fragment = fragmentForSku(sku);
 	return {
-		...(size ? { size } : {}),
-		...(scalarText(normalized.get('color'))
-			? { color: scalarText(normalized.get('color')) ?? undefined }
-			: {}),
-		...(scalarText(normalized.get('suggestedage'))
-			? { suggestedAge: scalarText(normalized.get('suggestedage')) ?? undefined }
-			: {}),
-		...(scalarText(normalized.get('suggestedgender'))
-			? { suggestedGender: scalarText(normalized.get('suggestedgender')) ?? undefined }
+		...(fragment.color ? { color: fragment.color } : {}),
+		...(fragment.size ? { size: fragment.size } : {}),
+		...(fragment.material ? { material: fragment.material } : {}),
+		...(fragment.pattern ? { pattern: fragment.pattern } : {}),
+		...(fragment.audience?.suggestedAge ? { suggestedAge: fragment.audience.suggestedAge } : {}),
+		...(fragment.audience?.suggestedGender
+			? { suggestedGender: fragment.audience.suggestedGender }
 			: {})
 	};
 }
@@ -81,20 +59,10 @@ function normalizeDimensions(attributes: CatalogSkuRecord['attributes']): Normal
 function varyingDimensions(skus: CatalogSkuRecord[]) {
 	return (Object.keys(structuredDimensionUrls) as Array<keyof NormalizedDimensions>).filter(
 		(dimension) => {
-			const values = skus.map((sku) => normalizeDimensions(sku.attributes)[dimension]);
+			const values = skus.map((sku) => normalizeDimensions(sku)[dimension]);
 			return values.every(Boolean) && new Set(values).size > 1;
 		}
 	);
-}
-
-function additionalProperties(attributes: CatalogSkuRecord['attributes']) {
-	const properties = Object.entries(attributes).flatMap(([name, rawValue]) => {
-		if (supportedAttributeKeys.has(name.trim().toLowerCase())) return [];
-		const value = scalarText(rawValue);
-		return value ? [{ '@type': 'PropertyValue', name, value }] : [];
-	});
-
-	return properties.length > 0 ? properties : undefined;
 }
 
 function variantUrl(productUrl: string, skuCode: string) {
@@ -125,9 +93,9 @@ function createProductSchema({
 	sku: CatalogSkuRecord;
 	url: string;
 }) {
-	const dimensions = normalizeDimensions(sku.attributes);
+	const fragment = fragmentForSku(sku);
+	const { additionalProperty, ...specificMetadata } = fragment;
 	const images = productImages(product, sku);
-	const properties = additionalProperties(sku.attributes);
 
 	return {
 		'@type': 'Product',
@@ -140,8 +108,8 @@ function createProductSchema({
 		brand: { '@type': 'Brand', name: brandName },
 		...(categoryName ? { category: categoryName } : {}),
 		...(images.length > 0 ? { image: images } : {}),
-		...dimensions,
-		...(properties ? { additionalProperty: properties } : {}),
+		...specificMetadata,
+		...(additionalProperty && additionalProperty.length > 0 ? { additionalProperty } : {}),
 		...(groupReference ? { isVariantOf: groupReference } : {}),
 		offers: {
 			'@type': 'Offer',
@@ -156,6 +124,27 @@ function createProductSchema({
 	};
 }
 
+function assertValidProductGraph(value: unknown): asserts value is ProductStructuredData {
+	if (!isRecord(value) || (value['@type'] !== 'Product' && value['@type'] !== 'ProductGroup')) {
+		throw new Error('The generated product structured-data graph is invalid.');
+	}
+	if (typeof value['url'] !== 'string' || !value['url'].startsWith('http')) {
+		throw new Error('The generated product structured-data URL is invalid.');
+	}
+	if (value['@type'] === 'Product') {
+		if (!isRecord(value['offers']) || typeof value['offers']['price'] !== 'number') {
+			throw new Error('The generated product offer is invalid.');
+		}
+		return;
+	}
+	if (!Array.isArray(value['hasVariant']) || value['hasVariant'].length === 0) {
+		throw new Error('The generated product group has no variants.');
+	}
+	if (!Array.isArray(value['variesBy']) || value['variesBy'].length === 0) {
+		throw new Error('The generated product group has no varying dimensions.');
+	}
+}
+
 export function buildProductStructuredData(input: ProductSchemaInput): ProductStructuredData {
 	const { product, productUrl, selectedSkuCode } = input;
 	const groupId = `${productUrl}#product-${product.id}`;
@@ -166,7 +155,7 @@ export function buildProductStructuredData(input: ProductSchemaInput): ProductSt
 		: undefined;
 
 	if (selectedSku) {
-		return createProductSchema({
+		const selectedProduct = createProductSchema({
 			...input,
 			sku: selectedSku,
 			url: variantUrl(productUrl, selectedSku.skuCode),
@@ -182,17 +171,17 @@ export function buildProductStructuredData(input: ProductSchemaInput): ProductSt
 						}
 					}
 				: {})
-		}) as ProductStructuredData;
+		});
+		assertValidProductGraph(selectedProduct);
+		return selectedProduct as ProductStructuredData;
 	}
 
 	const defaultSku = product.skus[0];
 	if (!defaultSku) throw new Error('A published product must include at least one SKU.');
 	if (variesBy.length === 0) {
-		return createProductSchema({
-			...input,
-			sku: defaultSku,
-			url: productUrl
-		}) as ProductStructuredData;
+		const defaultProduct = createProductSchema({ ...input, sku: defaultSku, url: productUrl });
+		assertValidProductGraph(defaultProduct);
+		return defaultProduct as ProductStructuredData;
 	}
 
 	const groupImages = [
@@ -200,8 +189,7 @@ export function buildProductStructuredData(input: ProductSchemaInput): ProductSt
 		...product.images.map((image) => image.imageUrl)
 	].filter((imageUrl, index, images) => images.indexOf(imageUrl) === index);
 	const groupReference = { '@id': groupId };
-
-	return {
+	const group = {
 		'@type': 'ProductGroup',
 		'@id': groupId,
 		productGroupID: product.id,
@@ -220,5 +208,7 @@ export function buildProductStructuredData(input: ProductSchemaInput): ProductSt
 				url: variantUrl(productUrl, sku.skuCode)
 			})
 		)
-	} as ProductStructuredData;
+	};
+	assertValidProductGraph(group as unknown);
+	return group as ProductStructuredData;
 }

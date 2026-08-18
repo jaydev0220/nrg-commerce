@@ -1,4 +1,6 @@
 import { AppError } from '../../errors/app-error.js';
+import type { ApiLogger } from '../../logging/logger.js';
+import { generateStructuredData } from '@packages/product-structured-data';
 
 import type {
 	CatalogCategoryDetailRecord,
@@ -13,6 +15,7 @@ import { buildCategoryTree } from '../../utils/catalog.js';
 import type { StorefrontRepository } from './storefront.repository.js';
 
 type StorefrontServiceDependencies = {
+	logger?: Pick<ApiLogger, 'error'>;
 	repository: Pick<
 		StorefrontRepository,
 		| 'listCategories'
@@ -26,6 +29,32 @@ type StorefrontServiceDependencies = {
 		| 'listChildCategories'
 	>;
 };
+
+function attachStructuredData(
+	product: CatalogProductRecord,
+	logger?: Pick<ApiLogger, 'error'>
+): CatalogProductRecord {
+	return {
+		...product,
+		skus: product.skus.map((sku) => {
+			const result = generateStructuredData({
+				attributes: sku.attributes,
+				structuredFields: sku.structuredFields
+			});
+			for (const diagnostic of result.diagnostics) {
+				logger?.error(
+					{
+						skuId: sku.id,
+						productId: sku.productId,
+						diagnosticCode: diagnostic.code
+					},
+					'Invalid persisted product SKU structured metadata was omitted.'
+				);
+			}
+			return { ...sku, structuredData: result.fragment };
+		})
+	};
+}
 
 type StorefrontSkuListQuery = {
 	page: number;
@@ -256,13 +285,16 @@ export function createStorefrontCatalogService(dependencies: StorefrontServiceDe
 				includeImages: boolean;
 			}
 		): Promise<CatalogProductRecord> {
-			return ensurePublishedProduct(
-				await dependencies.repository.findProductBySlug(productSlug, {
-					includeSkus: query.includeSkus,
-					includeImages: query.includeImages,
-					publishedOnly: true
-				}),
-				query.includeSkus
+			return attachStructuredData(
+				ensurePublishedProduct(
+					await dependencies.repository.findProductBySlug(productSlug, {
+						includeSkus: query.includeSkus,
+						includeImages: query.includeImages,
+						publishedOnly: true
+					}),
+					query.includeSkus
+				),
+				dependencies.logger
 			);
 		},
 

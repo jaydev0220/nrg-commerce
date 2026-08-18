@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createStorefrontCatalogService } from '../../../src/modules/storefront/storefront.service.js';
+import type { CatalogProductRecord } from '../../../src/types/catalog.js';
 
 function createCategory(id: string, parentId: string | null = null) {
 	const now = new Date();
@@ -544,4 +545,116 @@ test('getProductBySlug hides published products without active SKUs when details
 		}),
 		(error: { statusCode?: number }) => error.statusCode === 404
 	);
+});
+
+test('getProductBySlug attaches validated SKU fragments and logs malformed persisted fields', async () => {
+	const errors: Array<{ metadata: Record<string, unknown>; message: string }> = [];
+	const now = new Date();
+	const product: CatalogProductRecord = {
+		id: 'product-structured',
+		slug: 'structured-product',
+		name: 'Structured Product',
+		nameEn: 'Structured Product',
+		description: 'Visible',
+		descriptionEn: 'Visible',
+		notes: null,
+		baseUnit: null,
+		categoryId: null,
+		categorySlug: null,
+		published: true,
+		deletedAt: null,
+		createdAt: now,
+		updatedAt: now,
+		thumbnail: null,
+		images: [],
+		skus: [
+			{
+				id: 'sku-structured',
+				productId: 'product-structured',
+				productSlug: 'structured-product',
+				skuCode: 'STRUCTURED-001',
+				name: 'Structured Product',
+				nameEn: 'Structured Product',
+				description: 'Visible',
+				descriptionEn: 'Visible',
+				notes: null,
+				categoryId: null,
+				categorySlug: null,
+				price: 12,
+				stockQuantity: 1,
+				availability: 'in_stock' as const,
+				published: true,
+				attributes: { color: 'blue', volume: '100 ml' },
+				structuredFields: { color: 'red' },
+				deletedAt: null,
+				createdAt: now,
+				updatedAt: now,
+				images: []
+			},
+			{
+				id: 'sku-malformed',
+				productId: 'product-structured',
+				productSlug: 'structured-product',
+				skuCode: 'STRUCTURED-002',
+				name: 'Structured Product',
+				nameEn: 'Structured Product',
+				description: 'Visible',
+				descriptionEn: 'Visible',
+				notes: null,
+				categoryId: null,
+				categorySlug: null,
+				price: 13,
+				stockQuantity: 1,
+				availability: 'in_stock' as const,
+				published: true,
+				attributes: { color: 'green' },
+				structuredFields: { invalid: true },
+				deletedAt: null,
+				createdAt: now,
+				updatedAt: now,
+				images: []
+			}
+		]
+	};
+	const storefrontService = createStorefrontCatalogService({
+		repository: {
+			listCategories: async () => ({ data: [], total: 0 }),
+			listProducts: async () => ({ data: [], total: 0 }),
+			listSkus: async () => ({ data: [], total: 0 }),
+			findProductById: async () => null,
+			findProductBySlug: async () => product,
+			findSkuByCode: async () => null,
+			findCategoryBySlug: async () => null,
+			countProductsForCategoryIds: async () => ({}),
+			listChildCategories: async () => []
+		},
+		logger: {
+			error: (metadata: Record<string, unknown>, message: string) => {
+				errors.push({ metadata, message });
+			}
+		}
+	});
+
+	const result = await storefrontService.getProductBySlug('structured-product', {
+		includeSkus: true,
+		includeImages: false
+	});
+	assert.equal(result.skus[0]?.structuredData?.color, 'red');
+	assert.deepEqual(result.skus[0]?.structuredData?.additionalProperty?.[0]?.value, {
+		'@type': 'QuantitativeValue',
+		value: 100,
+		unitCode: 'MLT',
+		unitText: 'mL'
+	});
+	assert.equal(result.skus[1]?.structuredData?.color, 'green');
+	assert.deepEqual(errors, [
+		{
+			metadata: {
+				skuId: 'sku-malformed',
+				productId: 'product-structured',
+				diagnosticCode: 'stored-structured-fields-invalid'
+			},
+			message: 'Invalid persisted product SKU structured metadata was omitted.'
+		}
+	]);
 });

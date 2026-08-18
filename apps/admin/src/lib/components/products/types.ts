@@ -1,4 +1,5 @@
 import type { ManagedProduct } from '$lib/api/admin-api';
+import type { StructuredFields } from '@packages/product-structured-data';
 
 export type ProductListItem = ManagedProduct & {
 	isDeleted: boolean;
@@ -43,10 +44,13 @@ export type ProductSkuInput = {
 	price: number;
 	stockQuantity: number;
 	attributes: Record<string, unknown>;
+	structuredFields: StructuredFields;
 	notes: string | null;
 };
 
-export type ArchivedSkuRestoreInput = ProductSkuInput & { productId: string };
+export type ArchivedSkuRestoreInput = Omit<ProductSkuInput, 'structuredFields'> & {
+	productId: string;
+};
 
 export type ProductImageUploadInput = {
 	skuId: string | null;

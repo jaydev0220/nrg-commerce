@@ -30,18 +30,22 @@ type StorefrontCatalogController = {
 	getCategoryBySlug: RequestHandler;
 };
 
-function serializeSku(sku: CatalogSkuRecord) {
-	const { stockQuantity, notes, ...publicSku } = sku;
+function serializeSku(sku: CatalogSkuRecord, includeStructuredData = false) {
+	const { stockQuantity, notes, structuredFields, structuredData, ...publicSku } = sku;
 	void stockQuantity;
 	void notes;
-	return publicSku;
+	void structuredFields;
+	return includeStructuredData ? { ...publicSku, structuredData: structuredData ?? {} } : publicSku;
 }
 
-function serializeProduct(product: CatalogProductRecord) {
+function serializeProduct(product: CatalogProductRecord, includeStructuredData = false) {
 	const { notes, baseUnit, ...publicProduct } = product;
 	void notes;
 	void baseUnit;
-	return { ...publicProduct, skus: product.skus.map(serializeSku) };
+	return {
+		...publicProduct,
+		skus: product.skus.map((sku) => serializeSku(sku, includeStructuredData))
+	};
 }
 
 export function createStorefrontCatalogController(dependencies: StorefrontControllerDependencies) {
@@ -58,11 +62,14 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 			const result = await dependencies.storefrontService.listProducts(query);
 			markCacheable(response);
 			response.status(200).json(
-				buildPaginatedResponse(result.data.map(serializeProduct), {
-					page: query.page,
-					limit: query.limit,
-					total: result.total
-				})
+				buildPaginatedResponse(
+					result.data.map((product) => serializeProduct(product)),
+					{
+						page: query.page,
+						limit: query.limit,
+						total: result.total
+					}
+				)
 			);
 		},
 
@@ -75,7 +82,7 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 				query
 			);
 			markCacheable(response);
-			response.status(200).json(serializeProduct(product));
+			response.status(200).json(serializeProduct(product, true));
 		},
 
 		listSkus: async (request, response) => {
@@ -83,11 +90,14 @@ export function createStorefrontCatalogController(dependencies: StorefrontContro
 			const result = await dependencies.storefrontService.listSkus(query);
 			markCacheable(response);
 			response.status(200).json(
-				buildPaginatedResponse(result.data.map(serializeSku), {
-					page: query.page,
-					limit: query.limit,
-					total: result.total
-				})
+				buildPaginatedResponse(
+					result.data.map((sku) => serializeSku(sku)),
+					{
+						page: query.page,
+						limit: query.limit,
+						total: result.total
+					}
+				)
 			);
 		},
 

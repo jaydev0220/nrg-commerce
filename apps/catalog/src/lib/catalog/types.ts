@@ -1,3 +1,5 @@
+import type { StructuredDataFragment } from '@packages/product-structured-data';
+
 export type CatalogLocale = 'zh-tw' | 'en';
 
 export type CatalogJsonValue =
@@ -35,6 +37,7 @@ export type CatalogSkuRecord = {
 	availability: 'in_stock' | 'out_of_stock';
 	published: boolean;
 	attributes: Record<string, CatalogJsonValue>;
+	structuredData?: StructuredDataFragment;
 	deletedAt: string | null;
 	createdAt: string;
 	updatedAt: string;

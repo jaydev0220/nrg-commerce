@@ -171,6 +171,7 @@ export function createProductsRouter(state: MockState, publicOrigin: string): Ro
 			price: input.price,
 			stockQuantity: input.stockQuantity,
 			attributes: input.attributes,
+			structuredFields: input.structuredFields,
 			notes: input.notes ?? null,
 			deletedAt: null,
 			createdAt: now,
@@ -207,6 +208,7 @@ export function createProductsRouter(state: MockState, publicOrigin: string): Ro
 		if (product.deletedAt) notFound('The destination product could not be found.');
 		ensureUniqueSkuCode(state, input.skuCode, sku.id);
 		Object.assign(sku, input, {
+			structuredFields: sku.structuredFields,
 			notes: input.notes ?? null,
 			deletedAt: null,
 			updatedAt: new Date()

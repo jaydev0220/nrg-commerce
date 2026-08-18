@@ -32,9 +32,7 @@ describe('product structured data', () => {
 		expect(record(variants[0]?.['offers'])['url']).toBe(
 			'https://catalog.example.test/en/laboratory-beaker?sku=BEAKER-100'
 		);
-		expect(variants[0]?.['additionalProperty']).toEqual([
-			{ '@type': 'PropertyValue', name: 'material', value: 'glass' }
-		]);
+		expect(variants[0]?.['material']).toBe('glass');
 	});
 
 	it('describes the SSR-selected SKU and references its stable group', () => {
@@ -52,7 +50,7 @@ describe('product structured data', () => {
 		expect(group['variesBy']).toEqual(['https://schema.org/size']);
 	});
 
-	it('combines multiple dimensional keys into deterministic size text', () => {
+	it('emits size aliases as additional properties without grouping them as size', () => {
 		const product = createProductFixture([
 			createSkuFixture('00000000-0000-4000-8000-000000000101', 'BEAKER-S', 100, {
 				volume: '100 ml',
@@ -66,7 +64,31 @@ describe('product structured data', () => {
 		const schema = record(buildProductStructuredData({ ...schemaInput(), product }));
 		const variants = schema['hasVariant'] as Array<Record<string, unknown>>;
 
-		expect(variants[0]?.['size']).toBe('volume: 100 ml; diameter: 50 mm');
+		expect(schema['@type']).toBe('Product');
+		expect(schema).not.toHaveProperty('hasVariant');
+		expect(variants).toBeUndefined();
+		expect(schema['additionalProperty']).toEqual([
+			{
+				'@type': 'PropertyValue',
+				name: 'diameter',
+				value: {
+					'@type': 'QuantitativeValue',
+					value: 50,
+					unitCode: 'MMT',
+					unitText: 'mm'
+				}
+			},
+			{
+				'@type': 'PropertyValue',
+				name: 'volume',
+				value: {
+					'@type': 'QuantitativeValue',
+					value: 100,
+					unitCode: 'MLT',
+					unitText: 'mL'
+				}
+			}
+		]);
 	});
 
 	it('falls back to the default Product when no supported dimension varies', () => {

@@ -1,9 +1,12 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { X } from '@lucide/svelte';
 	import { AdminApiError } from '$lib/api/admin-api';
+	import type { StructuredFields } from '@packages/product-structured-data';
 	import Drawer from '$lib/components/shared/Drawer.svelte';
 	import type { ManagedProductSku } from '$lib/api/admin-api';
 	import type { ProductAttributeRow, ProductSkuInput } from './types';
+	import ProductStructuredFieldsEditor from './ProductStructuredFieldsEditor.svelte';
 
 	let {
 		open,
@@ -28,6 +31,8 @@
 	}
 
 	let attributeRows = $derived(initialAttributeRows(sku));
+	let structuredFields = $state<StructuredFields>(untrack(() => sku?.structuredFields ?? {}));
+	let structuredFieldsError = $state('');
 	let errorMessage = $state('');
 	let busy = $state(false);
 
@@ -69,9 +74,13 @@
 		const attributes = Object.fromEntries(
 			keys.map((key, index) => [key, attributeValues[index] ?? ''] as const).filter(([key]) => key)
 		);
+		if (structuredFieldsError) {
+			errorMessage = structuredFieldsError;
+			return;
+		}
 		busy = true;
 		try {
-			await onsave({ skuCode, price, stockQuantity, attributes, notes });
+			await onsave({ skuCode, price, stockQuantity, attributes, structuredFields, notes });
 			onclose();
 		} catch (error) {
 			errorMessage = message(error);
@@ -178,6 +187,13 @@
 				新增屬性
 			</button>
 		</fieldset>
+		<ProductStructuredFieldsEditor
+			bind:value={structuredFields}
+			attributes={Object.fromEntries(
+				attributeRows.map((row) => [row.key.trim(), row.value] as const).filter(([key]) => key)
+			)}
+			onvalidationchange={(message) => (structuredFieldsError = message)}
+		/>
 		<button
 			type="submit"
 			disabled={busy}

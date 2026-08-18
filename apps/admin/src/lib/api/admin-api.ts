@@ -562,6 +562,7 @@ export function createProductSku(input: {
 	price: number;
 	stockQuantity: number;
 	attributes: Record<string, unknown>;
+	structuredFields?: Record<string, unknown>;
 	notes?: string | null;
 }) {
 	return json(
@@ -578,6 +579,7 @@ export function updateProductSku(
 		price?: number;
 		stockQuantity?: number;
 		attributes?: Record<string, unknown>;
+		structuredFields?: Record<string, unknown>;
 		notes?: string | null;
 	}
 ) {

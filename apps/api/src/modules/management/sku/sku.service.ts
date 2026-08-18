@@ -1,5 +1,6 @@
 import { AppError } from '../../../errors/app-error.js';
 
+import type { StructuredFields } from '@packages/product-structured-data';
 import type { CatalogJsonValue, CatalogSkuRecord } from '../../../types/catalog.js';
 import type { CatalogRepository } from '../catalog.repository.js';
 
@@ -62,6 +63,7 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 			price: number;
 			stockQuantity: number;
 			attributes: Record<string, CatalogJsonValue>;
+			structuredFields?: StructuredFields;
 			notes?: string | null;
 		}): Promise<CatalogSkuRecord> {
 			if (await dependencies.repository.skuCodeExists(input.skuCode)) {
@@ -72,7 +74,10 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 				throw new AppError(404, 'PRODUCT_NOT_FOUND', 'The referenced product could not be found.');
 			}
 
-			return dependencies.repository.createSku(input);
+			return dependencies.repository.createSku({
+				...input,
+				structuredFields: input.structuredFields ?? {}
+			});
 		},
 
 		async updateSku(
@@ -82,6 +87,7 @@ export function createSkuService(dependencies: SkuServiceDependencies) {
 				price?: number;
 				stockQuantity?: number;
 				attributes?: Record<string, CatalogJsonValue>;
+				structuredFields?: StructuredFields;
 				notes?: string | null;
 			}
 		): Promise<CatalogSkuRecord> {

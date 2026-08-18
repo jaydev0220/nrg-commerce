@@ -7,7 +7,7 @@ import {
 	storefrontProductDetailQuerySchema,
 	storefrontProductListQuerySchema,
 	storefrontProductListResponseSchema,
-	storefrontProductResponseSchema
+	storefrontProductDetailResponseSchema
 } from '@packages/schemas';
 import { MockHttpError, notFound } from '../http/errors.js';
 import { compareValues, paginate } from '../http/pagination.js';
@@ -160,10 +160,11 @@ export function createStorefrontRouter(state: MockState, publicOrigin: string): 
 		}
 		sendJson(
 			response,
-			storefrontProductResponseSchema,
+			storefrontProductDetailResponseSchema,
 			projectStorefrontProduct(state, product, publicOrigin, {
 				includeSkus: query.includeSkus,
-				includeImages: query.includeImages
+				includeImages: query.includeImages,
+				includeStructuredData: true
 			})
 		);
 	});

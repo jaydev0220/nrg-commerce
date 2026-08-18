@@ -7,6 +7,7 @@ import type {
 	MockState,
 	FailureDomain
 } from '../state.js';
+import { generateStructuredData } from '@packages/product-structured-data';
 import { MockHttpError } from '../http/errors.js';
 
 export function assertDomainHealthy(state: MockState, domain: FailureDomain): void {
@@ -70,6 +71,7 @@ export function projectManagedSku(
 		availability: sku.stockQuantity > 0 ? ('in_stock' as const) : ('out_of_stock' as const),
 		published: product.published,
 		attributes: sku.attributes,
+		structuredFields: sku.structuredFields,
 		notes: sku.notes,
 		deletedAt: sku.deletedAt,
 		createdAt: sku.createdAt,
@@ -130,7 +132,7 @@ export function projectStorefrontProduct(
 	state: MockState,
 	product: MockProduct,
 	publicOrigin: string,
-	options: { includeSkus?: boolean; includeImages?: boolean } = {}
+	options: { includeSkus?: boolean; includeImages?: boolean; includeStructuredData?: boolean } = {}
 ) {
 	const category = categoryFor(state, product.categoryId);
 	const activeImages = options.includeImages
@@ -160,6 +162,14 @@ export function projectStorefrontProduct(
 					availability: sku.stockQuantity > 0 ? ('in_stock' as const) : ('out_of_stock' as const),
 					published: product.published,
 					attributes: sku.attributes,
+					...(options.includeStructuredData
+						? {
+								structuredData: generateStructuredData({
+									attributes: sku.attributes,
+									structuredFields: sku.structuredFields
+								}).fragment
+							}
+						: {}),
 					deletedAt: iso(sku.deletedAt),
 					createdAt: sku.createdAt.toISOString(),
 					updatedAt: sku.updatedAt.toISOString(),

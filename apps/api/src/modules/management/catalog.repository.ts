@@ -1,4 +1,5 @@
 import type { DatabaseClient, Prisma } from '@packages/database';
+import type { StructuredFields } from '@packages/product-structured-data';
 
 import type {
 	CatalogCategoryRecord,
@@ -194,6 +195,7 @@ function mapSkuRecordFromProduct(
 		price: { toString(): string };
 		stockQuantity: number;
 		attributes: unknown;
+		structuredFields: unknown;
 		notes: string | null;
 		deletedAt: Date | null;
 		createdAt: Date;
@@ -217,6 +219,7 @@ function mapSkuRecordFromProduct(
 		availability: sku.stockQuantity > 0 ? 'in_stock' : 'out_of_stock',
 		published: product.published,
 		attributes: (sku.attributes ?? {}) as Record<string, CatalogJsonValue>,
+		structuredFields: (sku.structuredFields ?? {}) as StructuredFields,
 		notes: sku.notes,
 		deletedAt: sku.deletedAt,
 		createdAt: sku.createdAt,
@@ -242,6 +245,7 @@ function mapSkuRecord(sku: {
 	price: { toString(): string };
 	stockQuantity: number;
 	attributes: unknown;
+	structuredFields: unknown;
 	notes: string | null;
 	deletedAt: Date | null;
 	createdAt: Date;
@@ -275,6 +279,7 @@ function mapProductRecord(product: {
 		price: { toString(): string };
 		stockQuantity: number;
 		attributes: unknown;
+		structuredFields: unknown;
 		notes: string | null;
 		deletedAt: Date | null;
 		createdAt: Date;
@@ -1273,6 +1278,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 			price: number;
 			stockQuantity: number;
 			attributes: Record<string, CatalogJsonValue>;
+			structuredFields: StructuredFields;
 			notes?: string | null;
 		}): Promise<CatalogSkuRecord> {
 			const sku = await database.productSku.create({
@@ -1282,6 +1288,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					price: input.price,
 					stockQuantity: input.stockQuantity,
 					attributes: input.attributes,
+					structuredFields: input.structuredFields,
 					notes: input.notes ?? null
 				},
 				include: {
@@ -1314,6 +1321,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 				price?: number;
 				stockQuantity?: number;
 				attributes?: Record<string, CatalogJsonValue>;
+				structuredFields?: StructuredFields;
 				notes?: string | null;
 			}
 		): Promise<CatalogSkuRecord> {
@@ -1326,6 +1334,7 @@ export function createPrismaCatalogRepository(database: DatabaseClient) {
 					price: input.price,
 					stockQuantity: input.stockQuantity,
 					attributes: input.attributes,
+					structuredFields: input.structuredFields,
 					notes: input.notes
 				},
 				include: {

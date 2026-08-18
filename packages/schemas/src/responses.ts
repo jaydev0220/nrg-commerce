@@ -24,6 +24,10 @@ import {
 	productImageSchema,
 	productImagePlacementSchema
 } from './products.js';
+import {
+	structuredDataFragmentSchema,
+	structuredFieldsSchema
+} from '@packages/product-structured-data';
 
 export const paginationResponseSchema = z.object({
 	page: z.int().min(1),
@@ -150,6 +154,7 @@ export const managedProductSkuResponseSchema = z.object({
 	availability: z.enum(['in_stock', 'out_of_stock']),
 	published: z.boolean(),
 	attributes: attributeMapSchema,
+	structuredFields: structuredFieldsSchema.default({}),
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
 	updatedAt: dateSchema,
@@ -381,6 +386,10 @@ export const storefrontSkuResponseSchema = z.object({
 	images: z.array(storefrontImageResponseSchema)
 });
 
+export const storefrontSkuDetailResponseSchema = storefrontSkuResponseSchema.extend({
+	structuredData: structuredDataFragmentSchema
+});
+
 export const storefrontProductResponseSchema = z.object({
 	id: uuidSchema,
 	slug: z.string().min(1),
@@ -397,6 +406,10 @@ export const storefrontProductResponseSchema = z.object({
 	thumbnail: storefrontImageResponseSchema.nullable(),
 	images: z.array(storefrontImageResponseSchema),
 	skus: z.array(storefrontSkuResponseSchema)
+});
+
+export const storefrontProductDetailResponseSchema = storefrontProductResponseSchema.extend({
+	skus: z.array(storefrontSkuDetailResponseSchema)
 });
 
 export const storefrontCategoryResponseSchema = productCategorySchema.extend({

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { structuredFieldsSchema } from '@packages/product-structured-data';
+
 import {
 	attributeMapSchema,
 	booleanLikeSchema,
@@ -133,6 +135,7 @@ export const productSkuSchema = z.object({
 	price: moneySchema,
 	stockQuantity: z.int().min(0).max(maximumDatabaseInteger),
 	attributes: attributeMapSchema,
+	structuredFields: structuredFieldsSchema.default({}),
 	notes: notesSchema.nullable(),
 	deletedAt: dateSchema.nullable(),
 	createdAt: dateSchema,
@@ -168,10 +171,11 @@ export const productSkuCreateSchema = z.object({
 	price: moneySchema,
 	stockQuantity: z.coerce.number().pipe(z.int().min(0).max(maximumDatabaseInteger)),
 	attributes: attributeMapSchema.default({}),
+	structuredFields: structuredFieldsSchema.default({}),
 	notes: notesSchema.nullable().optional()
 });
 
-export const productSkuRestoreSchema = productSkuCreateSchema;
+export const productSkuRestoreSchema = productSkuCreateSchema.omit({ structuredFields: true });
 
 export const productCreateSchema = z.object({
 	slug: resourceSlugSchema,
@@ -191,6 +195,7 @@ export const productSkuUpdateSchema = nonEmptyUpdate(
 		price: moneySchema.optional(),
 		stockQuantity: z.coerce.number().pipe(z.int().min(0).max(maximumDatabaseInteger)).optional(),
 		attributes: attributeMapSchema.optional(),
+		structuredFields: structuredFieldsSchema.optional(),
 		notes: notesSchema.nullable().optional()
 	})
 );

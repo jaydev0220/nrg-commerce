@@ -167,7 +167,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 		objectStorage
 	});
 	const storefrontService = createCachedStorefrontCatalogService(
-		createStorefrontCatalogService({ repository: storefrontCatalogRepository }),
+		createStorefrontCatalogService({ repository: storefrontCatalogRepository, logger }),
 		{
 			ttlMs: config.storefrontCacheTtlSeconds * 1000,
 			maxEntries: config.storefrontCacheMaxEntries,

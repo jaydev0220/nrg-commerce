@@ -5,7 +5,7 @@ import {
 	storefrontCategoryTreeListResponseSchema,
 	paginatedResponseSchema,
 	storefrontProductListResponseSchema,
-	storefrontProductResponseSchema,
+	storefrontProductDetailResponseSchema,
 	storefrontSkuResponseSchema,
 	type ZodType
 } from '@packages/schemas';
@@ -155,7 +155,7 @@ export async function fetchCatalogProductBySlug(
 	return fetchJson(
 		fetcher,
 		`/api/storefront/products/${encodeURIComponent(productSlug)}`,
-		storefrontProductResponseSchema,
+		storefrontProductDetailResponseSchema,
 		productQuery
 	);
 }

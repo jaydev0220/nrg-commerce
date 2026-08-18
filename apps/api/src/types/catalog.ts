@@ -1,3 +1,5 @@
+import type { StructuredDataFragment } from '@packages/product-structured-data';
+
 export type CatalogJsonValue =
 	string | number | boolean | null | CatalogJsonValue[] | { [key: string]: CatalogJsonValue };
 
@@ -35,6 +37,8 @@ export type CatalogSkuRecord = {
 	availability: 'in_stock' | 'out_of_stock';
 	published: boolean;
 	attributes: Record<string, CatalogJsonValue>;
+	structuredFields?: unknown;
+	structuredData?: StructuredDataFragment;
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;

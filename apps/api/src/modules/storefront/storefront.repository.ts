@@ -161,6 +161,7 @@ function mapSkuRecordFromProduct(
 		price: { toString(): string };
 		stockQuantity: number;
 		attributes: unknown;
+		structuredFields: unknown;
 		notes: string | null;
 		deletedAt: Date | null;
 		createdAt: Date;
@@ -184,6 +185,7 @@ function mapSkuRecordFromProduct(
 		availability: sku.stockQuantity > 0 ? 'in_stock' : 'out_of_stock',
 		published: product.published,
 		attributes: (sku.attributes ?? {}) as Record<string, CatalogJsonValue>,
+		structuredFields: sku.structuredFields,
 		notes: sku.notes,
 		deletedAt: sku.deletedAt,
 		createdAt: sku.createdAt,
@@ -209,6 +211,7 @@ function mapSkuRecord(sku: {
 	price: { toString(): string };
 	stockQuantity: number;
 	attributes: unknown;
+	structuredFields: unknown;
 	notes: string | null;
 	deletedAt: Date | null;
 	createdAt: Date;
@@ -242,6 +245,7 @@ function mapProductRecord(product: {
 		price: { toString(): string };
 		stockQuantity: number;
 		attributes: unknown;
+		structuredFields: unknown;
 		notes: string | null;
 		deletedAt: Date | null;
 		createdAt: Date;

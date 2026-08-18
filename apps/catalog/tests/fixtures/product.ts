@@ -1,4 +1,5 @@
 import type { CatalogProductRecord, CatalogSkuRecord } from '$lib/catalog/types.js';
+import { generateStructuredData } from '@packages/product-structured-data';
 
 const timestamp = '2026-07-01T00:00:00.000Z';
 
@@ -24,6 +25,7 @@ function createSku(
 		availability,
 		published: true,
 		attributes,
+		structuredData: generateStructuredData({ attributes, structuredFields: {} }).fragment,
 		deletedAt: null,
 		createdAt: timestamp,
 		updatedAt: timestamp,
@@ -34,14 +36,14 @@ function createSku(
 export function createProductFixture(
 	skus: CatalogSkuRecord[] = [
 		createSku('00000000-0000-4000-8000-000000000101', 'BEAKER-100', 100, {
-			volume: '100 ml',
+			size: '100 ml',
 			material: 'glass'
 		}),
 		createSku(
 			'00000000-0000-4000-8000-000000000102',
 			'BEAKER-250',
 			250,
-			{ volume: '250 ml', material: 'glass' },
+			{ size: '250 ml', material: 'glass' },
 			'out_of_stock'
 		)
 	]
