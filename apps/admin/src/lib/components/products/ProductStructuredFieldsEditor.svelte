@@ -21,6 +21,36 @@
 
 	type DraftValue = Record<string, unknown>;
 	type CustomDraft = { id: number; name: string; value: string };
+	type StructuredFieldKey = Exclude<StructuredFieldPreset['key'], 'custom'>;
+
+	const presetLabels: Record<StructuredFieldKey, string> = {
+		color: '顏色',
+		size: '尺寸',
+		material: '材質',
+		pattern: '圖樣',
+		suggestedAge: '建議年齡',
+		suggestedGender: '建議性別',
+		gtin: '全球貿易項目代碼（GTIN）',
+		mpn: '製造商零件編號（MPN）',
+		model: '型號',
+		countryOfOrigin: '原產國',
+		weight: '重量',
+		width: '寬度',
+		height: '高度',
+		depth: '深度',
+		capacity: '容量',
+		graduation: '刻度間隔',
+		outerDiameter: '外徑',
+		innerDiameter: '內徑',
+		wallThickness: '壁厚',
+		jointSize: '標準磨口尺寸',
+		threadSize: '螺紋尺寸',
+		temperatureRange: '溫度範圍',
+		autoclavable: '可高壓滅菌',
+		sterility: '滅菌狀態',
+		calibration: '校正等級',
+		coating: '表面處理'
+	};
 
 	let selectedKeys = $state<string[]>(
 		untrack(() => Object.keys(value).filter((key) => key !== 'additionalProperties'))
@@ -55,6 +85,10 @@
 
 	function presetFor(key: string): StructuredFieldPreset | undefined {
 		return structuredFieldPresets.find((preset) => preset.key === key);
+	}
+
+	function presetLabel(preset: StructuredFieldPreset): string {
+		return preset.key === 'custom' ? '自訂屬性' : presetLabels[preset.key];
 	}
 
 	function normalizedKey(key: string): string {
@@ -201,11 +235,11 @@
 				{#each groupedPresets as group (group.group)}
 					<optgroup label={groupLabels[group.group]}>
 						{#each group.presets.filter((preset) => !selectedKeys.includes(preset.key)) as preset (preset.key)}
-							<option value={preset.key}>{preset.label}</option>
+							<option value={preset.key}>{presetLabel(preset)}</option>
 						{/each}
 					</optgroup>
 				{/each}
-				<option value="custom">自訂 PropertyValue</option>
+				<option value="custom">自訂屬性</option>
 			</select>
 		</label>
 
@@ -214,7 +248,7 @@
 			{#if preset}
 				<div class="rounded-md border border-border bg-bg-surface p-3">
 					<div class="mb-2 flex items-center justify-between gap-2">
-						<span class="text-sm font-medium">{preset.label}</span>
+						<span class="text-sm font-medium">{presetLabel(preset)}</span>
 						<button
 							type="button"
 							class="text-xs text-danger"
