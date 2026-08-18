@@ -8,7 +8,7 @@
 	],
 	"scripts": {
 		"dev": "tsx watch src/index.ts",
-		"build": "esbuild src/index.ts src/cli/bootstrap-admin.ts --bundle --platform=node --format=esm --target=node24 --packages=external --sourcemap --alias:@packages/database=../../packages/database/src/index.ts --alias:@packages/schemas=../../packages/schemas/src/index.ts --outdir=build",
+		"build": "esbuild src/index.ts src/cli/bootstrap-admin.ts --bundle --platform=node --format=esm --target=node24 --packages=external --sourcemap --alias:@packages/database=../../packages/database/src/index.ts --alias:@packages/product-structured-data=../../packages/product-structured-data/src/index.ts --alias:@packages/schemas=../../packages/schemas/src/index.ts --outdir=build",
 		"start": "node --enable-source-maps build/index.js",
 		"bootstrap:admin": "node --enable-source-maps build/cli/bootstrap-admin.js",
 		"check": "tsc --noEmit --project tsconfig.json",
@@ -23,6 +23,7 @@
 		"@prisma/adapter-pg": "catalog:db",
 		"@prisma/client": "catalog:db",
 		"@simplewebauthn/server": "catalog:express",
+		"@packages/product-structured-data": "workspace:*",
 		"@opentelemetry/api": "catalog:express",
 		"@opentelemetry/auto-instrumentations-node": "catalog:express",
 		"@opentelemetry/exporter-metrics-otlp-http": "catalog:express",

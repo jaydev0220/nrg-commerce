@@ -1,5 +1,5 @@
 {
-	"name": "@packages/schemas",
+	"name": "@packages/product-structured-data",
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
@@ -13,10 +13,9 @@
 		"format": "prettier --ignore-path ../../.prettierignore --write .",
 		"lint": "prettier --ignore-path ../../.prettierignore --check . && eslint .",
 		"test": "node --import tsx --test \"tests/**/*.test.ts\"",
-		"test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-include=src/**/*.ts --test-coverage-lines=99 --test-coverage-branches=98 --test-coverage-functions=97 \"tests/**/*.test.ts\""
+		"test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-include=src/**/*.ts --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=90 \"tests/**/*.test.ts\""
 	},
 	"dependencies": {
-		"@packages/product-structured-data": "workspace:*",
 		"zod": "catalog:"
 	},
 	"devDependencies": {

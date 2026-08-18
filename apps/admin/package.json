@@ -23,6 +23,7 @@
 		"@lucide/svelte": "catalog:svelte",
 		"@packages/eslint-config": "workspace:*",
 		"@packages/prettier-config": "workspace:*",
+		"@packages/product-structured-data": "workspace:*",
 		"@packages/schemas": "workspace:*",
 		"@packages/styles": "workspace:*",
 		"@packages/tsconfig": "workspace:*",

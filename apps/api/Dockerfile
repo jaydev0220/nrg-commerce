@@ -16,6 +16,7 @@ COPY apps/api/package.json apps/api/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/eslint-config/package.json packages/eslint-config/package.json
 COPY packages/prettier-config/package.json packages/prettier-config/package.json
+COPY packages/product-structured-data/package.json packages/product-structured-data/package.json
 COPY packages/schemas/package.json packages/schemas/package.json
 COPY packages/tsconfig/package.json packages/tsconfig/package.json
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \

@@ -1,0 +1,10 @@
+{
+	"extends": "@packages/tsconfig/node.json",
+	"compilerOptions": {
+		"rootDir": ".",
+		"declaration": true,
+		"declarationMap": true
+	},
+	"include": ["src/**/*.ts", "tests/**/*.ts"],
+	"exclude": ["node_modules"]
+}

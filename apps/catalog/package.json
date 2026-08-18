@@ -26,6 +26,7 @@
 		"@packages/components": "workspace:*",
 		"@packages/eslint-config": "workspace:*",
 		"@packages/prettier-config": "workspace:*",
+		"@packages/product-structured-data": "workspace:*",
 		"@packages/schemas": "workspace:*",
 		"@packages/seo": "workspace:*",
 		"@packages/styles": "workspace:*",
