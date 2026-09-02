@@ -58,9 +58,21 @@ jobs:
               -H "Authorization: Bearer $NEON_API_KEY" \
               -H 'Content-Type: application/json' "$@"
           }
-          [[ "$BACKUP_KEY" =~ ^database/[A-Za-z0-9._/-]+\.dump\.age$ ]]
+          backup_key=${BACKUP_KEY:-}
+          if [[ -z "$backup_key" ]]; then
+            backup_key=$(aws s3api list-objects-v2 \
+              --bucket "$BACKUP_BUCKET" \
+              --prefix database/ \
+              --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+              --output json |
+              jq -r '[.Contents[]? | select(.Key | test("^database/[A-Za-z0-9._/-]+\\.dump\\.age$"))] | sort_by(.LastModified) | if length > 0 then .[-1].Key else empty end')
+          fi
+          if [[ ! "$backup_key" =~ ^database/[A-Za-z0-9._/-]+\.dump\.age$ ]]; then
+            printf 'No valid database backup object was found.\n' >&2
+            exit 1
+          fi
           payload=$(jq -nc --arg name "restore-drill-${GITHUB_RUN_ID}" --arg parent "$NEON_PRODUCTION_BRANCH_ID" \
-            '{branch: {name: $name, parent_id: $parent}, endpoints: [{type: "read_write", region_id: "aws-ap-southeast-1", autoscaling_limit_min_cu: 0.25, autoscaling_limit_max_cu: 1, suspend_timeout_seconds: 300}]}')
+            '{branch: {name: $name, parent_id: $parent}, endpoints: [{type: "read_write", region_id: "aws-ap-southeast-1", autoscaling_limit_min_cu: 0.25, autoscaling_limit_max_cu: 1}]}')
           created=$(neon_api -X POST "$NEON_API_BASE/projects/$NEON_PROJECT_ID/branches" --data "$payload")
           branch_id=$(jq -er '.branch.id' <<< "$created")
           connection_uri=''
@@ -72,7 +84,7 @@ jobs:
           done
           test -n "$connection_uri"
           connection_uri=$(node -e 'const url = new URL(process.argv[1]); url.searchParams.set("sslmode", "verify-full"); process.stdout.write(url.toString())' "$connection_uri")
-          aws s3 cp "s3://nrg-commerce-database-backups/$BACKUP_KEY" "$tmp/backup.age" --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3 cp "s3://$BACKUP_BUCKET/$backup_key" "$tmp/backup.age" --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
           age --decrypt --identity <(printf '%s' "$BACKUP_AGE_IDENTITY") --output "$tmp/database.dump" "$tmp/backup.age"
           docker run --rm --network host --env PGSSLROOTCERT=/etc/ssl/certs/ca-certificates.crt --volume /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro --volume "$tmp:/restore:ro" "$POSTGRES_IMAGE" \
             pg_restore --clean --if-exists --exit-on-error --single-transaction --no-owner --no-privileges --dbname "$connection_uri" /restore/database.dump
@@ -83,6 +95,7 @@ jobs:
           DATABASE_URL="$connection_uri" DIRECT_URL="$connection_uri" pnpm --filter @packages/database exec prisma migrate status
         env:
           BACKUP_KEY: ${{ inputs.backup_key || vars.LATEST_RESTORE_BACKUP_KEY }}
+          BACKUP_BUCKET: nrg-commerce-database-backups
           BACKUP_AGE_IDENTITY: ${{ secrets.BACKUP_AGE_IDENTITY }}
           NEON_API_BASE: https://console.neon.tech/api/v2
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}

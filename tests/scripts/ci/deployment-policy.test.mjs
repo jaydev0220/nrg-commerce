@@ -347,6 +347,10 @@ test('restore drill creates and deletes an isolated Neon branch', async () => {
 	assert.match(workflow, /POST .*branches/u);
 	assert.match(workflow, /hard_delete=true/u);
 	assert.match(workflow, /prisma migrate status/u);
+	assert.match(workflow, /s3api list-objects-v2/u);
+	assert.match(workflow, /sort_by\(\.LastModified/u);
+	assert.match(workflow, /No valid database backup object was found/u);
+	assert.doesNotMatch(workflow, /suspend_timeout_seconds/u);
 	assert.doesNotMatch(workflow, /RESTORE_DRILL_DATABASE_URL/u);
 });
 
