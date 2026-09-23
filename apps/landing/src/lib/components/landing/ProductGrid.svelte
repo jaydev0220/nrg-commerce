@@ -46,6 +46,16 @@
 </section>
 
 <style>
+	.product-grid {
+		grid-template-areas:
+			'beakers'
+			'tubes'
+			'funnels'
+			'condensers'
+			'hydrometers';
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.product-card {
 		grid-area: var(--grid-area);
 	}
