@@ -29,7 +29,7 @@ jobs:
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # pnpm/action-setup v4
         with: { version: 11.25.0, run_install: false }
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # actions/setup-node v6
-        with: { node-version: 24.19.0, cache: pnpm }
+        with: { node-version: 24.22.1, cache: pnpm }
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # hashicorp/setup-terraform v4
         with: { terraform_version: 1.15.5, terraform_wrapper: false }
       - run: pnpm install --frozen-lockfile && pnpm --filter @packages/database db:generate && pnpm --filter @apps/api build
