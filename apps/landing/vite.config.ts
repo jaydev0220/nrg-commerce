@@ -1,3 +1,5 @@
+import adapter from '@sveltejs/adapter-cloudflare';
+import { relative, sep } from 'node:path';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
@@ -8,11 +10,59 @@ import { loadEnv } from 'vite';
 export default defineConfig(({ mode }) => {
 	const env = loadEnv(mode, process.cwd(), '');
 	const cookieDomain = env['PUBLIC_COOKIE_DOMAIN']?.trim() ?? '';
+	const contactOrigin = new URL(env['PUBLIC_CONTACT_WORKER_URL']?.trim() || 'http://localhost:8787')
+		.origin as
+		`${string}://${string}.${string}` | `${string}://localhost` | `${string}://localhost:${number}`;
 
 	return {
 		plugins: [
 			tailwindcss(),
-			sveltekit(),
+			sveltekit({
+				alias: { $lib: './src/lib' },
+				compilerOptions: {
+					// defaults to rune mode for the project, except for `node_modules`. Can be removed in svelte 6.
+					runes: ({ filename }) => {
+						const relativePath = relative(import.meta.dirname, filename);
+						const pathSegments = relativePath.toLowerCase().split(sep);
+						const isExternalLibrary = pathSegments.includes('node_modules');
+
+						return isExternalLibrary ? undefined : true;
+					}
+				},
+				adapter: adapter(),
+				csp: {
+					mode: 'hash',
+					directives: {
+						'default-src': ['self'],
+						'script-src': ['self', 'https://challenges.cloudflare.com'],
+						'script-src-attr': ['none'],
+						'style-src': ['self', 'unsafe-inline'],
+						'img-src': ['self', 'data:', 'blob:', 'https:'],
+						'font-src': ['self', 'data:'],
+						'connect-src': ['self', contactOrigin, 'https://challenges.cloudflare.com'],
+						'frame-src': ['https://challenges.cloudflare.com', 'https://www.google.com'],
+						'worker-src': ['self', 'blob:'],
+						'object-src': ['none'],
+						'base-uri': ['self'],
+						'form-action': ['self'],
+						'frame-ancestors': ['none'],
+						'manifest-src': ['self']
+					}
+				},
+				prerender: {
+					entries: ['*', '/en/', '/en/about/', '/en/contact/'],
+					handleHttpError: ({ path, status, message }) => {
+						if (
+							status === 404 &&
+							(path.startsWith('/landing/') || path.startsWith('/logo-') || path === '/favicon.ico')
+						) {
+							return;
+						}
+
+						throw new Error(message);
+					}
+				}
+			}),
 			paraglideVitePlugin({
 				project: './project.inlang',
 				outdir: './src/lib/paraglide',
@@ -35,6 +85,7 @@ export default defineConfig(({ mode }) => {
 					extends: './vite.config.ts',
 					test: {
 						name: 'client',
+						setupFiles: ['./tests/browser-setup.ts'],
 						browser: {
 							enabled: true,
 							provider: playwright(),

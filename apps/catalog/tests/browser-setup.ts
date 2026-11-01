@@ -1,0 +1,13 @@
+import { vi } from 'vitest';
+
+vi.mock('$app/env/public', () => ({
+	PUBLIC_CDN_BASE_URL: 'https://cdn.example.com',
+	PUBLIC_API_BASE_URL: 'http://localhost:3000',
+	PUBLIC_CTA_URL: 'https://catalog.example.com/cta',
+	PUBLIC_FACEBOOK_URL: 'https://www.facebook.com/example',
+	PUBLIC_HOME_URL: 'https://www.example.com',
+	PUBLIC_LINE_URL: 'https://line.me/ti/p/example',
+	PUBLIC_COOKIE_DOMAIN: '',
+	PUBLIC_CONTACT_WORKER_URL: '',
+	PUBLIC_TURNSTILE_SITE_KEY: ''
+}));
