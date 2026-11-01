@@ -3,7 +3,8 @@ name: Roll back production application versions
 on:
   workflow_dispatch:
     inputs:
-      api_revision: { description: Existing healthy ACA revision, required: true, type: string }
+      api_revision:
+        { description: Existing ACA revision (active or inactive), required: true, type: string }
       admin_version: { description: Worker version ID, required: false, type: string }
       catalog_version: { description: Worker version ID, required: false, type: string }
       landing_version: { description: Worker version ID, required: false, type: string }
@@ -34,12 +35,22 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
           client-id: ${{ vars.AZURE_CLIENT_ID }}
-      - run: |
+      - name: Activate and route API revision
+        run: |
           set -euo pipefail
-          state="$(az containerapp revision show --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$API_REVISION" --query '{running:properties.runningState,health:properties.healthState}' -o json)"
-          test "$(jq -r '.running' <<<"$state")" = Running
-          test "$(jq -r '.health' <<<"$state")" = Healthy
-          az containerapp ingress traffic set --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$API_REVISION" --weight 100 --output none
+          az containerapp revision activate --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$API_REVISION" --output none
+          for attempt in $(seq 1 30); do
+            state="$(az containerapp revision show --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision "$API_REVISION" --query '{running:properties.runningState,health:properties.healthState}' -o json)"
+            if [[ "$(jq -r '.running' <<<"$state")" == Running && "$(jq -r '.health' <<<"$state")" == Healthy ]]; then
+              break
+            fi
+            if [[ "$attempt" -eq 30 ]]; then
+              echo "API revision did not become healthy: $state" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          az containerapp ingress traffic set --name "$AZURE_CONTAINER_APP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --revision-weight "${API_REVISION}=100" --output none
         env:
           AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -60,3 +71,9 @@ jobs:
           CATALOG_VERSION: ${{ inputs.catalog_version }}
           LANDING_VERSION: ${{ inputs.landing_version }}
           CONTACT_VERSION: ${{ inputs.contact_version }}
+      - name: Deactivate unused API revisions
+        run: bash scripts/operations/cleanup-api-revisions.sh
+        env:
+          AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          API_REVISION: ${{ inputs.api_revision }}

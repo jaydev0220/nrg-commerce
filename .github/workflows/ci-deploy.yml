@@ -664,6 +664,7 @@ jobs:
           done
           export WORKER_VERSIONS_JSON="$worker_versions"
           node scripts/ci/write-release-manifest.mjs "$RUNNER_TEMP/release-manifest.json"
+          bash scripts/operations/cleanup-api-revisions.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4
         with:
           name: production-release-manifest
