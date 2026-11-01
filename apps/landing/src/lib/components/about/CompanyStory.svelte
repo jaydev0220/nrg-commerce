@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import * as m from '$lib/paraglide/messages';
 	import { extractLocaleFromUrl, localizeHref } from '$lib/paraglide/runtime';
 	import type { SupportedLocale } from '@packages/seo';
 
-	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
+	const locale = $derived(extractLocaleFromUrl(page.url.href) as SupportedLocale);
 </script>
 
 <section class="bg-bg-page py-16 lg:py-20">
@@ -42,7 +42,7 @@
 			</section>
 		</div>
 		<a
-			href={resolve(localizeHref('/capabilities/', { locale }) as Pathname)}
+			href={resolve(localizeHref('/capabilities/', { locale }).slice(1) as Path)}
 			class="mt-8 inline-flex min-h-11 items-center rounded-md bg-brand px-6 py-3 font-medium text-text-on-accent hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none"
 		>
 			{m.story_capabilities_cta()}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import { page } from '$app/state';
 	import { localizeHref } from '$lib/paraglide/runtime';
 </script>
@@ -47,13 +47,13 @@
 		</a>
 		<a
 			class="rounded-md border border-border bg-bg-surface px-5 py-3 text-sm font-semibold text-text-body transition-colors hover:border-border-accent hover:bg-bg-accent"
-			href={resolve(localizeHref('/', { locale: 'en' }) as Pathname)}
+			href={resolve(localizeHref('/', { locale: 'en' }).slice(1) as Path)}
 		>
 			English home
 		</a>
 		<a
 			class="rounded-md border border-border bg-bg-surface px-5 py-3 text-sm font-semibold text-text-body transition-colors hover:border-border-accent hover:bg-bg-accent"
-			href={resolve('/contact/')}
+			href={resolve('contact/')}
 		>
 			<span lang="zh-TW">聯絡我們</span>
 			<span aria-hidden="true">/</span>

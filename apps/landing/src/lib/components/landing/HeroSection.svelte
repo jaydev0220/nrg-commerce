@@ -5,12 +5,12 @@
 	import { extractLocaleFromUrl } from '$lib/paraglide/runtime';
 	import { localizeHref } from '$lib/paraglide/runtime';
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import { getShopUrl, shopCta } from '$lib/data';
 	import { splitLineBreakTags } from '$lib/utils/line-breaks';
 
-	let shopHref = $derived(getShopUrl(extractLocaleFromUrl(page.url) as SupportedLocale));
-	let locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
+	let shopHref = $derived(getShopUrl(extractLocaleFromUrl(page.url.href) as SupportedLocale));
+	let locale = $derived(extractLocaleFromUrl(page.url.href) as SupportedLocale);
 </script>
 
 <section class="flex h-125 min-h-140 items-center bg-bg-accent md:h-114 xl:h-140">
@@ -49,7 +49,7 @@
 						{shopCta.label()}
 					</a>
 					<a
-						href={resolve(localizeHref('/capabilities/', { locale }) as Pathname)}
+						href={resolve(localizeHref('/capabilities/', { locale }).slice(1) as Path)}
 						class="inline-flex h-12 w-full items-center justify-center rounded-md border border-border bg-bg-surface px-6 py-3 font-medium text-text-body transition-colors duration-200 hover:-translate-y-0.5 hover:bg-bg-page focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none md:w-52 xl:h-13"
 					>
 						{m.cta_capabilities()}

@@ -1,6 +1,8 @@
 import { render } from 'vitest-browser-svelte';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { tick } from 'svelte';
+
+vi.mock('$app/env/public', () => ({ PUBLIC_API_BASE_URL: 'http://localhost:3000' }));
 
 import type { DashboardData } from '$lib/api/admin-api';
 import SalesTrendChart from './SalesTrendChart.svelte';

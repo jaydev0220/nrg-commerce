@@ -3,13 +3,13 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 
 	let { pagination }: { pagination: { page: number; totalPages: number; total: number } } =
 		$props();
 
 	function pageSearch(targetPage: number) {
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		url.searchParams.set('page', String(targetPage));
 		return url.search;
 	}
@@ -26,7 +26,9 @@
 			disabled={pagination.page <= 1}
 			onclick={() =>
 				goto(
-					resolve(`${page.url.pathname}${pageSearch(Math.max(1, pagination.page - 1))}` as Pathname)
+					resolve(
+						`${page.url.pathname}${pageSearch(Math.max(1, pagination.page - 1))}`.slice(1) as Path
+					)
 				)}
 			class="inline-grid size-9 place-items-center rounded-md border border-border text-text-body disabled:pointer-events-none disabled:opacity-40"
 			aria-label="上一頁"
@@ -44,7 +46,7 @@
 					resolve(
 						`${page.url.pathname}${pageSearch(
 							Math.min(Math.max(1, pagination.totalPages), pagination.page + 1)
-						)}` as Pathname
+						)}`.slice(1) as Path
 					)
 				)}
 			class="inline-grid size-9 place-items-center rounded-md border border-border text-text-body disabled:pointer-events-none disabled:opacity-40"

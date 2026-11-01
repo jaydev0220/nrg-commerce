@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ArrowRight } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import * as m from '$lib/paraglide/messages';
 	import type { CatalogProductView } from '$lib/catalog/types.js';
 
@@ -31,7 +31,7 @@
 	class="group duration-base overflow-hidden rounded-lg border border-border bg-bg-surface shadow-xs transition-[transform,border-color,box-shadow] ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:shadow-sm"
 >
 	<a
-		href={resolve(href as Pathname)}
+		href={resolve(href.slice(1) as Path)}
 		class="relative block aspect-square overflow-hidden bg-bg-sunken text-text-accent focus:ring-2 focus:ring-brand focus:outline-none focus:ring-inset"
 	>
 		{#if view.representativeImage}
@@ -76,7 +76,7 @@
 		</div>
 		<h2 class="text-xl leading-snug tracking-normal">
 			<a
-				href={resolve(href as Pathname)}
+				href={resolve(href.slice(1) as Path)}
 				class="duration-base transition-colors ease-ui hover:text-text-accent"
 			>
 				{view.name}
@@ -87,7 +87,7 @@
 		{/if}
 		<div class="flex justify-end pt-3">
 			<a
-				href={resolve(href as Pathname)}
+				href={resolve(href.slice(1) as Path)}
 				class="duration-base inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-xs font-semibold text-text-heading transition-[color,background-color,border-color,transform] ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle hover:text-text-accent"
 			>
 				{m.catalog_view_product()}

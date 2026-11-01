@@ -1,6 +1,6 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import type { Pathname } from '$app/types';
+import type { Path } from '$app/types';
 
 const pendingNavigations = new WeakMap<HTMLFormElement, ReturnType<typeof setTimeout>>();
 
@@ -34,10 +34,10 @@ export function buildFilterQuery(entries: Iterable<readonly [string, FormDataEnt
 
 function navigate(pathname: string, form: HTMLFormElement): void {
 	const query = buildFilterQuery(new FormData(form).entries());
-	void goto(resolve(`${pathname}${query ? `?${query}` : ''}` as Pathname), {
-		invalidateAll: true,
-		keepFocus: true,
-		replaceState: true
+	void goto(resolve(`${pathname}${query ? `?${query}` : ''}`.slice(1) as Path), {
+		refreshAll: true,
+		reset: false,
+		replace: true
 	});
 }
 

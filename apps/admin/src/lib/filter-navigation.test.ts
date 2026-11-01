@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const goto = vi.hoisted(() => vi.fn());
 
 vi.mock('$app/navigation', () => ({ goto }));
-vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
+vi.mock('$app/paths', () => ({ resolve: (path: string) => `/${path}` }));
 
 import { buildFilterQuery, createFilterHandlers } from './filter-navigation';
 
@@ -54,9 +54,9 @@ describe('createFilterHandlers', () => {
 		vi.advanceTimersByTime(1);
 		expect(goto).toHaveBeenCalledTimes(1);
 		expect(goto).toHaveBeenCalledWith('/orders?search=%E5%8F%B0%E7%81%A3', {
-			invalidateAll: true,
-			keepFocus: true,
-			replaceState: true
+			refreshAll: true,
+			reset: false,
+			replace: true
 		});
 	});
 
@@ -72,9 +72,9 @@ describe('createFilterHandlers', () => {
 		handlers.onchange({ currentTarget: form } as unknown as Event);
 		expect(goto).toHaveBeenCalledTimes(1);
 		expect(goto).toHaveBeenCalledWith('/products?search=glass', {
-			invalidateAll: true,
-			keepFocus: true,
-			replaceState: true
+			refreshAll: true,
+			reset: false,
+			replace: true
 		});
 
 		vi.advanceTimersByTime(350);

@@ -1,4 +1,4 @@
-import { PUBLIC_CDN_BASE_URL } from '$env/static/public';
+import { PUBLIC_CDN_BASE_URL } from '$app/env/public';
 import { createAssetUrlResolver, SHARED_ASSETS } from '@packages/assets';
 
 export { SHARED_ASSETS };

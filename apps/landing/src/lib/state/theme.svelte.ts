@@ -1,5 +1,5 @@
-import { browser } from '$app/environment';
-import { PUBLIC_COOKIE_DOMAIN } from '$env/static/public';
+import { browser } from '$app/env';
+import { PUBLIC_COOKIE_DOMAIN } from '$app/env/public';
 
 export type Theme = 'light' | 'dark';
 

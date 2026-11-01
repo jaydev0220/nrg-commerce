@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path, ResolvedPathname } from '$app/types';
 	import { page } from '$app/state';
 	import { ArrowLeft } from '@lucide/svelte';
 	import { SchemaOrg } from 'svead';
@@ -28,7 +28,9 @@
 
 	let locale = $derived(localeFromPathname(page.url.pathname));
 	let requestedSkuCode = $state<string | null>(null);
-	let variantUrlState = $derived(resolveProductVariantUrlState(page.url, data.product));
+	let variantUrlState = $derived(
+		resolveProductVariantUrlState(new URL(page.url.href), data.product)
+	);
 	let requestedSelection = $derived(
 		getSkuAttributeSelection(
 			data.product.skus.find((sku) => sku.skuCode === requestedSkuCode) ??
@@ -62,10 +64,10 @@
 			: -1;
 		return selectedIndex >= 0 ? selectedIndex : 0;
 	});
-	let catalogHref = $derived(localizeHref('/', { locale }) as Pathname);
+	let catalogHref = $derived(localizeHref('/', { locale }) as ResolvedPathname);
 	let categoryHref = $derived(
 		data.category
-			? (localizeHref(`/categories/${data.category.slug}`, { locale }) as Pathname)
+			? (localizeHref(`/categories/${data.category.slug}`, { locale }) as ResolvedPathname)
 			: null
 	);
 	let inquiryHref = $derived.by(() => {
@@ -86,12 +88,11 @@
 			getProductGalleryImages(data.product)[0]?.id ??
 			null;
 
-		const nextUrl = new URL(page.url);
+		const nextUrl = new URL(page.url.href);
 		nextUrl.searchParams.set('sku', nextModel.activeSku.skuCode);
-		void goto(resolve(`${nextUrl.pathname}${nextUrl.search}` as Pathname), {
-			keepFocus: true,
-			noScroll: true,
-			replaceState: true
+		void goto(resolve(`${nextUrl.pathname}${nextUrl.search}`.slice(1) as Path), {
+			reset: false,
+			replace: true
 		});
 	}
 </script>
@@ -111,7 +112,7 @@
 
 	<section class="mx-auto max-w-360 px-4 py-8 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
 		<a
-			href={resolve(catalogHref)}
+			href={resolve(catalogHref.slice(1) as Path)}
 			class="duration-base mb-7 inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-sm font-semibold text-text-heading shadow-xs transition-[color,background-color,border-color,transform] ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle hover:text-text-accent focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none"
 		>
 			<ArrowLeft class="size-4" />

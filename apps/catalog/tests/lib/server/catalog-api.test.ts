@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$env/dynamic/public', () => ({
-	env: {
-		PUBLIC_API_BASE_URL: 'https://api.example.test/'
-	}
+vi.mock('$app/env/public', () => ({
+	PUBLIC_API_BASE_URL: 'https://api.example.test/'
 }));
 
 import {

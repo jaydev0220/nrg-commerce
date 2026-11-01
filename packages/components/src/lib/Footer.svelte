@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PUBLIC_CDN_BASE_URL, PUBLIC_FACEBOOK_URL, PUBLIC_LINE_URL } from '$env/static/public';
+	import { PUBLIC_CDN_BASE_URL, PUBLIC_FACEBOOK_URL, PUBLIC_LINE_URL } from '$app/env/public';
 	import { siFacebook, siLine } from 'simple-icons';
 	import Logo from './Logo.svelte';
 	import SocialIcon from './SocialIcon.svelte';

@@ -41,7 +41,7 @@
 	}
 
 	async function returnToLogin() {
-		await goto(resolve('/login'), { invalidateAll: true });
+		await goto(resolve('/login'), { refreshAll: true });
 	}
 </script>
 

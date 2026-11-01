@@ -45,7 +45,7 @@
 		const form = new FormData(event.currentTarget as HTMLFormElement);
 		try {
 			await completeTotpLogin(String(form.get('code') ?? ''));
-			await goto(resolve('/'), { invalidateAll: true });
+			await goto(resolve('/'), { refreshAll: true });
 		} catch (error) {
 			message = errorMessage(error);
 		} finally {
@@ -61,7 +61,7 @@
 			const { options } = await beginPasskeyMfa();
 			const credential = await authenticateWithPasskey(options, 'optional');
 			await completePasskeyMfa(credential);
-			await goto(resolve('/'), { invalidateAll: true });
+			await goto(resolve('/'), { refreshAll: true });
 		} catch (error) {
 			message = errorMessage(error);
 		} finally {

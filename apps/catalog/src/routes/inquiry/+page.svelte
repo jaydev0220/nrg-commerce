@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path, ResolvedPathname } from '$app/types';
 	import { page } from '$app/state';
 	import { ArrowLeft } from '@lucide/svelte';
 	import InquiryForm from '$lib/components/InquiryForm.svelte';
@@ -12,14 +12,14 @@
 	let { data }: PageProps = $props();
 
 	let locale = $derived(localeFromPathname(page.url.pathname));
-	let catalogHref = $derived(localizeHref('/', { locale }) as Pathname);
+	let catalogHref = $derived(localizeHref('/', { locale }) as ResolvedPathname);
 </script>
 
 <main id="catalog-content">
 	<section class="border-b border-border bg-bg-surface">
 		<div class="mx-auto max-w-360 px-4 py-8 sm:px-6 lg:px-8">
 			<a
-				href={resolve(catalogHref)}
+				href={resolve(catalogHref.slice(1) as Path)}
 				class="duration-base inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-surface px-3 py-2 text-sm font-semibold text-text-heading shadow-xs transition-[color,background-color,border-color,transform] ease-ui hover:-translate-y-0.5 hover:border-border-accent hover:bg-brand-subtle hover:text-text-accent focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none"
 			>
 				<ArrowLeft class="size-4" />

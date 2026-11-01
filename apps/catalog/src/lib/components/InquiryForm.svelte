@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as publicEnv from '$env/static/public';
+	import * as publicEnv from '$app/env/public';
 	import * as m from '$lib/paraglide/messages';
 	import { TurnstileWidget } from '@packages/components';
 	import { submitInquiryRequest, type InquiryRequestPayload } from '$lib/inquiry-request.js';

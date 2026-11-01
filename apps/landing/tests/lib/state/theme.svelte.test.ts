@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
-vi.mock('$env/static/public', () => ({ PUBLIC_COOKIE_DOMAIN: '' }));
+vi.mock('$app/env/public', () => ({ PUBLIC_COOKIE_DOMAIN: '' }));
 
 import { theme } from '$lib/state/theme.svelte';
 

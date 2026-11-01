@@ -2,8 +2,8 @@
 	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import type { Pathname } from '$app/types';
-	import { PUBLIC_SITE_URL } from '$env/static/public';
+	import type { Path } from '$app/types';
+	import { PUBLIC_SITE_URL } from '$app/env/public';
 	import { assetUrl, LANDING_ASSETS, SHARED_ASSETS } from '$lib/assets';
 	import {
 		createScrollRestoration,
@@ -48,7 +48,7 @@
 		openGraphImage: assetUrl(LANDING_ASSETS.productBeakers),
 		openGraphImageAlt: m.home_meta_title()
 	}).seo;
-	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
+	const locale = $derived(extractLocaleFromUrl(page.url.href) as SupportedLocale);
 	const scrollRestoration = createScrollRestoration({
 		storageKey: 'nrg-commerce:landing-scroll:v1',
 		getRouteKey: (url) => {
@@ -60,7 +60,7 @@
 		href: getShopUrl(locale),
 		label: m.cta_visit_shop()
 	});
-	const homeHref = $derived(resolve(localizeHref('/', { locale }) as Pathname));
+	const homeHref = $derived(resolve(localizeHref('/', { locale }).slice(1) as Path));
 
 	const seoPage = $derived(page.data.seo ?? fallbackSeo);
 	const organization: SeoOrganizationData = $derived({
@@ -97,7 +97,7 @@
 			organization,
 			sameAs: socialLinks.map((social) => social.href).filter(Boolean),
 			breadcrumbItems:
-				deLocalizeUrl(page.url).pathname === '/'
+				deLocalizeUrl(page.url.href).pathname === '/'
 					? []
 					: [
 							{
@@ -108,7 +108,7 @@
 			mainEntityOrganization:
 				seoPage.pageType === 'AboutPage' ||
 				seoPage.pageType === 'ContactPage' ||
-				deLocalizeUrl(page.url).pathname.replace(/\/+$/u, '') === '/capabilities'
+				deLocalizeUrl(page.url.href).pathname.replace(/\/+$/u, '') === '/capabilities'
 		})
 	);
 	const alternateLinks = $derived(
@@ -121,7 +121,7 @@
 	const navigationLinks = $derived.by<NavLinkItem[]>(() =>
 		navLinks.map((link) => {
 			return {
-				href: resolve(localizeHref(link.href, { locale }) as Pathname),
+				href: resolve(localizeHref(link.href, { locale }).slice(1) as Path),
 				id: link.id,
 				label: link.label()
 			};
@@ -129,7 +129,7 @@
 	);
 	const legalLinks = $derived([
 		{
-			href: resolve(localizeHref('/privacy', { locale }) as Pathname),
+			href: resolve(localizeHref('/privacy', { locale }).slice(1) as Path),
 			label: m.footer_privacy()
 		}
 	]);

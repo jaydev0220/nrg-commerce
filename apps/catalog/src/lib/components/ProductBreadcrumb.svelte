@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import { ChevronRight } from '@lucide/svelte';
 
 	type Props = {
@@ -21,7 +21,7 @@
 			aria-label="Breadcrumb"
 		>
 			<a
-				href={resolve(catalogHref as Pathname)}
+				href={resolve(catalogHref.slice(1) as Path)}
 				class="duration-base transition-[color,transform] ease-ui hover:-translate-y-0.5 hover:text-text-accent"
 			>
 				{catalogLabel}
@@ -30,7 +30,7 @@
 				<ChevronRight class="size-3.5" />
 				{#if categoryHref}
 					<a
-						href={resolve(categoryHref as Pathname)}
+						href={resolve(categoryHref.slice(1) as Path)}
 						class="duration-base transition-[color,transform] ease-ui hover:-translate-y-0.5 hover:text-text-accent"
 					>
 						{categoryLabel}

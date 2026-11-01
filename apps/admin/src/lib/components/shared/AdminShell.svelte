@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import {
 		Building2,
 		ClipboardList,
@@ -44,7 +44,7 @@
 		try {
 			await logoutCurrentSession();
 		} finally {
-			await goto(resolve('/login'), { invalidateAll: true });
+			await goto(resolve('/login'), { refreshAll: true });
 		}
 	}
 	let drawerOpen = $state(false);
@@ -207,7 +207,7 @@
 					{@const active = item.match(pathname)}
 					<li>
 						<a
-							href={resolve(item.href as Pathname)}
+							href={resolve(item.href.slice(1) as Path)}
 							aria-current={active ? 'page' : undefined}
 							class="flex min-h-10 items-center gap-3 rounded-md border border-transparent px-3 py-2 text-sm font-medium text-text-body transition hover:border-border hover:bg-bg-sunken aria-[current=page]:border-border-accent aria-[current=page]:bg-brand-subtle aria-[current=page]:text-text-accent aria-[current=page]:shadow-[inset_3px_0_0_var(--color-brand)]"
 						>
@@ -335,7 +335,7 @@
 					{@const active = item.match(pathname)}
 					<li>
 						<a
-							href={resolve(item.href as Pathname)}
+							href={resolve(item.href.slice(1) as Path)}
 							aria-current={active ? 'page' : undefined}
 							class="flex min-h-11 items-center gap-3 rounded-md border border-transparent px-3 py-2 text-sm font-medium text-text-body transition hover:border-border hover:bg-bg-sunken aria-[current=page]:border-border-accent aria-[current=page]:bg-brand-subtle aria-[current=page]:text-text-accent"
 							onclick={closeDrawer}

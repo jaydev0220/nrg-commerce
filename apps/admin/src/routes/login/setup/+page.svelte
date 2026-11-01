@@ -63,7 +63,7 @@
 		busy = true;
 		try {
 			await completeTotpMfaSetup(code);
-			await goto(resolve('/'), { invalidateAll: true });
+			await goto(resolve('/'), { refreshAll: true });
 		} catch (error) {
 			setError(error, '驗證器設定失敗。');
 		} finally {
@@ -79,7 +79,7 @@
 			const { options } = await beginPasskeyMfaSetup();
 			const credential = await registerPasskey(options);
 			await completePasskeyMfaSetup(credential);
-			await goto(resolve('/'), { invalidateAll: true });
+			await goto(resolve('/'), { refreshAll: true });
 		} catch (error) {
 			setError(error, '通行密鑰設定失敗。');
 		} finally {

@@ -1,4 +1,4 @@
-import { PUBLIC_SITE_URL } from '$env/static/public';
+import { PUBLIC_SITE_URL } from '$app/env/public';
 import { staticPagePaths } from '$lib/seo/static-routes';
 import type { RequestHandler } from './$types';
 

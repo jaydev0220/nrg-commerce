@@ -2,7 +2,7 @@ import { flushSync } from 'svelte';
 import { render } from 'vitest-browser-svelte';
 import { expect, test, vi } from 'vitest';
 
-vi.mock('$env/static/public', () => ({
+vi.mock('$app/env/public', () => ({
 	PUBLIC_CDN_BASE_URL: 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='
 }));
 vi.mock('$app/state', () => ({ page: { url: new URL('https://www.example.com/') } }));

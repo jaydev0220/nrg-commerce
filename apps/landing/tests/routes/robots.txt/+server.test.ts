@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest';
 
-vi.mock('$env/static/public', () => ({
+vi.mock('$app/env/public', () => ({
 	PUBLIC_SITE_URL: 'https://www.example.test'
 }));
 

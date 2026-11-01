@@ -5,13 +5,6 @@ declare global {
 		interface PageData {
 			seo?: SeoPageData;
 		}
-
-		interface Platform {
-			env: Env;
-			ctx: ExecutionContext;
-			caches: CacheStorage;
-			cf?: IncomingRequestCfProperties;
-		}
 	}
 }
 

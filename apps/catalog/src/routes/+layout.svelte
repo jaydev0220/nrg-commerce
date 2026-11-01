@@ -6,9 +6,9 @@
 		PUBLIC_FACEBOOK_URL,
 		PUBLIC_HOME_URL,
 		PUBLIC_LINE_URL
-	} from '$env/static/public';
+	} from '$app/env/public';
 	import { page } from '$app/state';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import { assetUrl, CATALOG_ASSETS, SHARED_ASSETS } from '$lib/assets';
 	import { resolveProductVariantUrlState } from '$lib/catalog/product-urls.js';
 	import type { CatalogProductRecord } from '$lib/catalog/types.js';
@@ -56,7 +56,7 @@
 	});
 
 	let { children } = $props();
-	let locale = $derived((extractLocaleFromUrl(page.url) ?? 'zh-tw') as Locale);
+	let locale = $derived((extractLocaleFromUrl(page.url.href) ?? 'zh-tw') as Locale);
 	let seoLocale = $derived(locale as SupportedLocale);
 	let product = $derived(page.data['product'] as CatalogProductRecord | undefined);
 	let isProductPage = $derived(Boolean(product));
@@ -80,12 +80,12 @@
 		openGraphImageAlt: m.catalog_title()
 	}).seo;
 	const ctaConfig: CtaConfig = $derived({
-		href: resolve(localizeHref('/inquiry', { locale }) as Pathname),
+		href: resolve(localizeHref('/inquiry', { locale }).slice(1) as Path),
 		label: m.catalog_inquiry_cta()
 	});
-	const canonicalPathname = $derived(deLocalizeUrl(page.url).pathname);
+	const canonicalPathname = $derived(deLocalizeUrl(page.url.href).pathname);
 	const productVariantUrlState = $derived(
-		product ? resolveProductVariantUrlState(page.url, product) : null
+		product ? resolveProductVariantUrlState(new URL(page.url.href), product) : null
 	);
 	const seoPathname = $derived(productVariantUrlState?.canonicalPathname ?? page.url.pathname);
 	const seoPage = $derived(page.data.seo ?? fallbackSeo);
@@ -147,26 +147,26 @@
 
 	function getLocalizedLandingHref(nextLocale: Locale): string {
 		if (!homeUrl) {
-			return resolve(localizeHref('/', { locale: nextLocale }) as Pathname);
+			return resolve(localizeHref('/', { locale: nextLocale }).slice(1) as Path);
 		}
 
 		try {
 			return new URL(nextLocale === 'en' ? '/en/' : '/', homeUrl).toString();
 		} catch {
-			return resolve(localizeHref('/', { locale: nextLocale }) as Pathname);
+			return resolve(localizeHref('/', { locale: nextLocale }).slice(1) as Path);
 		}
 	}
 
 	function getLocalizedLandingPageHref(nextLocale: Locale, pathname: string): string {
 		if (!homeUrl) {
-			return resolve(localizeHref(pathname, { locale: nextLocale }) as Pathname);
+			return resolve(localizeHref(pathname, { locale: nextLocale }).slice(1) as Path);
 		}
 
 		const localizedPathname = nextLocale === 'en' ? `/en${pathname}` : pathname;
 		try {
 			return new URL(localizedPathname, homeUrl).toString();
 		} catch {
-			return resolve(localizeHref(pathname, { locale: nextLocale }) as Pathname);
+			return resolve(localizeHref(pathname, { locale: nextLocale }).slice(1) as Path);
 		}
 	}
 
@@ -183,7 +183,7 @@
 			label: locale === 'en' ? 'Capabilities' : '服務能力'
 		},
 		{
-			href: resolve(localizeHref('/', { locale }) as Pathname),
+			href: resolve(localizeHref('/', { locale }).slice(1) as Path),
 			id: 'products',
 			label: m.catalog_title()
 		}

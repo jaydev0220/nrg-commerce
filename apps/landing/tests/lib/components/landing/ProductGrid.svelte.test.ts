@@ -1,7 +1,7 @@
 import { render } from 'vitest-browser-svelte';
 import { expect, test, vi } from 'vitest';
 
-vi.mock('$env/static/public', () => ({
+vi.mock('$app/env/public', () => ({
 	PUBLIC_CDN_BASE_URL: 'https://cdn.example.test',
 	PUBLIC_CTA_URL: 'https://catalog.example.test',
 	PUBLIC_FACEBOOK_URL: 'https://facebook.example.test/nrg',

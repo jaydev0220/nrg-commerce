@@ -5,7 +5,7 @@
 	import { extractLocaleFromUrl } from '$lib/paraglide/runtime';
 	import type { SupportedLocale } from '@packages/seo';
 
-	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
+	const locale = $derived(extractLocaleFromUrl(page.url.href) as SupportedLocale);
 </script>
 
 <section class="bg-bg-page py-16 lg:py-20">

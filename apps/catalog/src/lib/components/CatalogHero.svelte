@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 
 	type Props = {
 		title: string;
@@ -21,7 +21,7 @@
 		>
 			{#if homeHref}
 				<a
-					href={resolve(homeHref as Pathname)}
+					href={resolve(homeHref.slice(1) as Path)}
 					class="duration-base transition-[color,transform] ease-ui hover:-translate-y-0.5 hover:text-text-accent"
 				>
 					{homeLabel}

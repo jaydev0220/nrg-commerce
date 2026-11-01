@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages';
 
@@ -42,7 +42,7 @@
 		{#if page > 1}
 			<a
 				class="inline-flex h-10 items-center gap-1 rounded-md border border-border bg-bg-surface px-3 text-sm font-medium text-text-body transition-colors hover:border-border-accent hover:bg-bg-accent"
-				href={resolve(getHref(page - 1) as Pathname)}
+				href={resolve(getHref(page - 1).slice(1) as Path)}
 				aria-label={m.catalog_previous_page()}
 			>
 				<ChevronLeft class="size-4" />
@@ -62,7 +62,7 @@
 				{:else}
 					<a
 						class={`grid size-10 place-items-center rounded-md text-sm font-medium transition-colors ${item === page ? 'bg-brand text-text-on-accent' : 'border border-border bg-bg-surface text-text-body hover:border-border-accent hover:bg-bg-accent'}`}
-						href={resolve(getHref(item) as Pathname)}
+						href={resolve(getHref(item).slice(1) as Path)}
 						aria-current={item === page ? 'page' : undefined}
 					>
 						{item}
@@ -74,7 +74,7 @@
 		{#if page < totalPages}
 			<a
 				class="inline-flex h-10 items-center gap-1 rounded-md border border-border bg-bg-surface px-3 text-sm font-medium text-text-body transition-colors hover:border-border-accent hover:bg-bg-accent"
-				href={resolve(getHref(page + 1) as Pathname)}
+				href={resolve(getHref(page + 1).slice(1) as Path)}
 				aria-label={m.catalog_next_page()}
 			>
 				<span class="hidden sm:inline">{m.catalog_next_page()}</span>

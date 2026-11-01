@@ -1,4 +1,4 @@
-import { PUBLIC_FACEBOOK_URL, PUBLIC_LINE_URL } from '$env/static/public';
+import { PUBLIC_FACEBOOK_URL, PUBLIC_LINE_URL } from '$app/env/public';
 import { siFacebook, siLine } from 'simple-icons';
 import * as m from '$lib/paraglide/messages';
 

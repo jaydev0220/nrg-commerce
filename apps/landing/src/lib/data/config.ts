@@ -1,5 +1,5 @@
 import * as m from '$lib/paraglide/messages';
-import { PUBLIC_CTA_URL } from '$env/static/public';
+import { PUBLIC_CTA_URL } from '$app/env/public';
 import type { SupportedLocale } from '@packages/seo';
 
 export const shopUrl = PUBLIC_CTA_URL.trim();

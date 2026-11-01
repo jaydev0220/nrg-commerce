@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import type { Path } from '$app/types';
 	import { page } from '$app/state';
 	import { KeyRound } from '@lucide/svelte';
 
@@ -46,7 +47,7 @@
 	) {
 		const credential = await authenticateWithPasskey(options, mediation, signal);
 		const result = await completePasskeyLogin(credential);
-		await goto(resolve(destination(result.status)), { invalidateAll: true });
+		await goto(resolve(destination(result.status).slice(1) as Path), { refreshAll: true });
 	}
 
 	async function startConditionalPasskey() {
@@ -95,7 +96,7 @@
 				email: String(form.get('email') ?? ''),
 				password: String(form.get('password') ?? '')
 			});
-			await goto(resolve(destination(result.status)), { invalidateAll: true });
+			await goto(resolve(destination(result.status).slice(1) as Path), { refreshAll: true });
 		} catch (error) {
 			message = errorMessage(error);
 		} finally {

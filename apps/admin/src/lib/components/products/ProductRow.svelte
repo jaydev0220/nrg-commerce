@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { ChevronDown, Edit3, Trash2, Undo2 } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
+	import type { Path } from '$app/types';
 
 	import Badge from '$lib/components/shared/Badge.svelte';
 	import ProductQuickEditor from './ProductQuickEditor.svelte';
@@ -72,7 +73,7 @@
 					<ChevronDown class={expanded ? 'size-4 rotate-180' : 'size-4'} />
 				</button>
 				<a
-					href={resolve(`/products/${product.id}`)}
+					href={resolve(`/products/${product.id}`.slice(1) as Path)}
 					class="inline-grid size-9 cursor-pointer place-items-center rounded-md border border-border"
 					aria-label="編輯商品與圖片"
 					title="編輯商品與圖片"

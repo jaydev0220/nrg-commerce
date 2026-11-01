@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
-	import { PUBLIC_CDN_BASE_URL } from '$env/static/public';
+	import { browser } from '$app/env';
+	import { PUBLIC_CDN_BASE_URL } from '$app/env/public';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { Menu } from '@lucide/svelte';

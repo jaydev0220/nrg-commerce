@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { LANDING_ASSETS, assetUrl } from '$lib/assets';
 	import * as m from '$lib/paraglide/messages';
@@ -32,7 +32,7 @@
 			caption: () => m.capabilities_photo_hydrometers()
 		}
 	];
-	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
+	const locale = $derived(extractLocaleFromUrl(page.url.href) as SupportedLocale);
 </script>
 
 <PageHeader
@@ -132,7 +132,7 @@
 			</h2>
 			<p class="mt-3 max-w-3xl text-accent-200">{m.capabilities_cta_body()}</p>
 			<a
-				href={resolve(localizeHref('/contact/?type=b2b', { locale }) as Pathname)}
+				href={resolve(localizeHref('/contact/?type=b2b', { locale }).slice(1) as Path)}
 				class="mt-6 inline-flex min-h-11 items-center justify-center rounded-md bg-brand px-6 py-3 font-medium hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-accent-200 focus-visible:outline-none"
 			>
 				{m.capabilities_cta()}

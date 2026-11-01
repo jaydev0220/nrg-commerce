@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
+	import { browser } from '$app/env';
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import * as m from '$lib/paraglide/messages';
 	import { page } from '$app/state';
-	import * as publicEnv from '$env/static/public';
+	import * as publicEnv from '$app/env/public';
 	import { TurnstileWidget } from '@packages/components';
 	import { submitContactRequest, type ContactRequestPayload } from '$lib/contact-request.js';
 	import { extractLocaleFromUrl, localizeHref } from '$lib/paraglide/runtime';
@@ -36,7 +36,7 @@
 	}
 
 	const initialInquiryType = browser ? page.url.searchParams.get('type') : null;
-	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
+	const locale = $derived(extractLocaleFromUrl(page.url.href) as SupportedLocale);
 
 	let form = $state({
 		name: '',
@@ -429,7 +429,7 @@
 				{m.form_privacy_notice()}
 				<a
 					class="ml-1 underline hover:text-text-body"
-					href={resolve(localizeHref('/privacy/', { locale }) as Pathname)}
+					href={resolve(localizeHref('/privacy/', { locale }).slice(1) as Path)}
 				>
 					{m.form_privacy_link()}
 				</a>

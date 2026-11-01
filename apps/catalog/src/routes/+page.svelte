@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
+	import { browser } from '$app/env';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import { X } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages';
 
@@ -30,7 +30,7 @@
 	const catalogYear = new Date().getFullYear();
 
 	let locale = $derived(localeFromPathname(page.url.pathname));
-	let queryState = $derived(parseCatalogQueryState(page.url.searchParams, locale));
+	let queryState = $derived(parseCatalogQueryState(new URLSearchParams(page.url.search), locale));
 	let searchInput = $derived(queryState.query);
 	let mobileFiltersOpen = $state(false);
 	let drawerElement = $state.raw<HTMLElement | null>(null);
@@ -94,10 +94,9 @@
 			? `${localizeHref('/', { locale })}?${queryString}`
 			: localizeHref('/', { locale });
 
-		goto(resolve(href as Pathname), {
-			replaceState: true,
-			keepFocus: true,
-			noScroll: true
+		goto(resolve(href.slice(1) as Path), {
+			replace: true,
+			reset: false
 		});
 	}
 

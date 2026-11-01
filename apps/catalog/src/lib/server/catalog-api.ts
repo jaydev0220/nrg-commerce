@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/public';
+import * as env from '$app/env/public';
 import { error } from '@sveltejs/kit';
 import {
 	storefrontCategoryResponseSchema,

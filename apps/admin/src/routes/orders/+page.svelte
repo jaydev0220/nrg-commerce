@@ -3,7 +3,7 @@
 	import { Edit3, RotateCcw, Search, ShoppingCart } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 
 	import {
 		AdminApiError,
@@ -52,10 +52,10 @@
 		const query = params
 			.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
 			.join('&');
-		void goto(resolve(`/orders${query ? `?${query}` : ''}` as Pathname), {
-			invalidateAll: true,
-			keepFocus: true,
-			replaceState: true
+		void goto(resolve(`/orders${query ? `?${query}` : ''}`.slice(1) as Path), {
+			refreshAll: true,
+			reset: false,
+			replace: true
 		});
 	}
 

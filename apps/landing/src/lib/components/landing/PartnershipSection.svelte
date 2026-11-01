@@ -1,16 +1,18 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import type { Pathname } from '$app/types';
+	import type { Path, ResolvedPathname } from '$app/types';
 	import * as m from '$lib/paraglide/messages';
 	import { partnerships } from '$lib/data';
 	import { extractLocaleFromUrl, localizeHref } from '$lib/paraglide/runtime';
 	import type { SupportedLocale } from '@packages/seo';
 
-	const locale = $derived(extractLocaleFromUrl(page.url) as SupportedLocale);
+	const locale = $derived(extractLocaleFromUrl(page.url.href) as SupportedLocale);
 
-	function getPartnershipHref(pathname: string, type: string): Pathname {
-		return localizeHref(`${pathname}?type=${encodeURIComponent(type)}`, { locale }) as Pathname;
+	function getPartnershipHref(pathname: string, type: string): ResolvedPathname {
+		return localizeHref(`${pathname}?type=${encodeURIComponent(type)}`, {
+			locale
+		}) as ResolvedPathname;
 	}
 </script>
 
@@ -37,7 +39,9 @@
 					</div>
 					<div>
 						<a
-							href={resolve(getPartnershipHref(partnership.href, partnership.type))}
+							href={resolve(
+								getPartnershipHref(partnership.href, partnership.type).slice(1) as Path
+							)}
 							class="
 								inline-flex h-9 w-37 items-center justify-center rounded px-6 py-2 text-sm
 								font-medium transition-colors duration-200 hover:-translate-y-0.5
@@ -68,7 +72,9 @@
 					</div>
 					<div>
 						<a
-							href={resolve(getPartnershipHref(partnership.href, partnership.type))}
+							href={resolve(
+								getPartnershipHref(partnership.href, partnership.type).slice(1) as Path
+							)}
 							class="
 								inline-flex h-9 w-37 items-center justify-center rounded px-6 py-2 text-sm
 								font-medium transition-colors duration-200 hover:-translate-y-0.5
@@ -99,7 +105,9 @@
 					</div>
 					<div>
 						<a
-							href={resolve(getPartnershipHref(partnership.href, partnership.type))}
+							href={resolve(
+								getPartnershipHref(partnership.href, partnership.type).slice(1) as Path
+							)}
 							class="
 								block w-full rounded px-6 py-3 text-center text-sm
 								font-medium transition-colors duration-200 hover:-translate-y-0.5

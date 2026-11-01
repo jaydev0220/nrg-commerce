@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 
 	import type { DashboardRange } from '$lib/api/admin-api';
 	import SalesTrendChart from '$lib/components/dashboard/SalesTrendChart.svelte';
@@ -39,7 +39,7 @@
 
 	async function changeRange(range: DashboardRange) {
 		if (range === dashboard.trend.range) return;
-		await goto(resolve(`/?range=${range}` as Pathname), { invalidateAll: true });
+		await goto(resolve(`/?range=${range}`.slice(1) as Path), { refreshAll: true });
 	}
 </script>
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import { Send } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages';
 	import type { CatalogLocale, ProductConfigurationModel } from '$lib/catalog/types.js';
@@ -101,7 +101,7 @@
 			</div>
 		</div>
 		<a
-			href={resolve(inquiryHref as Pathname)}
+			href={resolve(inquiryHref.slice(1) as Path)}
 			class="duration-base mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand px-4 py-3 text-sm font-semibold text-text-on-accent transition-[color,background-color,transform] ease-ui hover:-translate-y-0.5 hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none"
 		>
 			<Send class="size-4" />

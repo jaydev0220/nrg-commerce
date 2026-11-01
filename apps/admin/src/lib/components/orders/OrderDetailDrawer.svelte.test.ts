@@ -1,6 +1,8 @@
 import { render } from 'vitest-browser-svelte';
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('$app/env/public', () => ({ PUBLIC_API_BASE_URL: 'http://localhost:3000' }));
+
 import type { ManagedOrder, ManagedOrderUpdatePreview } from '$lib/api/admin-api';
 import OrderDetailDrawer from './OrderDetailDrawer.svelte';
 

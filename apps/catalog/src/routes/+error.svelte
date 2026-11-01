@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
+	import type { Path } from '$app/types';
 	import { page } from '$app/state';
 	import { localizeHref } from '$lib/paraglide/runtime';
 	import * as m from '$lib/paraglide/messages';
@@ -40,21 +40,21 @@
 		{#if isNotFound}
 			<a
 				class="hover:bg-brand-strong rounded-md bg-brand px-5 py-3 text-sm font-semibold text-text-on-accent transition-colors"
-				href={resolve(localizeHref('/', { locale }) as Pathname)}
+				href={resolve(localizeHref('/', { locale }).slice(1) as Path)}
 			>
 				{m.catalog_title()}
 			</a>
 		{:else}
 			<a
 				class="hover:bg-brand-strong rounded-md bg-brand px-5 py-3 text-sm font-semibold text-text-on-accent transition-colors"
-				href={resolve(`${page.url.pathname}${page.url.search}` as Pathname)}
+				href={resolve(`${page.url.pathname}${page.url.search}`.slice(1) as Path)}
 			>
 				{m.catalog_error_retry()}
 			</a>
 		{/if}
 		<a
 			class="rounded-md border border-border bg-bg-surface px-5 py-3 text-sm font-semibold text-text-body transition-colors hover:border-border-accent hover:bg-bg-accent"
-			href={resolve(localizeHref('/', { locale }) as Pathname)}
+			href={resolve(localizeHref('/', { locale }).slice(1) as Path)}
 		>
 			{m.nav_home()}
 		</a>
