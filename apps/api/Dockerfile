@@ -19,6 +19,7 @@ COPY packages/prettier-config/package.json packages/prettier-config/package.json
 COPY packages/product-structured-data/package.json packages/product-structured-data/package.json
 COPY packages/schemas/package.json packages/schemas/package.json
 COPY packages/tsconfig/package.json packages/tsconfig/package.json
+COPY patches/ ./patches/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 	pnpm install --frozen-lockfile --filter @apps/api...
 COPY . .
